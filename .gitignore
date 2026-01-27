@@ -1,0 +1,9 @@
+node_modules/
+.env
+project_state.json
+*_progress.json
+glossary.json
+*_rus.txt
+temp/
+.DS_Store
+*.log

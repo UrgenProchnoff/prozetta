@@ -1,0 +1,20 @@
+{
+  "name": "translator",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node  index.js"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@langchain/core": "^0.3.43",
+    "@langchain/google-gauth": "^0.2.3",
+    "@langchain/google-genai": "^0.2.0",
+    "@langchain/groq": "^1.0.3",
+    "@langchain/openai": "^0.4.8",
+    "@lenml/tokenizer-gemma3": "^3.4.2",
+    "@lenml/tokenizers": "^3.4.0",
+    "cli-progress": "^3.12.0",
+    "dotenv": "^16.4.5"
+  }
+}
