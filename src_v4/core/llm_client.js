@@ -62,7 +62,7 @@ class LLMClient {
                 rpm = conf.maxRPM || 0;
                 console.log(`[LLM] Initializing LOCAL logic client at ${conf.baseUrl} with RPM=${rpm}...`);
                 rawClient = new ChatOpenAI({
-                    openAIApiKey: conf.apiKey,
+                    apiKey: conf.apiKey,
                     configuration: { baseURL: conf.baseUrl },
                     timeout: conf.timeout,
                     maxRetries: 0,
@@ -77,7 +77,7 @@ class LLMClient {
             rpm = conf.maxRPM || 0;
             console.log(`[LLM] Initializing LOCAL fast client at ${conf.baseUrl} with RPM=${rpm}...`);
             rawClient = new ChatOpenAI({
-                openAIApiKey: conf.apiKey,
+                apiKey: conf.apiKey,
                 configuration: { baseURL: conf.baseUrl },
                 timeout: conf.timeout,
                 maxRetries: 0,
