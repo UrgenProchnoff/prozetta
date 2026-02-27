@@ -61,13 +61,18 @@ class LLMClient {
                 const conf = config.logic_model;
                 rpm = conf.maxRPM || 0;
                 console.log(`[LLM] Initializing LOCAL logic client at ${conf.baseUrl} with RPM=${rpm}...`);
+                const timeoutMs = conf.timeout || 4000000;
+                console.log(`[LLM DEBUG] timeout from config: ${conf.timeout}, using: ${timeoutMs}ms (${Math.round(timeoutMs / 60000)} minutes)`);
                 rawClient = new ChatOpenAI({
                     apiKey: conf.apiKey,
                     configuration: {
                         baseURL: conf.baseUrl,
-                        timeout: conf.timeout,
+                        timeout: timeoutMs,
+                        maxRetries: 0,
                     },
+                    timeout: timeoutMs,
                     maxRetries: 0,
+                    streaming: true,
                     modelName: conf.modelName,
                     temperature: conf.temperature,
                 });
@@ -84,7 +89,9 @@ class LLMClient {
                     baseURL: conf.baseUrl,
                     timeout: conf.timeout,
                 },
+                timeout: conf.timeout,
                 maxRetries: 0,
+                streaming: true,
                 modelName: conf.modelName,
                 temperature: conf.temperature,
             });
