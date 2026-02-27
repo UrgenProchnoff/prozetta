@@ -42,12 +42,15 @@ export async function runExtractionStage(state) {
         const userMessage = `Текст: \n${chunk.original}`;
 
         try {
+            console.log('prompt=', prompt)
+            console.log('userMessage=', userMessage)
             const response = await client.invoke([
                 new HumanMessage(prompt),
                 new HumanMessage(userMessage)
             ]);
 
             const content = response.content;
+            console.log('content=', content)
             let extracted = [];
 
             // Try to parse JSON

@@ -2,9 +2,9 @@ export default {
     logic_model: {
         baseUrl: 'http://127.0.0.1:8007/v1',
         apiKey: 'sk-no-key-required',
-        modelName: 'qwen3-80b-instruct',
-        timeout: 1200000,
-        temperature: 0.5,
+        modelName: 'qwen3.5-35b',
+        timeout: 4000000,
+        temperature: 0.6,
         maxRPM: 1000 // Local is usually fast
     },
     fast_model: {
