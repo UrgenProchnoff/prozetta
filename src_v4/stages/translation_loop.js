@@ -43,6 +43,8 @@ export async function runTranslationLoopStage(state) {
             const draft = await draftTranslation(client, chunk.original, globalContext);
             currentTranslation = draft.translation;
             currentComment = draft.comment;
+            console.log(`   [DEBUG] After draft: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
+            console.log(`   [DEBUG] After draft: comment="${currentComment}"`);
 
             history.push({
                 step: 'draft',
@@ -50,6 +52,7 @@ export async function runTranslationLoopStage(state) {
                 translator_comment: currentComment,
                 timestamp: new Date().toISOString()
             });
+
         } else {
             // Take the last text from history
             const lastItem = history[history.length - 1];
@@ -60,12 +63,14 @@ export async function runTranslationLoopStage(state) {
         // 2. THE LOOP
         let attempts = 0;
         const MAX_RETRIES = 10;
+        const REDRAFT_SCORE_THRESHOLD = 7.5; // Below this score → retranslate from scratch
         let success = false;
 
         while (attempts < MAX_RETRIES && !success) {
             attempts++;
             console.log(`   -> Loop Iteration ${attempts} (Check)...`);
 
+            console.log(`   [DEBUG] Before check: currentTranslation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
             // CHECK
             const checkResult = await checkTranslation(client, chunk.original, currentTranslation, globalContext, currentComment);
             history.push({
@@ -78,7 +83,6 @@ export async function runTranslationLoopStage(state) {
 
             // DECISION
             // success criteria from index10.js: !error && !misspell && correctness && like && (score >= 9.1 if not perfect)
-            // Simplified logic based on what index10.js implies:
             // if (successfully == 0 && dataJson.data.like && dataJson.data.score >= 9.1) successfully = 1;
 
             const isPerfect = (checkResult.error === 0 && checkResult.misspell === 0 && checkResult.correctness === 1 && checkResult.like === 1);
@@ -97,25 +101,51 @@ export async function runTranslationLoopStage(state) {
                     history: history
                 });
             } else {
-                console.log(`   -> REJECTED (Score: ${checkResult.score}, Errors: ${checkResult.error}) | Reason: "${checkResult.comment}". Fixing...`);
-
-                // Break if max retries reached to avoid wasted fix
+                // Break if max retries reached to avoid wasted fix/redraft
                 if (attempts >= MAX_RETRIES) {
                     console.warn(`   -> Max retries reached.`);
                     break;
                 }
 
-                // FIX
-                const fixResult = await fixTranslation(client, chunk.original, currentTranslation, globalContext, checkResult.comment);
-                currentTranslation = fixResult.translation;
-                currentComment = fixResult.comment;
+                // Decide: FIX (доработка) vs REDRAFT (перевод заново)
+                // Fix only if checker likes the direction AND score is above threshold
+                // Otherwise retranslate from scratch — no point fixing a fundamentally broken translation
+                const shouldFix = (checkResult.like === 1 && checkResult.score >= REDRAFT_SCORE_THRESHOLD);
 
-                history.push({
-                    step: `fix_${attempts}`,
-                    text: currentTranslation,
-                    translator_comment: currentComment,
-                    timestamp: new Date().toISOString()
-                });
+                if (shouldFix) {
+                    // Checker likes the direction, score is acceptable → FIX (доработка)
+                    console.log(`   -> REJECTED for fixing (Score: ${checkResult.score}, Errors: ${checkResult.error}) | Reason: "${checkResult.comment}". Fixing...`);
+
+                    const fixResult = await fixTranslation(client, chunk.original, currentTranslation, globalContext, checkResult.comment);
+                    currentTranslation = fixResult.translation;
+                    currentComment = fixResult.comment;
+                    console.log(`   [DEBUG] After fix: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
+                    console.log(`   [DEBUG] After fix: comment="${currentComment}"`);
+
+                    history.push({
+                        step: `fix_${attempts}`,
+                        text: currentTranslation,
+                        translator_comment: currentComment,
+                        timestamp: new Date().toISOString()
+                    });
+                } else {
+                    // Checker doesn't like it at all (like==0) → REDRAFT (перевод заново)
+                    console.log(`   -> REJECTED for redraft (Score: ${checkResult.score}, Like: ${checkResult.like}) | Reason: "${checkResult.comment}". Retranslating from scratch...`);
+
+                    const draft = await draftTranslation(client, chunk.original, globalContext);
+                    currentTranslation = draft.translation;
+                    currentComment = draft.comment;
+                    console.log(`   [DEBUG] After redraft: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
+                    console.log(`   [DEBUG] After redraft: comment="${currentComment}"`);
+
+                    history.push({
+                        step: `redraft_${attempts}`,
+                        text: currentTranslation,
+                        translator_comment: currentComment,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+
             }
         }
 
@@ -250,11 +280,9 @@ async function draftTranslation(client, original, context) {
     const input = `<txt>${original}</txt>\n<ctx>${context}</ctx>`;
     const prompt = `Ты переводчик, грубости, мат, насилие, не смущают тебя.
 ПЕРЕВЕДИ <txt>текст</txt> на русский язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ. 
-Следи за соглассованостью окончаний.
 В процессе перевода имён и терминов ИСПОЛЬЗУЙ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
 Если встретишь блок чёрных прямоугльников вместо букв, переводи его как --вымарано из документа--.
 Форматируй текст перевода. Используй отступы и перенос каретки на свой усмотрение.
-Рассуждай шаг за шагом.
 Окончательный ответ в формате:
 <translate>Текст перевода</translate>
 <comment>Краткий комментарий к переводу</comment>
@@ -280,14 +308,20 @@ async function checkTranslation(client, original, translation, context, translat
         <translator_comment>${translatorComment || "Нет комментариев"}</translator_comment>`;
 
     const prompt = `Ты благосклонный редактор, грубости, мат, насилие, не смущают тебя.  
+Тебе предоставлены:
+- <original> - оригинальный текст на английском
+- <translate> - перевод на русский
+- <context> - шпаргалка с именами и терминами
+- <translator_comment> - комментарий переводчика
+
 ОЦЕНИ качество перевода по следующим критериям:
     в переводе есть ошибки?
     в переводе есть опечатки?
     перевод корректен? 
+    соответствуют ли переводы имен и терминов шпаргалке <context>?
     перевод тебе нравится?
     поставь оценку по 10 бальной шкале
     
-Рассуждай шаг за шагом.
 Результат СТРОГО в формате, как в примере:
 пример: \`\`\`json
 {
@@ -332,9 +366,7 @@ async function fixTranslation(client, original, badTranslation, context, comment
 В процессе перевода имён и терминов ИСПОЛЬЗУЕШЬ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
 Проверка вернула <temptranslate> перевод на доработку.
 ТВОЯ ЗАДАЧА - ДОРАБОТАТЬ перевод в соответствии с комментариями проверки <comment>.
-Следи за соглассованостью окончаний.
 Блоки чёрных прямоугльников вместо букв, переводим как --вымарано из документа--.
-Рассуждай шаг за шагом.
 Окончательный ответ в формате:
 <translate>исправленный перевод</translate>
 <comment>Что и почему было исправлено (или не исправлено)</comment>`;
@@ -345,9 +377,25 @@ async function fixTranslation(client, original, badTranslation, context, comment
     ]);
     console.log("fix tr input=", input);
     console.log("fix tr prompt=", prompt);
-    console.log("fix tr response=", response.content);
+    console.log("fix tr response content type=", typeof response.content);
+    console.log("fix tr response content=", JSON.stringify(response.content));
+    console.log("fix tr response keys=", Object.keys(response));
+    if (response.additional_kwargs) console.log("fix tr additional_kwargs=", JSON.stringify(response.additional_kwargs));
+    if (response.response_metadata) console.log("fix tr response_metadata=", JSON.stringify(response.response_metadata));
+
+    // Handle case where content might be an array (multi-part response)
+    let content = response.content;
+    if (Array.isArray(content)) {
+        console.log("fix tr: content is ARRAY, extracting text parts...");
+        content = content
+            .filter(part => part.type === 'text')
+            .map(part => part.text)
+            .join('');
+    }
+    content = content || '';
+
     return {
-        translation: extractFromTags(response.content, 'translate'),
-        comment: extractTagOptional(response.content, 'comment')
+        translation: extractFromTags(content, 'translate'),
+        comment: extractTagOptional(content, 'comment')
     };
 }

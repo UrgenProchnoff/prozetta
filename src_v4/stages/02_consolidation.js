@@ -51,7 +51,21 @@ export async function runConsolidationStage(state) {
         return;
     }
 
-    // 2. Prepare for LLM - Sort by frequency to prioritize important terms
+    // 2. Load existing glossary to merge with (don't lose previous results on rerun)
+    const glossaryPath = path.join(state.workDir, 'glossary.json');
+    let existingGlossary = [];
+    if (fs.existsSync(glossaryPath)) {
+        try {
+            existingGlossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf-8'));
+            console.log(`[Consolidation] Loaded existing glossary with ${existingGlossary.length} items (will merge).`);
+        } catch (e) {
+            console.warn(`[Consolidation] Failed to parse existing glossary: ${e.message}. Starting fresh.`);
+        }
+    }
+    // Index existing terms by lowercase original for dedup
+    const existingKeys = new Set(existingGlossary.map(t => t.original?.toLowerCase().trim()));
+
+    // 3. Prepare for LLM - Sort by frequency to prioritize important terms
     const rawList = Array.from(allTerms.values())
         .map(t => ({
             original: t.original,
@@ -63,12 +77,16 @@ export async function runConsolidationStage(state) {
         .sort((a, b) => b.count - a.count); // Most frequent first
 
     const BATCH_SIZE = 30; // Reduced batch size due to added context field
-    let finalGlossary = [];
+    const MAX_RETRIES = 3;
+    let newTerms = [];
+    let skippedBatches = [];
     const client = llmManager.getClient('logic');
 
     for (let i = 0; i < rawList.length; i += BATCH_SIZE) {
         const batch = rawList.slice(i, i + BATCH_SIZE);
-        console.log(`[Consolidation] Processing batch ${(i / BATCH_SIZE) + 1}/${Math.ceil(rawList.length / BATCH_SIZE)}...`);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(rawList.length / BATCH_SIZE);
+        console.log(`[Consolidation] Processing batch ${batchNum}/${totalBatches}...`);
 
         // Minify context for prompt to save tokens
         const promptInput = batch.map(b => ({
@@ -97,34 +115,38 @@ export async function runConsolidationStage(state) {
 
         const userMessage = JSON.stringify(promptInput);
 
-        // Retry logic for each batch
-        let retries = 3;
+        let attempts = 0;
         let success = false;
 
-        while (retries > 0 && !success) {
+        while (attempts < MAX_RETRIES && !success) {
+            attempts++;
             try {
                 const response = await client.invoke([
                     new HumanMessage(prompt),
                     new HumanMessage(userMessage)
                 ]);
 
-                // let content = response.content.replace(/```json/g, '').replace(/```/g, '').trim();
-                // Fix potential trailing commas or markdown noise
-                // const batchResult = JSON.parse(content);
+                // Check for empty/truncated response
+                const content = response.content;
+                if (!content || content.trim().length === 0) {
+                    console.warn(`[Consolidation] Empty response for batch ${batchNum}, attempt ${attempts}. Retrying...`);
+                    continue;
+                }
 
-                const batchResult = extractJson(response.content);
+                const batchResult = extractJson(content);
 
                 if (Array.isArray(batchResult)) {
-                    finalGlossary.push(...batchResult);
+                    newTerms.push(...batchResult);
                     success = true;
                 } else {
                     throw new Error("Response is not an array");
                 }
             } catch (e) {
-                console.error(`[Consolidation] Batch failed (Attempts left: ${retries - 1}): ${e.message}`);
-                retries--;
-                if (retries === 0) {
-                    console.error(`[Consolidation] SKIPPING BATCH due to repeated errors.`);
+                console.error(`[Consolidation] Batch ${batchNum} attempt ${attempts}/${MAX_RETRIES} failed: ${e.message}`);
+                if (attempts >= MAX_RETRIES) {
+                    const skippedTerms = batch.map(b => b.original);
+                    skippedBatches.push({ batchNum, terms: skippedTerms });
+                    console.error(`[Consolidation] SKIPPING BATCH ${batchNum}. Lost terms: ${skippedTerms.join(', ')}`);
                 } else {
                     await new Promise(r => setTimeout(r, 2000));
                 }
@@ -132,11 +154,32 @@ export async function runConsolidationStage(state) {
         }
     }
 
-    // 3. Final Save
-    const glossaryPath = path.join(state.workDir, 'glossary.json');
+    // 4. Merge: existing glossary + new terms (dedup by original)
+    let finalGlossary = [...existingGlossary];
+    let addedCount = 0;
+    for (const term of newTerms) {
+        const key = term.original?.toLowerCase().trim();
+        if (key && !existingKeys.has(key)) {
+            finalGlossary.push(term);
+            existingKeys.add(key);
+            addedCount++;
+        }
+    }
+
+    // 5. Save
     fs.writeFileSync(glossaryPath, JSON.stringify(finalGlossary, null, 2));
 
-    console.log(`[Consolidation] Glossary saved to ${glossaryPath} (${finalGlossary.length} items)`);
+    console.log(`[Consolidation] Glossary saved to ${glossaryPath} (${finalGlossary.length} total, ${addedCount} new).`);
+
+    if (skippedBatches.length > 0) {
+        console.warn(`\n⚠️  WARNING: ${skippedBatches.length} batch(es) were SKIPPED due to LLM errors!`);
+        console.warn(`   The following terms may be MISSING from the glossary:`);
+        skippedBatches.forEach(sb => {
+            console.warn(`   Batch ${sb.batchNum}: ${sb.terms.join(', ')}`);
+        });
+        console.warn(`   Re-run Stage 1b to retry these batches.\n`);
+    }
+
     console.log('--- SYSTEM: Stage 1b Completed ---');
 }
 
