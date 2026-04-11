@@ -13,8 +13,9 @@ async function main() {
     const fileArg = args.find(a => a.startsWith('--file='));
     const modelArg = args.find(a => a.startsWith('--model='));
 
-    if (!stageArg) {
-        console.error('Usage: node src_v4/main.js --stage=<1|2|export> --file=<path/to/book.txt> [--model=google|local]');
+    if (!stageArg || !fileArg) {
+        console.error('Usage: node src_v4/main.js --stage=<1|2|export> --file=<path/to/book.txt> [--model=google|local|groq]');
+        console.error('  --file is always required to identify the project.');
         process.exit(1);
     }
 
@@ -29,19 +30,27 @@ async function main() {
     }
 
     const stage = stageArg.split('=')[1];
+    const filePath = fileArg.split('=')[1];
 
-    // Initialize State (V4 uses same format but maybe different dir? No, let's keep it compatible)
-    // Actually, ProjectState uses process.cwd(). Let's imply we run from root.
-    const state = new ProjectState(process.cwd());
+    // Derive prefix from filename: "txt/Sterling_Junk_DNA.txt" → "Sterling_Junk_DNA"
+    const fileExt = path.extname(filePath);
+    const filePrefix = path.basename(filePath, fileExt);
+
+    console.log(`[Init] Project prefix: "${filePrefix}"`);
+
+    // Ensure txt/ directory exists
+    const txtDir = path.join(process.cwd(), 'txt');
+    if (!fs.existsSync(txtDir)) {
+        fs.mkdirSync(txtDir, { recursive: true });
+        console.log(`[Init] Created txt/ directory.`);
+    }
+
+    // Initialize State with file prefix
+    const state = new ProjectState(process.cwd(), filePrefix);
     state.load();
 
-    // Initial Setup
+    // Initial Setup for Stage 1
     if (stage === '1' && state.getChunks().length === 0) {
-        if (!fileArg) {
-            console.error('[Error] --file argument is required for initial Stage 1 run.');
-            process.exit(1);
-        }
-        const filePath = fileArg.split('=')[1];
         if (!fs.existsSync(filePath)) {
             console.error(`[Error] File not found: ${filePath}`);
             process.exit(1);
@@ -53,6 +62,7 @@ async function main() {
         state.data = state.data || {};
         state.data.metadata = state.data.metadata || {};
         state.data.metadata.sourceFile = filePath;
+        state.data.metadata.filePrefix = filePrefix;
 
         const text = fs.readFileSync(filePath, 'utf-8');
         const chunks = splitTextIntoChunks(text);
@@ -68,8 +78,8 @@ async function main() {
                 console.log('\n--- Starting Consolidation ---');
                 await runConsolidationStage(state);
                 console.log('\n=== STAGE 1 COMPLETE ===');
-                console.log('Now please MANUALLY REVIEW and EDIT "glossary.json" to ensure terms are correct.');
-                console.log('Once finished, run: node src_v4/main.js --stage=2');
+                console.log(`Now please MANUALLY REVIEW and EDIT "${path.basename(state.getGlossaryPath())}" to ensure terms are correct.`);
+                console.log(`Once finished, run: node src_v4/main.js --stage=2 --file=${filePath}`);
                 break;
             case '2':
                 await runTranslationLoopStage(state);
@@ -91,16 +101,10 @@ async function main() {
 function exportBook(state) {
     const chunks = state.getChunks();
 
-    // Determine output filename
-    let outputPath = path.join(state.workDir, 'RESULT_V4.txt'); // Default fallback
-
-    if (state.data && state.data.metadata && state.data.metadata.sourceFile) {
-        const sourcePath = state.data.metadata.sourceFile;
-        const dir = path.dirname(sourcePath);
-        const ext = path.extname(sourcePath);
-        const name = path.basename(sourcePath, ext);
-        outputPath = path.join(dir, `${name}_rus${ext}`);
-    }
+    // Output goes to txt/ directory with _rus suffix
+    const txtDir = path.join(state.workDir, 'txt');
+    const prefix = state.filePrefix || 'RESULT_V4';
+    const outputPath = path.join(txtDir, `${prefix}_rus.txt`);
 
     console.log(`[Export] Assembling ${chunks.length} chunks to: ${outputPath}`);
     fs.writeFileSync(outputPath, '');

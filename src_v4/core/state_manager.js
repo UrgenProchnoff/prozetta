@@ -2,14 +2,21 @@ import fs from 'fs';
 import path from 'path';
 
 export class ProjectState {
-    constructor(workDir) {
+    constructor(workDir, filePrefix) {
         this.workDir = workDir || process.cwd();
-        this.stateFile = path.join(this.workDir, 'project_state.json');
+        this.filePrefix = filePrefix || '';
+
+        // Build prefixed filenames: e.g. "Sterling_Junk_DNA_project_state.json"
+        const prefix = this.filePrefix ? `${this.filePrefix}_` : '';
+        this.stateFile = path.join(this.workDir, `${prefix}project_state.json`);
+        this.glossaryFile = path.join(this.workDir, `${prefix}glossary.json`);
+
         this.data = {
             metadata: {
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 currentStage: 'init',
+                filePrefix: this.filePrefix,
             },
             chunks: []
         };
@@ -43,6 +50,10 @@ export class ProjectState {
             console.error(`[State] Error saving state: ${e.message}`);
             throw e;
         }
+    }
+
+    getGlossaryPath() {
+        return this.glossaryFile;
     }
 
     getChunks() {

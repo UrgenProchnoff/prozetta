@@ -1,5 +1,4 @@
 import fs from 'fs';
-import path from 'path';
 import { llmManager } from '../core/llm_client.js';
 import { HumanMessage } from "@langchain/core/messages";
 
@@ -7,7 +6,7 @@ export async function runTranslationLoopStage(state) {
     console.log('--- SYSTEM: Starting Stage 2 (Smart Translation Loop) ---');
 
     const chunks = state.getChunks();
-    const glossaryPath = path.join(state.workDir, 'glossary.json');
+    const glossaryPath = state.getGlossaryPath();
     let glossary = [];
 
     if (fs.existsSync(glossaryPath)) {

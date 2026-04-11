@@ -52,7 +52,7 @@ export async function runConsolidationStage(state) {
     }
 
     // 2. Load existing glossary to merge with (don't lose previous results on rerun)
-    const glossaryPath = path.join(state.workDir, 'glossary.json');
+    const glossaryPath = state.getGlossaryPath();
     let existingGlossary = [];
     if (fs.existsSync(glossaryPath)) {
         try {
