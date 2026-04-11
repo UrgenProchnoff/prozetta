@@ -2,6 +2,7 @@ import fs from 'fs';
 import { llmManager } from '../core/llm_client.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
+import config from '../config.js';
 
 export async function runTranslationLoopStage(state) {
     console.log('--- SYSTEM: Starting Stage 2 (Smart Translation Loop) ---');
@@ -62,8 +63,9 @@ export async function runTranslationLoopStage(state) {
 
         // 2. THE LOOP
         let attempts = 0;
-        const MAX_RETRIES = 10;
-        const REDRAFT_SCORE_THRESHOLD = 7.5; // Below this score → retranslate from scratch
+        const MAX_RETRIES = config.pipeline.translationMaxRetries;
+        const REDRAFT_SCORE_THRESHOLD = config.pipeline.redraftScoreThreshold;
+        const APPROVAL_SCORE_THRESHOLD = config.pipeline.approvalScoreThreshold;
         let success = false;
 
         while (attempts < MAX_RETRIES && !success) {
@@ -88,7 +90,7 @@ export async function runTranslationLoopStage(state) {
             const isPerfect = (checkResult.error === 0 && checkResult.misspell === 0 && checkResult.correctness === 1 && checkResult.like === 1);
             let passed = isPerfect;
 
-            if (!passed && checkResult.like === 1 && checkResult.score >= 9.1) {
+            if (!passed && checkResult.like === 1 && checkResult.score >= APPROVAL_SCORE_THRESHOLD) {
                 passed = true;
             }
 

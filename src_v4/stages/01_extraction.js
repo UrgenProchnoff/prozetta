@@ -1,13 +1,14 @@
 import { llmManager } from '../core/llm_client.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractJson } from '../utils/parsers.js';
+import config from '../config.js';
 
 export async function runExtractionStage(state) {
     console.log('--- SYSTEM: Starting Stage 1 (Extraction) ---');
 
     const chunks = state.getChunks();
     const client = llmManager.getClient('logic');
-    const MAX_RETRIES = 3;
+    const MAX_RETRIES = config.pipeline.extractionMaxRetries;
 
     let processedCount = 0;
 

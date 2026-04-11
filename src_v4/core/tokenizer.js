@@ -1,7 +1,8 @@
 import { fromPreTrained } from "@lenml/tokenizer-gemma3";
+import config from '../config.js';
 
-const TOKENS_LIMIT_1 = 500;
-const TOKENS_LIMIT_2 = 500;
+const TOKENS_LIMIT_1 = config.pipeline.chunkBaseTokens;
+const TOKENS_LIMIT_2 = config.pipeline.chunkOverflowTokens;
 
 let tokenizer = null;
 

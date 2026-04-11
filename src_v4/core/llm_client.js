@@ -45,7 +45,7 @@ class LLMClient {
                     apiKey: conf.apiKey,
                     modelName: conf.modelName,
                     temperature: conf.temperature,
-                    maxOutputTokens: 8192,
+                    maxOutputTokens: conf.maxOutputTokens || 8192,
                 });
             } else if (this.provider === 'groq') {
                 const conf = config.groq_model;

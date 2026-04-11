@@ -2,6 +2,7 @@ import fs from 'fs';
 import { llmManager } from '../core/llm_client.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractJson } from '../utils/parsers.js';
+import config from '../config.js';
 
 export async function runConsolidationStage(state) {
     console.log('--- SYSTEM: Starting Stage 1b (Consolidation + Context) ---');
@@ -76,8 +77,8 @@ export async function runConsolidationStage(state) {
         }))
         .sort((a, b) => b.count - a.count); // Most frequent first
 
-    const BATCH_SIZE = 30; // Reduced batch size due to added context field
-    const MAX_RETRIES = 3;
+    const BATCH_SIZE = config.pipeline.consolidationBatchSize;
+    const MAX_RETRIES = config.pipeline.consolidationMaxRetries;
     let newTerms = [];
     let skippedBatches = [];
     const client = llmManager.getClient('logic');
