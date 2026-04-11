@@ -1,5 +1,5 @@
-LoopLang
-Tolmach
-Stilograf
-Pero
-Booka
+looplang
+tolmach
+stilograf
+booka
+

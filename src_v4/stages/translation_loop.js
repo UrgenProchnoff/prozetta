@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { llmManager } from '../core/llm_client.js';
 import { HumanMessage } from "@langchain/core/messages";
+import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
 
 export async function runTranslationLoopStage(state) {
     console.log('--- SYSTEM: Starting Stage 2 (Smart Translation Loop) ---');
@@ -191,87 +192,6 @@ function getLocalContextString(text, glossary) {
     return hits.join('\n');
 }
 
-function extractFromTags(text, tag) {
-    const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
-    const match = text.match(regex);
-    if (match) return match[1].trim();
-
-    const startRegex = new RegExp(`<${tag}>([\\s\\S]*)`, 'i');
-    const startMatch = text.match(startRegex);
-    if (startMatch) return startMatch[1].trim();
-
-    // Fallback: if tag missing, return full text but warn
-    // console.warn(`Tag <${tag}> not found in response.`); 
-    return text.trim();
-}
-
-function extractTagOptional(text, tag) {
-    const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
-    const match = text.match(regex);
-    if (match) return match[1].trim();
-    return "";
-}
-
-function extractJson(text) {
-    try {
-        let jsonStr = null;
-        const jsonMatch = text.match(/```json([\s\S]*?)```/);
-        if (jsonMatch) {
-            jsonStr = jsonMatch[1];
-        } else {
-            // Try to find { ... }
-            const bracketMatch = text.match(/\{[\s\S]*\}/);
-            if (bracketMatch) jsonStr = bracketMatch[0];
-        }
-
-        if (!jsonStr) throw new Error("No JSON found");
-
-        // First attempt: parse as-is
-        try {
-            return JSON.parse(jsonStr);
-        } catch (e1) {
-            // Second attempt: try to fix common issues (unescaped quotes in comment field)
-            // Replace unescaped quotes inside the "comment" value
-            const fixedStr = jsonStr.replace(
-                /("comment"\s*:\s*")([^"]*(?:"[^"]*)*)("\s*})/,
-                (match, prefix, content, suffix) => {
-                    // Replace all inner quotes with escaped quotes or remove them
-                    const sanitized = content.replace(/"/g, "'");
-                    return prefix + sanitized + suffix;
-                }
-            );
-            try {
-                return JSON.parse(fixedStr);
-            } catch (e2) {
-                // Third attempt: extract values via regex for known fields
-                const result = {
-                    error: 1,
-                    misspell: 0,
-                    correctness: 0,
-                    like: 0,
-                    score: 0,
-                    comment: "Fallback parse"
-                };
-                const errorMatch = jsonStr.match(/"error"\s*:\s*(\d+)/);
-                const misspellMatch = jsonStr.match(/"misspell"\s*:\s*(\d+)/);
-                const correctnessMatch = jsonStr.match(/"correctness"\s*:\s*(\d+)/);
-                const likeMatch = jsonStr.match(/"like"\s*:\s*(\d+)/);
-                const scoreMatch = jsonStr.match(/"score"\s*:\s*([\d.]+)/);
-
-                if (errorMatch) result.error = parseInt(errorMatch[1]);
-                if (misspellMatch) result.misspell = parseInt(misspellMatch[1]);
-                if (correctnessMatch) result.correctness = parseInt(correctnessMatch[1]);
-                if (likeMatch) result.like = parseInt(likeMatch[1]);
-                if (scoreMatch) result.score = parseFloat(scoreMatch[1]);
-
-                console.warn("[extractJson] Used regex fallback due to malformed JSON.");
-                return result;
-            }
-        }
-    } catch (e) {
-        return { error: 1, misspell: 1, correctness: 0, like: 0, score: 0, comment: "JSON Parse Error: " + e.message };
-    }
-}
 
 // --- LLM FUNCTIONS (Prompts from index10.js) ---
 
@@ -341,15 +261,7 @@ async function checkTranslation(client, original, translation, context, translat
     console.log("check tr prompt=", prompt);
     console.log("check tr response=", response.content);
     // Normalize keys just in case
-    const data = extractJson(response.content);
-    return {
-        error: data.error ?? 1,
-        misspell: data.misspell ?? 0,
-        correctness: data.correctness ?? 0,
-        like: data.like ?? 0,
-        score: data.score ?? 0,
-        comment: data.comment || "No comment"
-    };
+    return extractCheckResult(response.content);
 }
 
 async function fixTranslation(client, original, badTranslation, context, comment) {

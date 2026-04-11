@@ -1,5 +1,6 @@
 import { llmManager } from '../core/llm_client.js';
 import { HumanMessage } from "@langchain/core/messages";
+import { extractJson } from '../utils/parsers.js';
 
 export async function runExtractionStage(state) {
     console.log('--- SYSTEM: Starting Stage 1 (Extraction) ---');
@@ -106,22 +107,3 @@ export async function runExtractionStage(state) {
     console.log('--- SYSTEM: Stage 1 (Extraction) Completed ---');
 }
 
-function extractJson(text) {
-    try {
-        const jsonMatch = text.match(/```json([\s\S]*?)```/);
-        if (jsonMatch) return JSON.parse(jsonMatch[1]);
-
-        // Try to find [ ... ]
-        const arrayMatch = text.match(/\[[\s\S]*\]/);
-        if (arrayMatch) return JSON.parse(arrayMatch[0]);
-
-        // Try to find { ... } - though we expect array here
-        const bracketMatch = text.match(/\{[\s\S]*\}/);
-        if (bracketMatch) return JSON.parse(bracketMatch[0]);
-
-        // Fallback: try parsing whole text if clean
-        return JSON.parse(text);
-    } catch (e) {
-        throw new Error("No JSON found or invalid JSON: " + e.message);
-    }
-}
