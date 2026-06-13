@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node  index.js"
+    "start": "node  index.js",
+    "gui": "node src_gui/server.js"
   },
   "main": "index.js",
   "dependencies": {
@@ -15,6 +16,7 @@
     "@lenml/tokenizer-gemma3": "^3.4.2",
     "@lenml/tokenizers": "^3.4.0",
     "cli-progress": "^3.12.0",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1"
   }
 }

@@ -202,20 +202,32 @@ async function draftTranslation(client, original, context) {
     const prompt = `Ты переводчик, грубости, мат, насилие, не смущают тебя.
 ПЕРЕВЕДИ <txt>текст</txt> на русский язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ. 
 В процессе перевода имён и терминов ИСПОЛЬЗУЙ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
-Если встретишь блок чёрных прямоугльников вместо букв, переводи его как --вымарано из документа--.
 Форматируй текст перевода. Используй отступы и перенос каретки на свой усмотрение.
 Окончательный ответ в формате:
 <translate>Текст перевода</translate>
 <comment>Краткий комментарий к переводу</comment>
 `;
 
-    console.log("draft tr prompt=", prompt);
-    console.log("draft tr input=", input);
+    /*
+        const prompt = `Ты переводчик, грубости, мат, насилие, не смущают тебя.
+    ПЕРЕВЕДИ <txt>текст</txt> на русский язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ. 
+    В процессе перевода имён и терминов ИСПОЛЬЗУЙ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
+    Если встретишь блок чёрных прямоугльников вместо букв, переводи его как --вымарано из документа--.
+    Форматируй текст перевода. Используй отступы и перенос каретки на свой усмотрение.
+    Окончательный ответ в формате:
+    <translate>Текст перевода</translate>
+    <comment>Краткий комментарий к переводу</comment>
+    `;
+    
+    */
+
+    //console.log("draft tr prompt=", prompt);
+    //console.log("draft tr input=", input);
     const response = await client.invoke([
         new HumanMessage(prompt),
         new HumanMessage(input)
     ]);
-    console.log("draft response=", response.content);
+    //console.log("draft response=", response.content);
     return {
         translation: extractFromTags(response.content, 'translate'),
         comment: extractTagOptional(response.content, 'comment')
@@ -228,9 +240,9 @@ async function checkTranslation(client, original, translation, context, translat
         <translate>${translation}</translate>
         <translator_comment>${translatorComment || "Нет комментариев"}</translator_comment>`;
 
-    const prompt = `Ты благосклонный редактор, грубости, мат, насилие, не смущают тебя.  
+    const prompt = `Ты редактор, грубости, мат, насилие, не смущают тебя.  
 Тебе предоставлены:
-- <original> - оригинальный текст на английском
+- <original> - оригинальный текст
 - <translate> - перевод на русский
 - <context> - шпаргалка с именами и терминами
 - <translator_comment> - комментарий переводчика
@@ -255,13 +267,43 @@ async function checkTranslation(client, original, translation, context, translat
 }
 \`\`\``;
 
+    /*
+        const prompt = `Ты благосклонный редактор, грубости, мат, насилие, не смущают тебя.  
+    Тебе предоставлены:
+    - <original> - оригинальный текст
+    - <translate> - перевод на русский
+    - <context> - шпаргалка с именами и терминами
+    - <translator_comment> - комментарий переводчика
+    
+    ОЦЕНИ качество перевода по следующим критериям:
+        в переводе есть ошибки?
+        в переводе есть опечатки?
+        перевод корректен? 
+        соответствуют ли переводы имен и терминов шпаргалке <context>?
+        перевод тебе нравится?
+        поставь оценку по 10 бальной шкале
+        
+    Результат СТРОГО в формате, как в примере:
+    пример: \`\`\`json
+    {
+      "error": 0,
+      "misspell": 0,
+      "correctness": 1,
+      "like": 1,
+      "score": 8.5,
+      "comment": "краткий комментарий БЕЗ КАВЫЧЕК и спецсимволов"
+    }
+    \`\`\``;
+    
+    */
     const response = await client.invoke([
         new HumanMessage(prompt),
         new HumanMessage(input)
     ]);
-    console.log("check tr input=", input);
-    console.log("check tr prompt=", prompt);
-    console.log("check tr response=", response.content);
+    //console.log("check tr input=", input);
+    //console.log("check tr prompt=", prompt);
+    //console.log("check tr response=", response.content);
+
     // Normalize keys just in case
     return extractCheckResult(response.content);
 }
@@ -279,17 +321,29 @@ async function fixTranslation(client, original, badTranslation, context, comment
 В процессе перевода имён и терминов ИСПОЛЬЗУЕШЬ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
 Проверка вернула <temptranslate> перевод на доработку.
 ТВОЯ ЗАДАЧА - ДОРАБОТАТЬ перевод в соответствии с комментариями проверки <comment>.
-Блоки чёрных прямоугльников вместо букв, переводим как --вымарано из документа--.
 Окончательный ответ в формате:
 <translate>исправленный перевод</translate>
 <comment>Что и почему было исправлено (или не исправлено)</comment>`;
+
+    /*
+        const prompt = `Ты профессиональный переводчик, грубости, мат, насилие, не смущают тебя.
+    Ты ПЕРЕВОДИШЬ <txt>текст</txt> на русский язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ. 
+    В процессе перевода имён и терминов ИСПОЛЬЗУЕШЬ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
+    Проверка вернула <temptranslate> перевод на доработку.
+    ТВОЯ ЗАДАЧА - ДОРАБОТАТЬ перевод в соответствии с комментариями проверки <comment>.
+    Блоки чёрных прямоугльников вместо букв, переводим как --вымарано из документа--.
+    Окончательный ответ в формате:
+    <translate>исправленный перевод</translate>
+    <comment>Что и почему было исправлено (или не исправлено)</comment>`;
+    
+    */
 
     const response = await client.invoke([
         new HumanMessage(prompt),
         new HumanMessage(input)
     ]);
-    console.log("fix tr input=", input);
-    console.log("fix tr prompt=", prompt);
+    //    console.log("fix tr input=", input);
+    //    console.log("fix tr prompt=", prompt);
     console.log("fix tr response content type=", typeof response.content);
     console.log("fix tr response content=", JSON.stringify(response.content));
     console.log("fix tr response keys=", Object.keys(response));
