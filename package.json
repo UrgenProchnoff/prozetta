@@ -1,12 +1,14 @@
 {
-  "name": "translator",
+  "name": "prozetta",
   "version": "1.0.0",
+  "description": "LLM pipeline for literary translation with a consistency glossary and a self-checking quality loop",
+  "license": "MIT",
   "type": "module",
   "scripts": {
-    "start": "node  index.js",
+    "start": "node src_v4/main.js",
     "gui": "node src_gui/server.js"
   },
-  "main": "index.js",
+  "main": "src_v4/main.js",
   "dependencies": {
     "@langchain/core": "^1.1.17",
     "@langchain/google-gauth": "^0.2.3",
