@@ -273,9 +273,9 @@ async function renderMonitor(prefix) {
         <div class="toolbar">
             <label>Этап
                 <select id="m-stage">
-                    <option value="1">1 — глоссарий</option>
-                    <option value="2" selected>2 — перевод</option>
-                    <option value="export">экспорт</option>
+                    <option value="1" data-base="1 — извлечение терминов">1 — извлечение терминов</option>
+                    <option value="2" data-base="2 — перевод">2 — перевод</option>
+                    <option value="export" data-base="экспорт">экспорт</option>
                 </select>
             </label>
             <label>Модель
@@ -293,6 +293,7 @@ async function renderMonitor(prefix) {
             <a class="btn" href="#/glossary/${encodeURIComponent(prefix)}">Глоссарий</a>
             <a class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">⬇ Перевод</a>
         </div>
+        <div id="m-hint" class="hint" hidden></div>
         <div class="monitor-grid">
             <div>
                 <div class="legend">
@@ -300,6 +301,7 @@ async function renderMonitor(prefix) {
                     <span><span class="dot" style="background:#6b5320"></span>лучшая попытка</span>
                     <span><span class="dot" style="background:#29456e"></span>в работе</span>
                     <span><span class="dot" style="background:#1f242e"></span>в очереди</span>
+                    <span><span class="dot ext-dot"></span>термины извлечены</span>
                 </div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">Загрузка…</span></div>
             </div>
@@ -314,9 +316,54 @@ async function renderMonitor(prefix) {
     const statusEl = document.getElementById('m-status');
     const startBtn = document.getElementById('m-start');
     const stopBtn = document.getElementById('m-stop');
+    const stageSel = document.getElementById('m-stage');
+    const hintEl = document.getElementById('m-hint');
 
     let activeChunk = null; // 0-based index parsed from the log
     let running = false;
+    let recommendApplied = false; // preselect the stage only once, then respect user choice
+
+    // Where is the project in the pipeline? Drives the recommended next stage.
+    function recommend(s) {
+        if (!s || s.total === 0)
+            return { stage: '1', text: 'Проект ещё не создан. Начните с Этапа 1 — извлечения терминов.' };
+        if (s.extracted < s.total)
+            return { stage: '1', text: `Этап 1 не завершён: извлечено ${s.extracted}/${s.total} чанков. Сначала закончите извлечение.` };
+        const done = s.statuses.success + s.statuses.best_effort;
+        if (done >= s.total)
+            return { stage: 'export', text: 'Все чанки переведены. Можно собрать книгу (экспорт) или открыть чанк для ручной правки.' };
+        if (!s.glossaryCount)
+            return { stage: '2', text: 'Термины извлечены, но глоссарий пуст. Проверьте/заполните глоссарий перед переводом.' };
+        return { stage: '2', text: `Термины извлечены, глоссарий: ${s.glossaryCount} терминов. Можно запускать Этап 2. Не забудьте вычитать глоссарий.` };
+    }
+
+    // Returns a warning string if the chosen stage breaks the recommended order
+    // (extraction → review glossary → translation), or null if it's safe.
+    function preflight(stage, s) {
+        if (stage !== '2') return null;
+        if (!s || s.total === 0)
+            return 'Проект ещё не создан, Этап 1 (извлечение терминов) не выполнялся.\n\nБез глоссария перевод потеряет единообразие имён и терминов. Рекомендуется сначала запустить Этап 1.\n\nВсё равно запустить перевод?';
+        if (s.extracted < s.total)
+            return `Извлечение терминов завершено не полностью: ${s.extracted}/${s.total} чанков.\n\nРекомендуемый порядок: сначала завершить Этап 1, вычитать глоссарий, затем переводить.\n\nВсё равно запустить перевод?`;
+        if (!s.glossaryCount)
+            return 'Глоссарий пуст или отсутствует.\n\nПеревод пойдёт без шпаргалки имён и терминов — единообразие не гарантируется. Обычно глоссарий заполняется на Этапе 1 и вычитывается вручную.\n\nВсё равно запустить перевод?';
+        return null;
+    }
+
+    function applyRecommendation() {
+        const rec = recommend(summary);
+        // Annotate the recommended option and (once) preselect it
+        for (const opt of stageSel.options) {
+            const base = opt.dataset.base || opt.textContent;
+            opt.textContent = opt.value === rec.stage ? `★ ${base} (рекомендуется)` : base;
+        }
+        if (!recommendApplied && !running) {
+            stageSel.value = rec.stage;
+            recommendApplied = true;
+        }
+        hintEl.hidden = false;
+        hintEl.textContent = `▶ Рекомендуется: ${rec.text}`;
+    }
 
     function setRunning(v) {
         running = v;
@@ -352,10 +399,11 @@ async function renderMonitor(prefix) {
         }
         grid.innerHTML = summary.chunks.map(c => {
             const title = `Чанк ${c.i + 1} · ${STATUS_LABELS[c.status]}`
+                + `\nТермины: ${c.extracted ? (c.nTerms != null ? `извлечено (${c.nTerms})` : 'извлечено') : 'не извлечено'}`
                 + (c.score != null ? ` · оценка ${c.score}` : '')
                 + (c.attempts ? ` · шагов: ${c.attempts}` : '')
                 + `\n${c.preview}`;
-            return `<a class="chunk-cell s-${c.status} ${c.i === activeChunk && running ? 'active' : ''}"
+            return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
                 href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}</a>`;
         }).join('');
     }
@@ -369,12 +417,14 @@ async function renderMonitor(prefix) {
                 summary = await api(`/api/projects/${encodeURIComponent(prefix)}/summary`);
             } catch { summary = null; }
             drawGrid();
+            applyRecommendation();
         }, 300);
     }
 
     // Initial load: summary + job backlog
     try { summary = await api(`/api/projects/${encodeURIComponent(prefix)}/summary`); } catch { summary = null; }
     drawGrid();
+    applyRecommendation();
 
     try {
         const job = await api(`/api/projects/${encodeURIComponent(prefix)}/job`);
@@ -396,8 +446,12 @@ async function renderMonitor(prefix) {
     });
 
     startBtn.addEventListener('click', async () => {
-        const stage = document.getElementById('m-stage').value;
+        const stage = stageSel.value;
         const model = document.getElementById('m-model').value;
+
+        const warning = preflight(stage, summary);
+        if (warning && !confirm(warning)) return;
+
         try {
             await api('/api/run', { method: 'POST', body: { prefix, stage, model } });
             logPane.innerHTML = '';
@@ -433,6 +487,9 @@ async function renderChunk(prefix, i) {
         : chunk.translation_status === 'failed_best_effort' ? 'best_effort'
         : (chunk.history?.length ? 'in_progress' : 'pending');
 
+    const extracted = chunk.extraction_status === 'success' || Array.isArray(chunk.extracted_terms);
+    const nTerms = Array.isArray(chunk.extracted_terms) ? chunk.extracted_terms.length : null;
+
     const history = (chunk.history || []).slice().reverse();
 
     const historyHtml = history.map(h => {
@@ -465,6 +522,7 @@ async function renderChunk(prefix, i) {
             <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${i + 1}" ${i >= total - 1 ? 'hidden' : ''}>${i + 2} →</a>
             <span class="badge b-${status}">${STATUS_LABELS[status]}</span>
             <span class="badge">${chunk.tokens ?? '?'} токенов</span>
+            <span class="badge" title="Этап 1: извлечение терминов">${extracted ? `🔍 термины: ${nTerms ?? '✓'}` : '○ термины не извлечены'}</span>
             <span class="spacer"></span>
             <button id="c-save">💾 Сохранить</button>
             <button id="c-approve" class="primary">✓ Сохранить и принять</button>

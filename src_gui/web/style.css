@@ -162,6 +162,7 @@ table.glossary .del { text-align: center; }
 
 .chunk-grid { display: flex; flex-wrap: wrap; gap: 5px; }
 .chunk-cell {
+    position: relative;
     width: 34px;
     height: 34px;
     border-radius: 5px;
@@ -174,6 +175,31 @@ table.glossary .del { text-align: center; }
     border: 1px solid var(--border);
     cursor: pointer;
     text-decoration: none;
+}
+/* Corner marker: terms extracted (Stage 1). Composes with status colour. */
+.chunk-cell.extracted::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    border-width: 0 7px 7px 0;
+    border-style: solid;
+    border-color: transparent #6cc0ff transparent transparent;
+    border-top-right-radius: 4px;
+}
+.dot.ext-dot {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    position: relative;
+}
+.dot.ext-dot::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    border-width: 0 6px 6px 0;
+    border-style: solid;
+    border-color: transparent #6cc0ff transparent transparent;
 }
 .chunk-cell.s-success { background: #1e5e41; border-color: var(--green); }
 .chunk-cell.s-best_effort { background: #6b5320; border-color: var(--yellow); }
@@ -199,6 +225,17 @@ table.glossary .del { text-align: center; }
 .log-pane .warn { color: var(--yellow); }
 .log-pane .err { color: var(--red); }
 .log-pane .ok { color: var(--green); }
+
+.hint {
+    background: rgba(79, 140, 255, 0.08);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    color: var(--text);
+    font-size: 13px;
+}
 
 .legend { display: flex; gap: 14px; margin: 10px 0; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
 .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }

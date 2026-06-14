@@ -51,6 +51,12 @@ function chunkStatus(chunk) {
     return 'pending';
 }
 
+// A chunk counts as extracted if Stage 1 marked it done. Older projects predate
+// the extraction_status field but still carry the extracted_terms array.
+function isExtracted(chunk) {
+    return chunk.extraction_status === 'success' || Array.isArray(chunk.extracted_terms);
+}
+
 function lastScore(chunk) {
     if (!chunk.history) return null;
     for (let i = chunk.history.length - 1; i >= 0; i--) {
@@ -69,11 +75,14 @@ function projectSummary(prefix) {
     const chunkList = chunks.map((c, i) => {
         const status = chunkStatus(c);
         statuses[status]++;
-        if (c.extracted_terms) extracted++;
+        const ext = isExtracted(c);
+        if (ext) extracted++;
         return {
             i,
             tokens: c.tokens || null,
             status,
+            extracted: ext,
+            nTerms: Array.isArray(c.extracted_terms) ? c.extracted_terms.length : null,
             score: lastScore(c),
             attempts: c.history ? c.history.length : 0,
             preview: (c.original || '').slice(0, 80)
