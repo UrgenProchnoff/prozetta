@@ -3,6 +3,7 @@ import { llmManager } from '../core/llm_client.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractJson } from '../utils/parsers.js';
 import config from '../config.js';
+import prompts from '../prompts.js';
 
 export async function runConsolidationStage(state) {
     console.log('--- SYSTEM: Starting Stage 1b (Consolidation + Context) ---');
@@ -95,26 +96,9 @@ export async function runConsolidationStage(state) {
             ctx: b.contexts.join(' | ').slice(0, 200) // Truncate long contexts
         }));
 
-        const prompt = `
-        Ты - главный редактор. Создай чистовой глоссарий для перевода книги.
-        
-        Вход: Список терминов (orig) с примерами использования/контекстом (ctx).
-        Задача:
-        1. Проанализируй термины. Если это мусор или обычные слова (не имена/термины) - ИГНОРИРУЙ их.
-        2. Объедини дубликаты.
-        3. Переведи на русский.
-        4. Укажи пол (m/f/n) для имен.
-        
-        Рассуждай шаг за шагом.
-        JSON должен быть обернут в тройные кавычки (markdown block).
-        Формат ответа (JSON список):
-        \`\`\`json
-        [
-          { "original": "Term", "translation": "Термин", "type": "name|term", "gender": "m", "notes": "пояснение" }
-        ]
-        \`\`\``;
+        const prompt = prompts.consolidation.system;
 
-        const userMessage = JSON.stringify(promptInput);
+        const userMessage = prompts.consolidation.user(promptInput);
 
         let attempts = 0;
         let success = false;

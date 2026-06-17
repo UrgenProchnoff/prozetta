@@ -242,18 +242,42 @@ table.glossary .del { text-align: center; }
 
 /* --- Chunk view --- */
 
-.panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+/* align-items: stretch makes both panes share the taller pane's height,
+   and the flex children fill it — so the editor matches the original. */
+.panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
 @media (max-width: 900px) { .panes { grid-template-columns: 1fr; } }
+
+/* Hidden original: editor takes the full width and a comfortable height */
+.panes.hide-original { grid-template-columns: 1fr; }
+.panes.hide-original #c-pane-orig { display: none; }
+.panes.hide-original textarea { min-height: 60vh; }
 
 .pane {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 14px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 .pane h4 { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
-.pane .original-text { white-space: pre-wrap; line-height: 1.6; max-height: 60vh; overflow-y: auto; }
-.pane textarea { width: 100%; min-height: 50vh; resize: vertical; line-height: 1.6; }
+.pane .original-text {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 70vh;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    line-height: 1.6;
+}
+.pane textarea {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    max-height: 70vh;
+    resize: vertical;
+    line-height: 1.6;
+}
 
 .history-item {
     background: var(--panel);

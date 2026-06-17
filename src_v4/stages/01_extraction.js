@@ -2,6 +2,7 @@ import { llmManager } from '../core/llm_client.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractJson } from '../utils/parsers.js';
 import config from '../config.js';
+import prompts from '../prompts.js';
 
 export async function runExtractionStage(state) {
     console.log('--- SYSTEM: Starting Stage 1 (Extraction) ---');
@@ -22,27 +23,9 @@ export async function runExtractionStage(state) {
 
         console.log(`[Stage 1] Processing Chunk ${i + 1}/${chunks.length}...`);
 
-        const prompt = `
-        Ты - аналитик текста. Твоя задача - извлечь из фрагмента текста все **имена персонажей** и **специфические термины**, которые могут потребовать унификации при переводе.
-        Особое внимание удели:
-        1. Именам (людей, клички, названия существ).
-        2. Редким или выдуманным терминам (технологии, магия, организации).
-        Рассуждай шаг за шагом.
-        Выведи окончательный результат строго в формате JSON:
-        JSON должен быть обернут в тройные кавычки (markdown block).
-        
-        Пример ответа:
-        \`\`\`json
-        [
-          { "original": "Name", "type": "name", "gender": "male|female|unknown", "context": "Краткое описание на русском кто это или что это по тексту" },
-          { "original": "Term", "type": "term", "context": "Описание на русском, например: вид оружия, организация" }
-        ]
-        \`\`\`
-        Если ничего не найдено, верни пустой массив [].
-        Не выдумывай. Извлекай только то, что есть в тексте.
-        `;
+        const prompt = prompts.extraction.system;
 
-        const userMessage = `Текст: \n${chunk.original}`;
+        const userMessage = prompts.extraction.user(chunk.original);
 
         let extracted = null;
 

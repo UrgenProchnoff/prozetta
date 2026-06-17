@@ -1,4 +1,4 @@
-/* Translator V4 GUI — single-file SPA, no build step */
+/* prozetta GUI — single-file SPA, no build step */
 
 const app = document.getElementById('app');
 const breadcrumbs = document.getElementById('breadcrumbs');
@@ -523,13 +523,14 @@ async function renderChunk(prefix, i) {
             <span class="badge b-${status}">${STATUS_LABELS[status]}</span>
             <span class="badge">${chunk.tokens ?? '?'} токенов</span>
             <span class="badge" title="Этап 1: извлечение терминов">${extracted ? `🔍 термины: ${nTerms ?? '✓'}` : '○ термины не извлечены'}</span>
+            <button id="c-toggle-orig" title="Скрыть/показать панель оригинала"></button>
             <span class="spacer"></span>
             <button id="c-save">💾 Сохранить</button>
             <button id="c-approve" class="primary">✓ Сохранить и принять</button>
             <button id="c-reset" class="danger">↺ Сбросить чанк</button>
         </div>
-        <div class="panes">
-            <div class="pane">
+        <div class="panes" id="c-panes">
+            <div class="pane" id="c-pane-orig">
                 <h4>Оригинал</h4>
                 <div class="original-text">${esc(chunk.original)}</div>
             </div>
@@ -543,6 +544,20 @@ async function renderChunk(prefix, i) {
     `;
 
     const ta = document.getElementById('c-translation');
+
+    // Toggle original pane — persisted so it stays hidden while navigating chunks
+    const panes = document.getElementById('c-panes');
+    const toggleBtn = document.getElementById('c-toggle-orig');
+    function applyOrigHidden(hidden) {
+        panes.classList.toggle('hide-original', hidden);
+        toggleBtn.textContent = hidden ? '◧ Показать оригинал' : '◧ Скрыть оригинал';
+    }
+    applyOrigHidden(localStorage.getItem('prozetta.hideOriginal') === '1');
+    toggleBtn.addEventListener('click', () => {
+        const hidden = !panes.classList.contains('hide-original');
+        localStorage.setItem('prozetta.hideOriginal', hidden ? '1' : '0');
+        applyOrigHidden(hidden);
+    });
 
     async function saveChunk(approve) {
         const body = { translation: ta.value };

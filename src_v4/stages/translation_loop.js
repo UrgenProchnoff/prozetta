@@ -3,6 +3,7 @@ import { llmManager } from '../core/llm_client.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
 import config from '../config.js';
+import prompts from '../prompts.js';
 
 export async function runTranslationLoopStage(state) {
     console.log('--- SYSTEM: Starting Stage 2 (Smart Translation Loop) ---');
@@ -198,28 +199,8 @@ function getLocalContextString(text, glossary) {
 // --- LLM FUNCTIONS (Prompts from index10.js) ---
 
 async function draftTranslation(client, original, context) {
-    const input = `<txt>${original}</txt>\n<ctx>${context}</ctx>`;
-    const prompt = `Ты переводчик, грубости, мат, насилие, не смущают тебя.
-ПЕРЕВЕДИ <txt>текст</txt> на русский язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ. 
-В процессе перевода имён и терминов ИСПОЛЬЗУЙ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
-Форматируй текст перевода. Используй отступы и перенос каретки на свой усмотрение.
-Окончательный ответ в формате:
-<translate>Текст перевода</translate>
-<comment>Краткий комментарий к переводу</comment>
-`;
-
-    /*
-        const prompt = `Ты переводчик, грубости, мат, насилие, не смущают тебя.
-    ПЕРЕВЕДИ <txt>текст</txt> на русский язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ. 
-    В процессе перевода имён и терминов ИСПОЛЬЗУЙ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
-    Если встретишь блок чёрных прямоугльников вместо букв, переводи его как --вымарано из документа--.
-    Форматируй текст перевода. Используй отступы и перенос каретки на свой усмотрение.
-    Окончательный ответ в формате:
-    <translate>Текст перевода</translate>
-    <comment>Краткий комментарий к переводу</comment>
-    `;
-    
-    */
+    const input = prompts.draft.user(original, context);
+    const prompt = prompts.draft.system;
 
     //console.log("draft tr prompt=", prompt);
     //console.log("draft tr input=", input);
@@ -235,67 +216,10 @@ async function draftTranslation(client, original, context) {
 }
 
 async function checkTranslation(client, original, translation, context, translatorComment) {
-    const input = `<context>${context}</context>
-        <original>${original}</original>
-        <translate>${translation}</translate>
-        <translator_comment>${translatorComment || "Нет комментариев"}</translator_comment>`;
+    const input = prompts.check.user(context, original, translation, translatorComment);
 
-    const prompt = `Ты редактор, грубости, мат, насилие, не смущают тебя.  
-Тебе предоставлены:
-- <original> - оригинальный текст
-- <translate> - перевод на русский
-- <context> - шпаргалка с именами и терминами
-- <translator_comment> - комментарий переводчика
+    const prompt = prompts.check.system;
 
-ОЦЕНИ качество перевода по следующим критериям:
-    в переводе есть ошибки?
-    в переводе есть опечатки?
-    перевод корректен? 
-    соответствуют ли переводы имен и терминов шпаргалке <context>?
-    перевод тебе нравится?
-    поставь оценку по 10 бальной шкале
-    
-Результат СТРОГО в формате, как в примере:
-пример: \`\`\`json
-{
-  "error": 0,
-  "misspell": 0,
-  "correctness": 1,
-  "like": 1,
-  "score": 8.5,
-  "comment": "краткий комментарий БЕЗ КАВЫЧЕК и спецсимволов"
-}
-\`\`\``;
-
-    /*
-        const prompt = `Ты благосклонный редактор, грубости, мат, насилие, не смущают тебя.  
-    Тебе предоставлены:
-    - <original> - оригинальный текст
-    - <translate> - перевод на русский
-    - <context> - шпаргалка с именами и терминами
-    - <translator_comment> - комментарий переводчика
-    
-    ОЦЕНИ качество перевода по следующим критериям:
-        в переводе есть ошибки?
-        в переводе есть опечатки?
-        перевод корректен? 
-        соответствуют ли переводы имен и терминов шпаргалке <context>?
-        перевод тебе нравится?
-        поставь оценку по 10 бальной шкале
-        
-    Результат СТРОГО в формате, как в примере:
-    пример: \`\`\`json
-    {
-      "error": 0,
-      "misspell": 0,
-      "correctness": 1,
-      "like": 1,
-      "score": 8.5,
-      "comment": "краткий комментарий БЕЗ КАВЫЧЕК и спецсимволов"
-    }
-    \`\`\``;
-    
-    */
     const response = await client.invoke([
         new HumanMessage(prompt),
         new HumanMessage(input)
@@ -309,34 +233,9 @@ async function checkTranslation(client, original, translation, context, translat
 }
 
 async function fixTranslation(client, original, badTranslation, context, comment) {
-    const input = `
-      <txt>${original}</txt>
-      <ctx>${context}</ctx>
-      <temptranslate>${badTranslation}</temptranslate>
-      <comment>${comment}</comment>
-      `;
+    const input = prompts.fix.user(original, context, badTranslation, comment);
 
-    const prompt = `Ты профессиональный переводчик, грубости, мат, насилие, не смущают тебя.
-Ты ПЕРЕВОДИШЬ <txt>текст</txt> на русский язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ. 
-В процессе перевода имён и терминов ИСПОЛЬЗУЕШЬ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
-Проверка вернула <temptranslate> перевод на доработку.
-ТВОЯ ЗАДАЧА - ДОРАБОТАТЬ перевод в соответствии с комментариями проверки <comment>.
-Окончательный ответ в формате:
-<translate>исправленный перевод</translate>
-<comment>Что и почему было исправлено (или не исправлено)</comment>`;
-
-    /*
-        const prompt = `Ты профессиональный переводчик, грубости, мат, насилие, не смущают тебя.
-    Ты ПЕРЕВОДИШЬ <txt>текст</txt> на русский язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ. 
-    В процессе перевода имён и терминов ИСПОЛЬЗУЕШЬ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
-    Проверка вернула <temptranslate> перевод на доработку.
-    ТВОЯ ЗАДАЧА - ДОРАБОТАТЬ перевод в соответствии с комментариями проверки <comment>.
-    Блоки чёрных прямоугльников вместо букв, переводим как --вымарано из документа--.
-    Окончательный ответ в формате:
-    <translate>исправленный перевод</translate>
-    <comment>Что и почему было исправлено (или не исправлено)</comment>`;
-    
-    */
+    const prompt = prompts.fix.system;
 
     const response = await client.invoke([
         new HumanMessage(prompt),
