@@ -1,4 +1,4 @@
-/* prozetta GUI — single-file SPA, no build step */
+/* prozetta GUI — single-file SPA, no build step. UI strings via i18n (window.t). */
 
 const app = document.getElementById('app');
 const breadcrumbs = document.getElementById('breadcrumbs');
@@ -32,15 +32,10 @@ function toast(msg, kind = '') {
 function fmtDate(iso) {
     if (!iso) return '—';
     const d = new Date(iso);
-    return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString(i18n.dateLocale(), { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
-const STATUS_LABELS = {
-    success: 'принято',
-    best_effort: 'лучшая попытка',
-    in_progress: 'в работе',
-    pending: 'в очереди'
-};
+function statusLabel(s) { return t(`status.${s}`); }
 
 // --- Router ---
 
@@ -62,33 +57,34 @@ function route() {
 window.addEventListener('hashchange', route);
 
 function setCrumbs(html) { breadcrumbs.innerHTML = html; }
+function crumbHome() { return `<a href="#/">${esc(t('nav.projects'))}</a>`; }
 
 // ============================================================
 // Dashboard
 // ============================================================
 
 async function renderDashboard() {
-    setCrumbs('Проекты');
-    app.innerHTML = '<div class="loading">Загрузка…</div>';
+    setCrumbs(esc(t('nav.projects')));
+    app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
     let data;
     try { data = await api('/api/projects'); }
-    catch (e) { app.innerHTML = `<div class="loading">Ошибка: ${esc(e.message)}</div>`; return; }
+    catch (e) { app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`; return; }
 
     const projectCards = data.projects.map(p => {
         if (p.error) {
             return `<div class="card"><div class="title">${esc(p.prefix)}</div>
-                <div class="meta">Ошибка чтения состояния: ${esc(p.error)}</div></div>`;
+                <div class="meta">${esc(t('dash.stateReadError', { msg: p.error }))}</div></div>`;
         }
-        const t = p.total || 1;
-        const pct = s => (100 * (p.statuses[s] || 0) / t).toFixed(1);
+        const total = p.total || 1;
+        const pct = s => (100 * (p.statuses[s] || 0) / total).toFixed(1);
         const done = p.statuses.success + p.statuses.best_effort;
         return `
         <div class="card">
             <div class="title">${esc(p.prefix)}
-                ${p.running ? '<span class="badge b-running">⚡ выполняется</span>' : ''}
+                ${p.running ? `<span class="badge b-running">${esc(t('dash.running'))}</span>` : ''}
             </div>
-            <div class="meta">Обновлён: ${fmtDate(p.metadata.updatedAt)} · Чанков: ${p.total} · Глоссарий: ${p.glossaryCount ?? '—'}</div>
+            <div class="meta">${esc(t('dash.meta', { date: fmtDate(p.metadata.updatedAt), chunks: p.total, glossary: p.glossaryCount ?? '—' }))}</div>
             <div class="progress">
                 <div class="p-success" style="width:${pct('success')}%"></div>
                 <div class="p-best_effort" style="width:${pct('best_effort')}%"></div>
@@ -98,12 +94,12 @@ async function renderDashboard() {
                 <span class="badge b-success">✓ ${p.statuses.success}</span>
                 <span class="badge b-best_effort">~ ${p.statuses.best_effort}</span>
                 <span class="badge">⏳ ${p.statuses.pending + p.statuses.in_progress}</span>
-                <span class="badge">извлечено: ${p.extracted}/${p.total}</span>
+                <span class="badge">${esc(t('dash.extracted', { done: p.extracted, total: p.total }))}</span>
             </div>
             <div class="row">
-                <a class="btn" href="#/monitor/${encodeURIComponent(p.prefix)}">Монитор</a>
-                <a class="btn" href="#/glossary/${encodeURIComponent(p.prefix)}">Глоссарий</a>
-                ${done > 0 ? `<a class="btn" href="/api/projects/${encodeURIComponent(p.prefix)}/output">⬇ Перевод</a>` : ''}
+                <a class="btn" href="#/monitor/${encodeURIComponent(p.prefix)}">${esc(t('dash.monitor'))}</a>
+                <a class="btn" href="#/glossary/${encodeURIComponent(p.prefix)}">${esc(t('dash.glossary'))}</a>
+                ${done > 0 ? `<a class="btn" href="/api/projects/${encodeURIComponent(p.prefix)}/output">${esc(t('dash.download'))}</a>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -111,16 +107,16 @@ async function renderDashboard() {
     const newBookCards = data.newBooks.map(b => `
         <div class="card">
             <div class="title">📄 ${esc(b.prefix)}</div>
-            <div class="meta">${esc(b.file)} — проект ещё не создан</div>
+            <div class="meta">${esc(t('dash.notCreated', { file: b.file }))}</div>
             <div class="row">
-                <a class="btn primary" href="#/monitor/${encodeURIComponent(b.prefix)}">Открыть монитор → Этап 1</a>
+                <a class="btn primary" href="#/monitor/${encodeURIComponent(b.prefix)}">${esc(t('dash.openMonitor'))}</a>
             </div>
         </div>`).join('');
 
     app.innerHTML = `
-        <h2>Проекты</h2>
-        ${projectCards ? `<div class="cards">${projectCards}</div>` : '<p class="loading">Проектов пока нет.</p>'}
-        ${newBookCards ? `<h3>Новые книги в txt/</h3><div class="cards">${newBookCards}</div>` : ''}
+        <h2>${esc(t('nav.projects'))}</h2>
+        ${projectCards ? `<div class="cards">${projectCards}</div>` : `<p class="loading">${esc(t('dash.noProjects'))}</p>`}
+        ${newBookCards ? `<h3>${esc(t('dash.newBooks'))}</h3><div class="cards">${newBookCards}</div>` : ''}
     `;
 }
 
@@ -129,8 +125,8 @@ async function renderDashboard() {
 // ============================================================
 
 async function renderGlossary(prefix) {
-    setCrumbs(`<a href="#/">Проекты</a> / ${esc(prefix)} / Глоссарий`);
-    app.innerHTML = '<div class="loading">Загрузка…</div>';
+    setCrumbs(`${crumbHome()} / ${esc(prefix)} / ${esc(t('gloss.heading'))}`);
+    app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
     let terms, counts;
     try {
@@ -138,7 +134,7 @@ async function renderGlossary(prefix) {
         terms = data.terms;
         counts = data.counts;
     } catch (e) {
-        app.innerHTML = `<div class="loading">Ошибка: ${esc(e.message)}</div>`;
+        app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
         return;
     }
 
@@ -148,24 +144,24 @@ async function renderGlossary(prefix) {
     const knownTypes = [...new Set(['name', 'term', ...terms.map(t => t.type).filter(Boolean)])];
 
     app.innerHTML = `
-        <h2>Глоссарий: ${esc(prefix)}</h2>
+        <h2>${esc(t('gloss.heading'))}: ${esc(prefix)}</h2>
         <div class="toolbar">
-            <input id="g-search" type="search" placeholder="Поиск…" style="width:220px">
-            <button id="g-add">+ Термин</button>
+            <input id="g-search" type="search" placeholder="${esc(t('gloss.search'))}" style="width:220px">
+            <button id="g-add">${esc(t('gloss.addTerm'))}</button>
             <span id="g-count" class="badge"></span>
-            <span class="badge" title="Сколько чанков содержит термин. 0 — кандидат на удаление">0 вхождений — мусор?</span>
+            <span class="badge" title="${esc(t('gloss.junkHintTitle'))}">${esc(t('gloss.junkHint'))}</span>
             <span class="spacer"></span>
-            <span id="g-dirty" class="dirty" hidden>несохранённые изменения</span>
-            <button id="g-save" class="primary">💾 Сохранить</button>
+            <span id="g-dirty" class="dirty" hidden>${esc(t('gloss.unsaved'))}</span>
+            <button id="g-save" class="primary">${esc(t('common.save'))}</button>
         </div>
         <table class="glossary">
             <thead><tr>
-                <th style="width:22%">Оригинал</th>
-                <th style="width:22%">Перевод</th>
-                <th style="width:10%">Тип</th>
-                <th style="width:8%">Род</th>
-                <th>Заметки</th>
-                <th style="width:60px" title="Вхождений в чанках">#</th>
+                <th style="width:22%">${esc(t('gloss.colOriginal'))}</th>
+                <th style="width:22%">${esc(t('gloss.colTranslation'))}</th>
+                <th style="width:10%">${esc(t('gloss.colType'))}</th>
+                <th style="width:8%">${esc(t('gloss.colGender'))}</th>
+                <th>${esc(t('gloss.colNotes'))}</th>
+                <th style="width:60px" title="${esc(t('gloss.colCountTitle'))}">#</th>
                 <th style="width:40px"></th>
             </tr></thead>
             <tbody id="g-body"></tbody>
@@ -197,14 +193,14 @@ async function renderGlossary(prefix) {
                 <td><input data-f="translation" value="${esc(t.translation)}"></td>
                 <td><select data-f="type">${typeOpts}</select></td>
                 <td><select data-f="gender">
-                    <option value="" ${!t.gender ? 'selected' : ''}>—</option>
-                    <option value="m" ${t.gender === 'm' ? 'selected' : ''}>м</option>
-                    <option value="f" ${t.gender === 'f' ? 'selected' : ''}>ж</option>
-                    <option value="n" ${t.gender === 'n' ? 'selected' : ''}>ср</option>
+                    <option value="" ${!t.gender ? 'selected' : ''}>${esc(t('gloss.genderNone'))}</option>
+                    <option value="m" ${t.gender === 'm' ? 'selected' : ''}>${esc(t('gloss.genderM'))}</option>
+                    <option value="f" ${t.gender === 'f' ? 'selected' : ''}>${esc(t('gloss.genderF'))}</option>
+                    <option value="n" ${t.gender === 'n' ? 'selected' : ''}>${esc(t('gloss.genderN'))}</option>
                 </select></td>
                 <td><input data-f="notes" value="${esc(t.notes)}"></td>
                 <td class="cnt ${cnt === 0 ? 'zero' : ''}">${cnt ?? ''}</td>
-                <td class="del"><button class="danger" data-del="${idx}" title="Удалить">✕</button></td>
+                <td class="del"><button class="danger" data-del="${idx}" title="${esc(t('gloss.delTitle'))}">✕</button></td>
             </tr>`;
         }).join('');
     }
@@ -213,8 +209,8 @@ async function renderGlossary(prefix) {
         const tr = e.target.closest('tr');
         const f = e.target.dataset.f;
         if (!tr || !f) return;
-        const t = terms[+tr.dataset.idx];
-        t[f] = f === 'gender' && e.target.value === '' ? null : e.target.value;
+        const term = terms[+tr.dataset.idx];
+        term[f] = f === 'gender' && e.target.value === '' ? null : e.target.value;
         markDirty();
     });
 
@@ -246,16 +242,16 @@ async function renderGlossary(prefix) {
             const r = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary`, { method: 'PUT', body: cleaned });
             dirty = false;
             dirtyEl.hidden = true;
-            toast(`Глоссарий сохранён (${r.count} терминов)`, 'ok');
+            toast(t('gloss.saved', { count: r.count }), 'ok');
         } catch (e) {
-            toast(`Ошибка сохранения: ${e.message}`, 'error');
+            toast(t('gloss.saveError', { msg: e.message }), 'error');
         }
     });
 
     renderRows();
 
     cleanup = () => {
-        if (dirty && !confirm('Есть несохранённые изменения глоссария. Уйти без сохранения?')) {
+        if (dirty && !confirm(t('gloss.leaveConfirm'))) {
             // too late to cancel hash navigation cleanly — just warn
         }
     };
@@ -266,44 +262,44 @@ async function renderGlossary(prefix) {
 // ============================================================
 
 async function renderMonitor(prefix) {
-    setCrumbs(`<a href="#/">Проекты</a> / ${esc(prefix)} / Монитор`);
+    setCrumbs(`${crumbHome()} / ${esc(prefix)} / ${esc(t('mon.heading'))}`);
 
     app.innerHTML = `
-        <h2>Монитор: ${esc(prefix)}</h2>
+        <h2>${esc(t('mon.heading'))}: ${esc(prefix)}</h2>
         <div class="toolbar">
-            <label>Этап
+            <label>${esc(t('mon.stageLabel'))}
                 <select id="m-stage">
-                    <option value="1" data-base="1 — извлечение терминов">1 — извлечение терминов</option>
-                    <option value="2" data-base="2 — перевод">2 — перевод</option>
-                    <option value="export" data-base="экспорт">экспорт</option>
+                    <option value="1" data-base="${esc(t('mon.stage1'))}">${esc(t('mon.stage1'))}</option>
+                    <option value="2" data-base="${esc(t('mon.stage2'))}">${esc(t('mon.stage2'))}</option>
+                    <option value="export" data-base="${esc(t('mon.stageExport'))}">${esc(t('mon.stageExport'))}</option>
                 </select>
             </label>
-            <label>Модель
+            <label>${esc(t('mon.modelLabel'))}
                 <select id="m-model">
-                    <option value="default">по умолчанию (local)</option>
+                    <option value="default">${esc(t('mon.modelDefault'))}</option>
                     <option value="local">local</option>
                     <option value="google">google</option>
                     <option value="groq">groq</option>
                 </select>
             </label>
-            <button id="m-start" class="primary">▶ Старт</button>
-            <button id="m-stop" class="danger" disabled>■ Стоп</button>
+            <button id="m-start" class="primary">${esc(t('mon.start'))}</button>
+            <button id="m-stop" class="danger" disabled>${esc(t('mon.stop'))}</button>
             <span class="spacer"></span>
             <span id="m-status" class="badge"></span>
-            <a class="btn" href="#/glossary/${encodeURIComponent(prefix)}">Глоссарий</a>
-            <a class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">⬇ Перевод</a>
+            <a class="btn" href="#/glossary/${encodeURIComponent(prefix)}">${esc(t('dash.glossary'))}</a>
+            <a class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">${esc(t('dash.download'))}</a>
         </div>
         <div id="m-hint" class="hint" hidden></div>
         <div class="monitor-grid">
             <div>
                 <div class="legend">
-                    <span><span class="dot" style="background:#1e5e41"></span>принято</span>
-                    <span><span class="dot" style="background:#6b5320"></span>лучшая попытка</span>
-                    <span><span class="dot" style="background:#29456e"></span>в работе</span>
-                    <span><span class="dot" style="background:#1f242e"></span>в очереди</span>
-                    <span><span class="dot ext-dot"></span>термины извлечены</span>
+                    <span><span class="dot" style="background:#1e5e41"></span>${esc(t('status.success'))}</span>
+                    <span><span class="dot" style="background:#6b5320"></span>${esc(t('status.best_effort'))}</span>
+                    <span><span class="dot" style="background:#29456e"></span>${esc(t('status.in_progress'))}</span>
+                    <span><span class="dot" style="background:#1f242e"></span>${esc(t('status.pending'))}</span>
+                    <span><span class="dot ext-dot"></span>${esc(t('legend.extracted'))}</span>
                 </div>
-                <div id="m-grid" class="chunk-grid"><span class="loading">Загрузка…</span></div>
+                <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
             </div>
             <div>
                 <div id="m-log" class="log-pane"></div>
@@ -326,15 +322,15 @@ async function renderMonitor(prefix) {
     // Where is the project in the pipeline? Drives the recommended next stage.
     function recommend(s) {
         if (!s || s.total === 0)
-            return { stage: '1', text: 'Проект ещё не создан. Начните с Этапа 1 — извлечения терминов.' };
+            return { stage: '1', text: t('rec.notCreated') };
         if (s.extracted < s.total)
-            return { stage: '1', text: `Этап 1 не завершён: извлечено ${s.extracted}/${s.total} чанков. Сначала закончите извлечение.` };
+            return { stage: '1', text: t('rec.stage1Incomplete', { done: s.extracted, total: s.total }) };
         const done = s.statuses.success + s.statuses.best_effort;
         if (done >= s.total)
-            return { stage: 'export', text: 'Все чанки переведены. Можно собрать книгу (экспорт) или открыть чанк для ручной правки.' };
+            return { stage: 'export', text: t('rec.allDone') };
         if (!s.glossaryCount)
-            return { stage: '2', text: 'Термины извлечены, но глоссарий пуст. Проверьте/заполните глоссарий перед переводом.' };
-        return { stage: '2', text: `Термины извлечены, глоссарий: ${s.glossaryCount} терминов. Можно запускать Этап 2. Не забудьте вычитать глоссарий.` };
+            return { stage: '2', text: t('rec.glossaryEmpty') };
+        return { stage: '2', text: t('rec.canTranslate', { glossary: s.glossaryCount }) };
     }
 
     // Returns a warning string if the chosen stage breaks the recommended order
@@ -342,11 +338,11 @@ async function renderMonitor(prefix) {
     function preflight(stage, s) {
         if (stage !== '2') return null;
         if (!s || s.total === 0)
-            return 'Проект ещё не создан, Этап 1 (извлечение терминов) не выполнялся.\n\nБез глоссария перевод потеряет единообразие имён и терминов. Рекомендуется сначала запустить Этап 1.\n\nВсё равно запустить перевод?';
+            return t('pre.notCreated');
         if (s.extracted < s.total)
-            return `Извлечение терминов завершено не полностью: ${s.extracted}/${s.total} чанков.\n\nРекомендуемый порядок: сначала завершить Этап 1, вычитать глоссарий, затем переводить.\n\nВсё равно запустить перевод?`;
+            return t('pre.stage1Incomplete', { done: s.extracted, total: s.total });
         if (!s.glossaryCount)
-            return 'Глоссарий пуст или отсутствует.\n\nПеревод пойдёт без шпаргалки имён и терминов — единообразие не гарантируется. Обычно глоссарий заполняется на Этапе 1 и вычитывается вручную.\n\nВсё равно запустить перевод?';
+            return t('pre.glossaryEmpty');
         return null;
     }
 
@@ -355,21 +351,21 @@ async function renderMonitor(prefix) {
         // Annotate the recommended option and (once) preselect it
         for (const opt of stageSel.options) {
             const base = opt.dataset.base || opt.textContent;
-            opt.textContent = opt.value === rec.stage ? `★ ${base} (рекомендуется)` : base;
+            opt.textContent = opt.value === rec.stage ? t('mon.recommendedTag', { base }) : base;
         }
         if (!recommendApplied && !running) {
             stageSel.value = rec.stage;
             recommendApplied = true;
         }
         hintEl.hidden = false;
-        hintEl.textContent = `▶ Рекомендуется: ${rec.text}`;
+        hintEl.textContent = t('mon.recommendPrefix', { text: rec.text });
     }
 
     function setRunning(v) {
         running = v;
         startBtn.disabled = v;
         stopBtn.disabled = !v;
-        statusEl.textContent = v ? '⚡ выполняется' : 'остановлен';
+        statusEl.textContent = v ? t('mon.running') : t('mon.stopped');
         statusEl.className = `badge ${v ? 'b-running' : ''}`;
         if (!v) { activeChunk = null; }
     }
@@ -394,14 +390,17 @@ async function renderMonitor(prefix) {
     let summary = null;
     function drawGrid() {
         if (!summary) {
-            grid.innerHTML = '<span class="loading">Проект ещё не создан — запустите Этап 1.</span>';
+            grid.innerHTML = `<span class="loading">${esc(t('mon.gridEmpty'))}</span>`;
             return;
         }
         grid.innerHTML = summary.chunks.map(c => {
-            const title = `Чанк ${c.i + 1} · ${STATUS_LABELS[c.status]}`
-                + `\nТермины: ${c.extracted ? (c.nTerms != null ? `извлечено (${c.nTerms})` : 'извлечено') : 'не извлечено'}`
-                + (c.score != null ? ` · оценка ${c.score}` : '')
-                + (c.attempts ? ` · шагов: ${c.attempts}` : '')
+            const termsValue = c.extracted
+                ? (c.nTerms != null ? t('mon.chunkTermsYes', { n: c.nTerms }) : t('mon.chunkTermsYesNoCount'))
+                : t('mon.chunkTermsNo');
+            const title = t('mon.chunkTitle', { n: c.i + 1, status: statusLabel(c.status) })
+                + '\n' + t('mon.chunkTerms', { value: termsValue })
+                + (c.score != null ? t('mon.chunkScore', { score: c.score }) : '')
+                + (c.attempts ? t('mon.chunkSteps', { n: c.attempts }) : '')
                 + `\n${c.preview}`;
             return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
                 href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}</a>`;
@@ -440,7 +439,7 @@ async function renderMonitor(prefix) {
         const j = JSON.parse(e.data);
         setRunning(!!j.running);
         if (j.running === false && j.exitCode !== undefined) {
-            appendLog(`[GUI] Процесс завершён (код ${j.exitCode})`);
+            appendLog(t('mon.processFinished', { code: j.exitCode }));
             refreshGrid();
         }
     });
@@ -455,14 +454,14 @@ async function renderMonitor(prefix) {
         try {
             await api('/api/run', { method: 'POST', body: { prefix, stage, model } });
             logPane.innerHTML = '';
-            toast(`Этап ${stage} запущен`, 'ok');
+            toast(t('mon.stageStarted', { stage }), 'ok');
         } catch (e) {
             toast(e.message, 'error');
         }
     });
 
     stopBtn.addEventListener('click', async () => {
-        if (!confirm('Остановить процесс? Прогресс по завершённым чанкам сохранён.')) return;
+        if (!confirm(t('mon.stopConfirm'))) return;
         try { await api(`/api/projects/${encodeURIComponent(prefix)}/stop`, { method: 'POST' }); }
         catch (e) { toast(e.message, 'error'); }
     });
@@ -475,12 +474,12 @@ async function renderMonitor(prefix) {
 // ============================================================
 
 async function renderChunk(prefix, i) {
-    setCrumbs(`<a href="#/">Проекты</a> / <a href="#/monitor/${encodeURIComponent(prefix)}">${esc(prefix)}</a> / Чанк ${i + 1}`);
-    app.innerHTML = '<div class="loading">Загрузка…</div>';
+    setCrumbs(`${crumbHome()} / <a href="#/monitor/${encodeURIComponent(prefix)}">${esc(prefix)}</a> / ${esc(t('chunk.crumb', { n: i + 1 }))}`);
+    app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
     let data;
     try { data = await api(`/api/projects/${encodeURIComponent(prefix)}/chunks/${i}`); }
-    catch (e) { app.innerHTML = `<div class="loading">Ошибка: ${esc(e.message)}</div>`; return; }
+    catch (e) { app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`; return; }
 
     const { chunk, total } = data;
     const status = chunk.translation_status === 'success' ? 'success'
@@ -498,12 +497,12 @@ async function renderChunk(prefix, i) {
             : h.step.startsWith('redraft') ? 'redraft' : 'draft';
         const r = h.result;
         const pills = r ? `
-            <span class="score-pill">оценка: ${r.score ?? '?'}</span>
-            <span class="score-pill">like: ${r.like ?? '?'}</span>
-            <span class="score-pill">err: ${r.error ?? '?'}</span>` : '';
+            <span class="score-pill">${esc(t('chunk.scorePill', { v: r.score ?? '?' }))}</span>
+            <span class="score-pill">${esc(t('chunk.likePill', { v: r.like ?? '?' }))}</span>
+            <span class="score-pill">${esc(t('chunk.errPill', { v: r.error ?? '?' }))}</span>` : '';
         const body = [
-            r?.comment ? `Редактор: ${r.comment}` : '',
-            h.translator_comment ? `Переводчик: ${h.translator_comment}` : ''
+            r?.comment ? t('chunk.editorLabel', { comment: r.comment }) : '',
+            h.translator_comment ? t('chunk.translatorLabel', { comment: h.translator_comment }) : ''
         ].filter(Boolean).join('\n');
         return `<details class="history-item">
             <summary>
@@ -518,29 +517,34 @@ async function renderChunk(prefix, i) {
     app.innerHTML = `
         <div class="toolbar">
             <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${i - 1}" ${i <= 0 ? 'hidden' : ''}>← ${i}</a>
-            <h2 style="margin:0">Чанк ${i + 1} / ${total}</h2>
+            <h2 style="margin:0">${esc(t('chunk.heading', { i: i + 1, total }))}</h2>
             <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${i + 1}" ${i >= total - 1 ? 'hidden' : ''}>${i + 2} →</a>
-            <span class="badge b-${status}">${STATUS_LABELS[status]}</span>
-            <span class="badge">${chunk.tokens ?? '?'} токенов</span>
-            <span class="badge" title="Этап 1: извлечение терминов">${extracted ? `🔍 термины: ${nTerms ?? '✓'}` : '○ термины не извлечены'}</span>
-            <button id="c-toggle-orig" title="Скрыть/показать панель оригинала"></button>
+            <span class="badge b-${status}">${esc(statusLabel(status))}</span>
+            <span class="badge">${esc(t('chunk.tokens', { n: chunk.tokens ?? '?' }))}</span>
+            <span class="badge" title="${esc(t('chunk.termsTitle'))}">${extracted ? esc(t('chunk.termsExtracted', { n: nTerms ?? '✓' })) : esc(t('chunk.termsNot'))}</span>
+            <button id="c-toggle-orig" title="${esc(t('chunk.toggleTitle'))}"></button>
+            <span class="font-ctl">
+                <button id="c-font-dec" title="${esc(t('chunk.fontSmaller'))}">A−</button>
+                <button id="c-font-size" class="font-size-label"></button>
+                <button id="c-font-inc" title="${esc(t('chunk.fontLarger'))}">A+</button>
+            </span>
             <span class="spacer"></span>
-            <button id="c-save">💾 Сохранить</button>
-            <button id="c-approve" class="primary">✓ Сохранить и принять</button>
-            <button id="c-reset" class="danger">↺ Сбросить чанк</button>
+            <button id="c-save">${esc(t('common.save'))}</button>
+            <button id="c-approve" class="primary">${esc(t('chunk.approve'))}</button>
+            <button id="c-reset" class="danger">${esc(t('chunk.reset'))}</button>
         </div>
         <div class="panes" id="c-panes">
             <div class="pane" id="c-pane-orig">
-                <h4>Оригинал</h4>
+                <h4>${esc(t('chunk.original'))}</h4>
                 <div class="original-text">${esc(chunk.original)}</div>
             </div>
             <div class="pane">
-                <h4>Перевод (редактируемый)</h4>
+                <h4>${esc(t('chunk.translationEditable'))}</h4>
                 <textarea id="c-translation">${esc(chunk.translation || '')}</textarea>
             </div>
         </div>
-        <h3>История (${history.length})</h3>
-        ${historyHtml || '<p class="loading">История пуста — чанк ещё не переводился.</p>'}
+        <h3>${esc(t('chunk.history', { n: history.length }))}</h3>
+        ${historyHtml || `<p class="loading">${esc(t('chunk.historyEmpty'))}</p>`}
     `;
 
     const ta = document.getElementById('c-translation');
@@ -550,7 +554,7 @@ async function renderChunk(prefix, i) {
     const toggleBtn = document.getElementById('c-toggle-orig');
     function applyOrigHidden(hidden) {
         panes.classList.toggle('hide-original', hidden);
-        toggleBtn.textContent = hidden ? '◧ Показать оригинал' : '◧ Скрыть оригинал';
+        toggleBtn.textContent = hidden ? t('chunk.showOriginal') : t('chunk.hideOriginal');
     }
     applyOrigHidden(localStorage.getItem('prozetta.hideOriginal') === '1');
     toggleBtn.addEventListener('click', () => {
@@ -559,12 +563,31 @@ async function renderChunk(prefix, i) {
         applyOrigHidden(hidden);
     });
 
+    // Reader font size — applied to both panes via a CSS variable, persisted.
+    const FONT_DEFAULT = 15, FONT_MIN = 11, FONT_MAX = 32;
+    const sizeLabel = document.getElementById('c-font-size');
+    function readFontSize() {
+        const v = parseInt(localStorage.getItem('prozetta.fontSize'), 10);
+        return Number.isFinite(v) ? Math.min(FONT_MAX, Math.max(FONT_MIN, v)) : FONT_DEFAULT;
+    }
+    function applyFontSize(px) {
+        const size = Math.min(FONT_MAX, Math.max(FONT_MIN, px));
+        localStorage.setItem('prozetta.fontSize', String(size));
+        panes.style.setProperty('--reader-font', size + 'px');
+        sizeLabel.textContent = size;
+        sizeLabel.title = t('chunk.fontResetTitle', { size });
+    }
+    applyFontSize(readFontSize());
+    document.getElementById('c-font-dec').addEventListener('click', () => applyFontSize(readFontSize() - 1));
+    document.getElementById('c-font-inc').addEventListener('click', () => applyFontSize(readFontSize() + 1));
+    sizeLabel.addEventListener('click', () => applyFontSize(FONT_DEFAULT));
+
     async function saveChunk(approve) {
         const body = { translation: ta.value };
         if (approve) body.translation_status = 'success';
         try {
             await api(`/api/projects/${encodeURIComponent(prefix)}/chunks/${i}`, { method: 'PUT', body });
-            toast(approve ? 'Сохранено и принято' : 'Сохранено', 'ok');
+            toast(approve ? t('chunk.savedApproved') : t('chunk.saved'), 'ok');
             if (approve) renderChunk(prefix, i);
         } catch (e) {
             toast(e.message, 'error');
@@ -574,10 +597,10 @@ async function renderChunk(prefix, i) {
     document.getElementById('c-save').addEventListener('click', () => saveChunk(false));
     document.getElementById('c-approve').addEventListener('click', () => saveChunk(true));
     document.getElementById('c-reset').addEventListener('click', async () => {
-        if (!confirm('Сбросить чанк? Перевод и вся история попыток будут удалены, Этап 2 переведёт его заново.')) return;
+        if (!confirm(t('chunk.resetConfirm'))) return;
         try {
             await api(`/api/projects/${encodeURIComponent(prefix)}/chunks/${i}`, { method: 'PUT', body: { reset: true } });
-            toast('Чанк сброшен', 'ok');
+            toast(t('chunk.resetDone'), 'ok');
             renderChunk(prefix, i);
         } catch (e) {
             toast(e.message, 'error');
@@ -585,5 +608,24 @@ async function renderChunk(prefix, i) {
     });
 }
 
+// ============================================================
+// Language switcher
+// ============================================================
+
+function initLangSwitcher() {
+    const sel = document.getElementById('lang-select');
+    if (!sel) return;
+    sel.title = t('header.lang');
+    sel.innerHTML = Object.entries(i18n.langs)
+        .map(([code, meta]) => `<option value="${esc(code)}">${esc(meta.name)}</option>`).join('');
+    sel.value = i18n.getLang();
+    sel.addEventListener('change', () => {
+        i18n.setLang(sel.value);
+        sel.title = t('header.lang');
+        route(); // re-render current view in the new language
+    });
+}
+
 // --- Go ---
+initLangSwitcher();
 route();

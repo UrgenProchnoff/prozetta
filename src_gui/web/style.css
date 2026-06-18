@@ -45,6 +45,8 @@ header {
 #breadcrumbs { color: var(--muted); }
 #breadcrumbs a { color: var(--accent); text-decoration: none; }
 
+.lang-select { margin-left: auto; padding: 4px 8px; font-size: 13px; }
+
 main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 
 .loading { color: var(--muted); padding: 40px; text-align: center; }
@@ -269,6 +271,7 @@ table.glossary .del { text-align: center; }
     overflow-y: auto;
     white-space: pre-wrap;
     line-height: 1.6;
+    font-size: var(--reader-font, 15px);
 }
 .pane textarea {
     flex: 1 1 auto;
@@ -277,6 +280,17 @@ table.glossary .del { text-align: center; }
     max-height: 70vh;
     resize: vertical;
     line-height: 1.6;
+    font-size: var(--reader-font, 15px);
+}
+
+/* Reader font-size stepper in the chunk toolbar */
+.font-ctl { display: inline-flex; align-items: center; gap: 2px; }
+.font-ctl button { padding: 4px 8px; }
+.font-ctl .font-size-label {
+    min-width: 30px;
+    text-align: center;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
 }
 
 .history-item {
