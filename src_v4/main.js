@@ -6,6 +6,12 @@ import { runExtractionStage } from './stages/01_extraction.js';
 import { runConsolidationStage } from './stages/02_consolidation.js';
 import { runTranslationLoopStage } from './stages/translation_loop.js';
 import { llmManager } from './core/llm_client.js';
+import { usageTracker } from './core/usage_tracker.js';
+
+function reportUsage() {
+    const report = usageTracker.formatReport();
+    if (report) console.log('\n' + report);
+}
 
 async function main() {
     const args = process.argv.slice(2);
@@ -77,12 +83,15 @@ async function main() {
                 await runExtractionStage(state);
                 console.log('\n--- Starting Consolidation ---');
                 await runConsolidationStage(state);
+                state.save(); // flush token-usage stats (consolidation writes only the glossary)
                 console.log('\n=== STAGE 1 COMPLETE ===');
+                reportUsage();
                 console.log(`Now please MANUALLY REVIEW and EDIT "${path.basename(state.getGlossaryPath())}" to ensure terms are correct.`);
                 console.log(`Once finished, run: node src_v4/main.js --stage=2 --file=${filePath}`);
                 break;
             case '2':
                 await runTranslationLoopStage(state);
+                reportUsage();
                 // Auto-export after translation loop
                 exportBook(state);
                 break;
@@ -120,6 +129,15 @@ function exportBook(state) {
             missing++;
         }
     }
+
+    // Disclaimer at the end of the book.
+    const modelName = llmManager.getModelName();
+    const disclaimer =
+        `\n\n---\n` +
+        `Перевод сделан проектом prozetta — помощник переводчика.\n` +
+        `Модель: ${modelName}.\n` +
+        `GitHub: <ссылка будет добавлена позже>\n`;
+    fs.appendFileSync(outputPath, disclaimer);
 
     console.log(`--- SYSTEM: Book Assembled to ${outputPath} ---`);
     if (missing > 0) {

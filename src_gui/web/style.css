@@ -45,7 +45,48 @@ header {
 #breadcrumbs { color: var(--muted); }
 #breadcrumbs a { color: var(--accent); text-decoration: none; }
 
-.lang-select { margin-left: auto; padding: 4px 8px; font-size: 13px; }
+.settings-link {
+    margin-left: auto;
+    text-decoration: none;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--muted);
+    padding: 2px 4px;
+}
+.settings-link:hover { color: var(--accent); }
+.lang-select { padding: 4px 8px; font-size: 13px; }
+
+/* --- Settings page --- */
+.cfg-group .title { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+.cfg-gid { color: var(--muted); font-size: 12px; font-weight: 400; font-family: ui-monospace, monospace; }
+.cfg-test-area { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.cfg-test { font-size: 12px; padding: 3px 10px; }
+.cfg-test-result { font-size: 12px; color: var(--muted); cursor: help; }
+.cfg-test-result.ok { color: var(--green); }
+.cfg-test-result.err { color: var(--red); }
+.cfg-field {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    padding: 5px 0;
+    border-top: 1px solid #1c212b;
+}
+.cfg-field label {
+    color: var(--text);
+    font-size: 12.5px;
+    font-family: ui-monospace, monospace;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-wrap: anywhere;
+}
+.cfg-input { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.cfg-input input[type="text"],
+.cfg-input input[type="password"],
+.cfg-input input[type="number"] { flex: 1 1 120px; min-width: 0; }
+.cfg-hint { color: var(--muted); font-size: 12px; }
+.cfg-ovr { color: var(--yellow); }
 
 main { padding: 20px; max-width: 1400px; margin: 0 auto; }
 
@@ -57,6 +98,12 @@ h3 { margin: 24px 0 10px; font-size: 15px; color: var(--muted); }
 /* --- Cards / dashboard --- */
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+
+/* Settings: single wide column instead of a tile grid */
+.cards-col { grid-template-columns: minmax(0, 720px); }
+
+/* Active-model selector card sits above the model cards */
+.cfg-provider { max-width: 720px; margin-bottom: 14px; }
 
 .card {
     background: var(--panel);
@@ -140,6 +187,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 }
 .toolbar .spacer { flex: 1; }
 .toolbar .dirty { color: var(--yellow); font-size: 12px; }
+.mon-model { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.mon-model strong { color: var(--text); font-family: ui-monospace, monospace; }
+.mon-model a { color: var(--muted); }
 
 table.glossary { width: 100%; border-collapse: collapse; }
 table.glossary th {
@@ -346,3 +396,59 @@ table.glossary .del { text-align: center; }
 #toast .t.ok { border-left-color: var(--green); }
 
 @keyframes fadein { from { opacity: 0; transform: translateY(6px); } }
+
+/* --- Token usage stats --- */
+.card .usage-line { margin: 6px 0 0; color: var(--accent); cursor: help; }
+
+.usage-details { margin-top: 14px; }
+.usage-details > summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 0;
+    user-select: none;
+}
+.usage-details > summary:hover { color: var(--text); }
+
+.usage-panel { margin-top: 8px; }
+.usage-panel.empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+
+.usage-totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.usage-stat {
+    flex: 1 1 0;
+    min-width: 70px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: center;
+}
+.usage-stat .num { display: block; font-size: 18px; font-weight: 700; }
+.usage-stat .lbl { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.usage-stat.total { border-color: var(--accent); }
+.usage-stat.total .num { color: var(--accent); }
+
+.usage-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-bottom: 12px;
+}
+.usage-table th, .usage-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+}
+.usage-table th:first-child, .usage-table td:first-child { text-align: left; }
+.usage-table th {
+    color: var(--muted);
+    font-weight: 600;
+}
+.usage-table tbody tr:last-child td { border-bottom: none; }
+.usage-table td:first-child { color: var(--text); }

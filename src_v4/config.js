@@ -1,4 +1,14 @@
-export default {
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const defaults = {
+    // Active LLM provider used when no --model override is passed on the CLI.
+    // One of: 'local' | 'google' | 'groq'. Set via the GUI settings page.
+    activeProvider: 'local',
+
     logic_model: {
         baseUrl: 'http://127.0.0.1:8007/v1',
         apiKey: 'sk-no-key-required',
@@ -6,14 +16,6 @@ export default {
         timeout: 400000,
         temperature: 0.6,
         maxRPM: 10 // Local is usually fast
-    },
-    fast_model: {
-        baseUrl: 'http://127.0.0.1:8008/v1',
-        apiKey: 'sk-no-key-required',
-        modelName: 'hy-mt-1.5-7b',
-        timeout: 300000,
-        temperature: 0.3,
-        maxRPM: 10
     },
     google_model: {
         apiKey: process.env.GOOGLE_API_KEY,
@@ -23,7 +25,10 @@ export default {
         maxRPM: 10, // Conservative for Google Free/Pay-as-you-go
         maxOutputTokens: 8192
     },
+    // Custom OpenAI-compatible endpoint. Defaults to Groq, but baseUrl can point
+    // at any OpenAI-compatible API (Together, OpenRouter, vLLM, ...).
     groq_model: {
+        baseUrl: 'https://api.groq.com/openai/v1',
         apiKey: process.env.GROQ_API_KEY,
         modelName: 'moonshotai/kimi-k2-instruct-0905',
         timeout: 300000,
@@ -50,3 +55,30 @@ export default {
         redraftScoreThreshold: 7.5,     // Score < this OR like=0 → retranslate from scratch
     }
 };
+
+// --- GUI overrides ---
+// Optional config.overrides.json (next to this file) is deep-merged over the
+// defaults above. The GUI settings page writes only that file, so config.js
+// stays the source of defaults and keeps env-based secrets intact.
+function deepMerge(base, over) {
+    const out = Array.isArray(base) ? [...base] : { ...base };
+    for (const k of Object.keys(over || {})) {
+        const v = over[k];
+        if (v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object') {
+            out[k] = deepMerge(out[k], v);
+        } else {
+            out[k] = v;
+        }
+    }
+    return out;
+}
+
+let overrides = {};
+try {
+    const p = path.join(__dirname, 'config.overrides.json');
+    if (fs.existsSync(p)) overrides = JSON.parse(fs.readFileSync(p, 'utf-8'));
+} catch (e) {
+    console.warn(`[config] Failed to read config.overrides.json: ${e.message}`);
+}
+
+export default deepMerge(defaults, overrides);

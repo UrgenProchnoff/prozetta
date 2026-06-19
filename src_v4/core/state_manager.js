@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { usageTracker } from './usage_tracker.js';
 
 export class ProjectState {
     constructor(workDir, filePrefix) {
@@ -29,6 +30,9 @@ export class ProjectState {
                 this.data = JSON.parse(raw);
                 console.log(`[State] Loaded project state from ${this.stateFile}`);
                 console.log(`[State] Total chunks: ${this.data.chunks.length}`);
+                // Seed the usage tracker with spend already recorded for this project
+                // so this run accumulates on top of it instead of resetting.
+                usageTracker.setBaseline(this.data.metadata?.usage);
             } catch (e) {
                 console.error(`[State] Error loading state file: ${e.message}`);
                 throw e;
@@ -40,6 +44,10 @@ export class ProjectState {
 
     save() {
         this.data.metadata.updatedAt = new Date().toISOString();
+        // Persist accumulated LLM spend (baseline + this session) for the GUI.
+        if (usageTracker.hasData || usageTracker.hasBaseline) {
+            this.data.metadata.usage = usageTracker.snapshot();
+        }
         const tempFile = this.stateFile + '.tmp';
 
         try {

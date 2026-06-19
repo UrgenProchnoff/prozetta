@@ -38,7 +38,6 @@
 Настройки моделей — в [src_v4/config.js](src_v4/config.js):
 
 - **logic_model** — основная модель перевода и проверки (по умолчанию локальный сервер)
-- **fast_model** — модель для быстрых задач
 - **google_model** — Google Gemini
 - **groq_model** — Groq
 

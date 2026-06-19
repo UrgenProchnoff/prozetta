@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { llmManager } from '../core/llm_client.js';
+import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractJson } from '../utils/parsers.js';
 import config from '../config.js';
@@ -7,6 +8,7 @@ import prompts from '../prompts.js';
 
 export async function runConsolidationStage(state) {
     console.log('--- SYSTEM: Starting Stage 1b (Consolidation + Context) ---');
+    usageTracker.setStage('consolidation');
 
     const chunks = state.getChunks();
     const allTerms = new Map();

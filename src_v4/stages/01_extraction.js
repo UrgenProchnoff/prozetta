@@ -1,4 +1,5 @@
 import { llmManager } from '../core/llm_client.js';
+import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractJson } from '../utils/parsers.js';
 import config from '../config.js';
@@ -6,6 +7,7 @@ import prompts from '../prompts.js';
 
 export async function runExtractionStage(state) {
     console.log('--- SYSTEM: Starting Stage 1 (Extraction) ---');
+    usageTracker.setStage('extraction');
 
     const chunks = state.getChunks();
     const client = llmManager.getClient('logic');
@@ -85,6 +87,8 @@ export async function runExtractionStage(state) {
         processedCount++;
         state.save();
         console.log(`[Stage 1] Saved progress.`);
+        const usageLine = usageTracker.sessionLine();
+        if (usageLine) console.log(usageLine);
     }
 
     state.save();

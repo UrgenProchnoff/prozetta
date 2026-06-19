@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { llmManager } from '../core/llm_client.js';
+import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
 import config from '../config.js';
@@ -176,6 +177,8 @@ export async function runTranslationLoopStage(state) {
         processedCount++;
         state.save();
         console.log(`[Stage 2] Saved progress.`);
+        const usageLine = usageTracker.sessionLine();
+        if (usageLine) console.log(usageLine);
     }
 
     state.save();
@@ -199,6 +202,7 @@ function getLocalContextString(text, glossary) {
 // --- LLM FUNCTIONS (Prompts from index10.js) ---
 
 async function draftTranslation(client, original, context) {
+    usageTracker.setStage('translate');
     const input = prompts.draft.user(original, context);
     const prompt = prompts.draft.system;
 
@@ -216,6 +220,7 @@ async function draftTranslation(client, original, context) {
 }
 
 async function checkTranslation(client, original, translation, context, translatorComment) {
+    usageTracker.setStage('check');
     const input = prompts.check.user(context, original, translation, translatorComment);
 
     const prompt = prompts.check.system;
@@ -233,6 +238,7 @@ async function checkTranslation(client, original, translation, context, translat
 }
 
 async function fixTranslation(client, original, badTranslation, context, comment) {
+    usageTracker.setStage('fix');
     const input = prompts.fix.user(original, context, badTranslation, comment);
 
     const prompt = prompts.fix.system;

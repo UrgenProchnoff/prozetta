@@ -37,7 +37,6 @@ progress, and correcting individual chunks.
 Model settings live in [src_v4/config.js](src_v4/config.js):
 
 - **logic_model** — main translation/review model (local server by default)
-- **fast_model** — model for quick tasks
 - **google_model** — Google Gemini
 - **groq_model** — Groq
 

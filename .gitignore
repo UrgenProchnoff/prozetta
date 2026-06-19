@@ -1,5 +1,6 @@
 node_modules/
 .env
+src_v4/config.overrides.json
 *_project_state.json
 *_progress.json
 *_glossary.json

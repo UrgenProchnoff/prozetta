@@ -37,6 +37,61 @@ function fmtDate(iso) {
 
 function statusLabel(s) { return t(`status.${s}`); }
 
+// Compact token/number formatting: 1234 → "1.2k", 3_400_000 → "3.4M".
+function fmtNum(n) {
+    n = Number(n) || 0;
+    if (n < 1000) return String(n);
+    if (n < 1e6) return (n / 1e3).toFixed(n < 1e4 ? 1 : 0) + 'k';
+    return (n / 1e6).toFixed(n < 1e7 ? 2 : 1) + 'M';
+}
+
+// Localized labels for the per-operation usage breakdown.
+function usageStageLabel(stage) {
+    const key = `usage.stage.${stage}`;
+    const label = t(key);
+    return label === key ? stage : label;
+}
+
+// Render the full token-spend panel for the monitor view from metadata.usage.
+function usagePanelHtml(usage) {
+    if (!usage || !usage.totalCalls) {
+        return `<div class="usage-panel empty">${esc(t('usage.none'))}</div>`;
+    }
+    const stages = Object.keys(usage.byStage || {})
+        .map(k => ({ k, ...usage.byStage[k] }))
+        .sort((a, b) => b.totalTokens - a.totalTokens);
+    const models = Object.keys(usage.byModel || {})
+        .map(k => ({ k, ...usage.byModel[k] }))
+        .sort((a, b) => b.totalTokens - a.totalTokens);
+
+    const stageRows = stages.map(s => `
+        <tr><td>${esc(usageStageLabel(s.k))}</td><td>${fmtNum(s.calls)}</td>
+        <td>${fmtNum(s.inputTokens)}</td><td>${fmtNum(s.outputTokens)}</td>
+        <td>${fmtNum(s.totalTokens)}</td></tr>`).join('');
+    const modelRows = models.map(m => `
+        <tr><td>${esc(m.k)}</td><td>${fmtNum(m.calls)}</td>
+        <td>${fmtNum(m.inputTokens)}</td><td>${fmtNum(m.outputTokens)}</td>
+        <td>${fmtNum(m.totalTokens)}</td></tr>`).join('');
+
+    return `
+    <div class="usage-panel">
+        <div class="usage-totals">
+            <div class="usage-stat"><span class="num">${fmtNum(usage.totalCalls)}</span><span class="lbl">${esc(t('usage.calls'))}</span></div>
+            <div class="usage-stat"><span class="num">${fmtNum(usage.inputTokens)}</span><span class="lbl">${esc(t('usage.input'))}</span></div>
+            <div class="usage-stat"><span class="num">${fmtNum(usage.outputTokens)}</span><span class="lbl">${esc(t('usage.output'))}</span></div>
+            <div class="usage-stat total"><span class="num">${fmtNum(usage.totalTokens)}</span><span class="lbl">${esc(t('usage.total'))}</span></div>
+        </div>
+        <table class="usage-table">
+            <thead><tr><th>${esc(t('usage.byStage'))}</th><th>${esc(t('usage.calls'))}</th><th>${esc(t('usage.input'))}</th><th>${esc(t('usage.output'))}</th><th>${esc(t('usage.total'))}</th></tr></thead>
+            <tbody>${stageRows}</tbody>
+        </table>
+        ${models.length ? `<table class="usage-table">
+            <thead><tr><th>${esc(t('usage.byModel'))}</th><th>${esc(t('usage.calls'))}</th><th>${esc(t('usage.input'))}</th><th>${esc(t('usage.output'))}</th><th>${esc(t('usage.total'))}</th></tr></thead>
+            <tbody>${modelRows}</tbody>
+        </table>` : ''}
+    </div>`;
+}
+
 // --- Router ---
 
 let cleanup = null; // page teardown (close SSE etc.)
@@ -47,6 +102,7 @@ function route() {
     const parts = hash.split('/').filter(Boolean);
 
     if (parts.length === 0) return renderDashboard();
+    if (parts[0] === 'settings') return renderSettings();
     if (parts[0] === 'glossary' && parts[1]) return renderGlossary(decodeURIComponent(parts[1]));
     if (parts[0] === 'monitor' && parts[1]) return renderMonitor(decodeURIComponent(parts[1]));
     if (parts[0] === 'chunk' && parts[1] && parts[2] !== undefined)
@@ -96,6 +152,7 @@ async function renderDashboard() {
                 <span class="badge">⏳ ${p.statuses.pending + p.statuses.in_progress}</span>
                 <span class="badge">${esc(t('dash.extracted', { done: p.extracted, total: p.total }))}</span>
             </div>
+            ${p.metadata?.usage?.totalCalls ? `<div class="meta usage-line" title="${esc(t('usage.cardTitle'))}">⚡ ${esc(t('usage.cardLine', { calls: fmtNum(p.metadata.usage.totalCalls), tokens: fmtNum(p.metadata.usage.totalTokens) }))}</div>` : ''}
             <div class="row">
                 <a class="btn" href="#/monitor/${encodeURIComponent(p.prefix)}">${esc(t('dash.monitor'))}</a>
                 <a class="btn" href="#/glossary/${encodeURIComponent(p.prefix)}">${esc(t('dash.glossary'))}</a>
@@ -264,6 +321,13 @@ async function renderGlossary(prefix) {
 async function renderMonitor(prefix) {
     setCrumbs(`${crumbHome()} / ${esc(prefix)} / ${esc(t('mon.heading'))}`);
 
+    // The active model is chosen in Settings; the monitor only displays it.
+    let activeProvider = 'local';
+    try { activeProvider = (await api('/api/config')).activeProvider || 'local'; } catch { /* keep default */ }
+    // Show the same friendly label as the settings card (provider → config group).
+    const providerGroup = { local: 'logic_model', google: 'google_model', groq: 'groq_model' };
+    const activeProviderLabel = t('cfg.group.' + (providerGroup[activeProvider] || 'logic_model'));
+
     app.innerHTML = `
         <h2>${esc(t('mon.heading'))}: ${esc(prefix)}</h2>
         <div class="toolbar">
@@ -274,14 +338,10 @@ async function renderMonitor(prefix) {
                     <option value="export" data-base="${esc(t('mon.stageExport'))}">${esc(t('mon.stageExport'))}</option>
                 </select>
             </label>
-            <label>${esc(t('mon.modelLabel'))}
-                <select id="m-model">
-                    <option value="default">${esc(t('mon.modelDefault'))}</option>
-                    <option value="local">local</option>
-                    <option value="google">google</option>
-                    <option value="groq">groq</option>
-                </select>
-            </label>
+            <span class="mon-model">${esc(t('mon.modelLabel'))}:
+                <strong>${esc(activeProviderLabel)}</strong>
+                <a href="#/settings" class="cfg-hint">(${esc(t('mon.modelInSettings'))})</a>
+            </span>
             <button id="m-start" class="primary">${esc(t('mon.start'))}</button>
             <button id="m-stop" class="danger" disabled>${esc(t('mon.stop'))}</button>
             <span class="spacer"></span>
@@ -300,6 +360,10 @@ async function renderMonitor(prefix) {
                     <span><span class="dot ext-dot"></span>${esc(t('legend.extracted'))}</span>
                 </div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
+                <details class="usage-details" open>
+                    <summary>${esc(t('usage.heading'))}</summary>
+                    <div id="m-usage"></div>
+                </details>
             </div>
             <div>
                 <div id="m-log" class="log-pane"></div>
@@ -308,6 +372,7 @@ async function renderMonitor(prefix) {
     `;
 
     const grid = document.getElementById('m-grid');
+    const usageEl = document.getElementById('m-usage');
     const logPane = document.getElementById('m-log');
     const statusEl = document.getElementById('m-status');
     const startBtn = document.getElementById('m-start');
@@ -388,7 +453,11 @@ async function renderMonitor(prefix) {
     }
 
     let summary = null;
+    function drawUsage() {
+        usageEl.innerHTML = usagePanelHtml(summary?.metadata?.usage);
+    }
     function drawGrid() {
+        drawUsage();
         if (!summary) {
             grid.innerHTML = `<span class="loading">${esc(t('mon.gridEmpty'))}</span>`;
             return;
@@ -446,13 +515,12 @@ async function renderMonitor(prefix) {
 
     startBtn.addEventListener('click', async () => {
         const stage = stageSel.value;
-        const model = document.getElementById('m-model').value;
 
         const warning = preflight(stage, summary);
         if (warning && !confirm(warning)) return;
 
         try {
-            await api('/api/run', { method: 'POST', body: { prefix, stage, model } });
+            await api('/api/run', { method: 'POST', body: { prefix, stage } });
             logPane.innerHTML = '';
             toast(t('mon.stageStarted', { stage }), 'ok');
         } catch (e) {
@@ -609,10 +677,191 @@ async function renderChunk(prefix, i) {
 }
 
 // ============================================================
+// Settings (config.js via config.overrides.json)
+// ============================================================
+
+async function renderSettings() {
+    setCrumbs(`${crumbHome()} / ${esc(t('settings.title'))}`);
+    app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
+
+    let data;
+    try { data = await api('/api/config'); }
+    catch (e) { app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`; return; }
+
+    const groups = data.groups;
+    const fieldId = (g, k) => `cfg__${g}__${k}`;
+
+    function fieldHtml(groupId, f) {
+        const id = fieldId(groupId, f.key);
+        const hintKey = 'cfg.hint.' + f.key;
+        const hintRaw = t(hintKey);
+        const hint = hintRaw !== hintKey ? `<span class="cfg-hint">${esc(hintRaw)}</span>` : '';
+        const ovr = f.overridden ? `<span class="badge cfg-ovr">${esc(t('settings.overridden'))}</span>` : '';
+
+        let input;
+        if (f.type === 'secret') {
+            const status = f.set ? t('settings.apiKeySet') : t('settings.apiKeyUnset');
+            input = `<input type="password" id="${id}" data-type="secret" autocomplete="off"
+                        placeholder="${esc(t('settings.apiKeyPlaceholder'))}">
+                     <span class="cfg-hint">${esc(status)}</span>`;
+        } else if (f.type === 'bool') {
+            input = `<input type="checkbox" id="${id}" data-type="bool" data-orig="${f.value ? '1' : ''}" ${f.value ? 'checked' : ''}>`;
+        } else if (f.type === 'int' || f.type === 'float') {
+            const step = f.type === 'int' ? '1' : 'any';
+            input = `<input type="number" step="${step}" id="${id}" data-type="${f.type}" data-orig="${esc(f.value)}" value="${esc(f.value)}">${hint}`;
+        } else {
+            input = `<input type="text" id="${id}" data-type="string" data-orig="${esc(f.value)}" value="${esc(f.value)}">${hint}`;
+        }
+        return `<div class="cfg-field">
+            <label for="${id}">${esc(f.key)}${ovr}</label>
+            <div class="cfg-input">${input}</div>
+        </div>`;
+    }
+
+    const groupProvider = { logic_model: 'local', google_model: 'google', groq_model: 'groq' };
+
+    function groupHtml(g) {
+        const provider = groupProvider[g.id];
+        const testArea = provider ? `
+            <span class="cfg-test-area">
+                <button class="btn cfg-test" data-group="${esc(g.id)}" data-provider="${esc(provider)}">${esc(t('settings.test'))}</button>
+                <span class="cfg-test-result" data-for="${esc(g.id)}"></span>
+            </span>` : '';
+        return `<div class="card cfg-group">
+            <div class="title">${esc(t('cfg.group.' + g.id))} <span class="cfg-gid">${esc(g.id)}</span>${testArea}</div>
+            ${g.fields.map(f => fieldHtml(g.id, f)).join('')}
+        </div>`;
+    }
+
+    const modelGroups = groups.filter(g => g.kind === 'model');
+    const pipeGroups = groups.filter(g => g.kind === 'pipeline');
+    const providers = ['local', 'google', 'groq'];
+    const activeProvider = data.activeProvider || 'local';
+    // Show the same friendly label as each provider's card (e.g. "Custom (OpenAI-compatible)").
+    const providerLabel = (p) => {
+        const gid = Object.keys(groupProvider).find(k => groupProvider[k] === p);
+        return gid ? t('cfg.group.' + gid) : p;
+    };
+
+    app.innerHTML = `
+        <h2>${esc(t('settings.title'))}</h2>
+        <div class="toolbar">
+            <button id="cfg-save" class="primary">${esc(t('common.save'))}</button>
+            <button id="cfg-reset" class="danger">${esc(t('settings.reset'))}</button>
+        </div>
+        <div class="hint">${esc(t('settings.note'))}</div>
+        <h3>${esc(t('settings.sectionModels'))}</h3>
+        <div class="card cfg-group cfg-provider">
+            <div class="cfg-field">
+                <label for="cfg-active-provider">${esc(t('settings.activeProvider'))}</label>
+                <div class="cfg-input">
+                    <select id="cfg-active-provider">
+                        ${providers.map(p => `<option value="${esc(p)}" ${p === activeProvider ? 'selected' : ''}>${esc(providerLabel(p))}</option>`).join('')}
+                    </select>
+                    <span class="cfg-hint">${esc(t('settings.activeProviderHint'))}</span>
+                </div>
+            </div>
+        </div>
+        <div class="cards cards-col">${modelGroups.map(groupHtml).join('')}</div>
+        <h3>${esc(t('settings.sectionPipeline'))}</h3>
+        <div class="cards cards-col">${pipeGroups.map(groupHtml).join('')}</div>
+    `;
+
+    // Collect only changed fields, so config.overrides.json stays minimal.
+    function collectChanges() {
+        const payload = {};
+        for (const g of groups) {
+            for (const f of g.fields) {
+                const el = document.getElementById(fieldId(g.id, f.key));
+                if (!el) continue;
+                const type = el.dataset.type;
+                if (type === 'secret') {
+                    if (el.value.trim() !== '') (payload[g.id] ||= {})[f.key] = el.value;
+                    continue;
+                }
+                if (type === 'bool') {
+                    if ((el.checked ? '1' : '') !== el.dataset.orig) (payload[g.id] ||= {})[f.key] = el.checked;
+                    continue;
+                }
+                if (el.value !== el.dataset.orig) (payload[g.id] ||= {})[f.key] = el.value;
+            }
+        }
+        const provEl = document.getElementById('cfg-active-provider');
+        if (provEl && provEl.value !== activeProvider) payload.activeProvider = provEl.value;
+        return payload;
+    }
+
+    document.getElementById('cfg-save').addEventListener('click', async () => {
+        try {
+            await api('/api/config', { method: 'PUT', body: collectChanges() });
+            toast(t('settings.saved'), 'ok');
+            renderSettings();
+        } catch (e) { toast(e.message, 'error'); }
+    });
+
+    document.getElementById('cfg-reset').addEventListener('click', async () => {
+        if (!confirm(t('settings.resetConfirm'))) return;
+        try {
+            await api('/api/config/reset', { method: 'POST' });
+            toast(t('settings.resetDone'), 'ok');
+            renderSettings();
+        } catch (e) { toast(e.message, 'error'); }
+    });
+
+    // Read all current (unsaved) form values for one provider group.
+    function collectGroupValues(groupId) {
+        const g = groups.find(x => x.id === groupId);
+        const out = {};
+        if (!g) return out;
+        for (const f of g.fields) {
+            const el = document.getElementById(fieldId(groupId, f.key));
+            if (!el) continue;
+            out[f.key] = el.dataset.type === 'bool' ? el.checked : el.value;
+        }
+        return out;
+    }
+
+    app.querySelectorAll('.cfg-test').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const groupId = btn.dataset.group;
+            const resultEl = app.querySelector(`.cfg-test-result[data-for="${groupId}"]`);
+            btn.disabled = true;
+            resultEl.className = 'cfg-test-result';
+            resultEl.textContent = t('settings.testing');
+            resultEl.removeAttribute('title');
+            try {
+                const r = await api('/api/config/test', {
+                    method: 'POST',
+                    body: { provider: btn.dataset.provider, values: collectGroupValues(groupId) },
+                });
+                if (r.ok) {
+                    resultEl.classList.add('ok');
+                    resultEl.textContent = t('settings.testOk', { ms: r.latencyMs });
+                    resultEl.title = r.reply || '';
+                } else {
+                    resultEl.classList.add('err');
+                    resultEl.textContent = t('settings.testFail');
+                    resultEl.title = r.error || '';
+                }
+            } catch (e) {
+                resultEl.classList.add('err');
+                resultEl.textContent = t('settings.testFail');
+                resultEl.title = e.message;
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
+}
+
+// ============================================================
 // Language switcher
 // ============================================================
 
 function initLangSwitcher() {
+    const settingsLink = document.getElementById('settings-link');
+    if (settingsLink) settingsLink.title = t('nav.settings');
+
     const sel = document.getElementById('lang-select');
     if (!sel) return;
     sel.title = t('header.lang');
@@ -622,6 +871,7 @@ function initLangSwitcher() {
     sel.addEventListener('change', () => {
         i18n.setLang(sel.value);
         sel.title = t('header.lang');
+        if (settingsLink) settingsLink.title = t('nav.settings');
         route(); // re-render current view in the new language
     });
 }
