@@ -241,21 +241,21 @@ async function renderGlossary(prefix) {
 
         countEl.textContent = `${rows.length} / ${terms.length}`;
 
-        tbody.innerHTML = rows.map(({ t, idx }) => {
+        tbody.innerHTML = rows.map(({ t: term, idx }) => {
             const cnt = counts[idx];
             const typeOpts = knownTypes.map(k =>
-                `<option value="${esc(k)}" ${t.type === k ? 'selected' : ''}>${esc(k)}</option>`).join('');
+                `<option value="${esc(k)}" ${term.type === k ? 'selected' : ''}>${esc(k)}</option>`).join('');
             return `<tr data-idx="${idx}">
-                <td><input data-f="original" value="${esc(t.original)}"></td>
-                <td><input data-f="translation" value="${esc(t.translation)}"></td>
+                <td><input data-f="original" value="${esc(term.original)}"></td>
+                <td><input data-f="translation" value="${esc(term.translation)}"></td>
                 <td><select data-f="type">${typeOpts}</select></td>
                 <td><select data-f="gender">
-                    <option value="" ${!t.gender ? 'selected' : ''}>${esc(t('gloss.genderNone'))}</option>
-                    <option value="m" ${t.gender === 'm' ? 'selected' : ''}>${esc(t('gloss.genderM'))}</option>
-                    <option value="f" ${t.gender === 'f' ? 'selected' : ''}>${esc(t('gloss.genderF'))}</option>
-                    <option value="n" ${t.gender === 'n' ? 'selected' : ''}>${esc(t('gloss.genderN'))}</option>
+                    <option value="" ${!term.gender ? 'selected' : ''}>${esc(t('gloss.genderNone'))}</option>
+                    <option value="m" ${term.gender === 'm' ? 'selected' : ''}>${esc(t('gloss.genderM'))}</option>
+                    <option value="f" ${term.gender === 'f' ? 'selected' : ''}>${esc(t('gloss.genderF'))}</option>
+                    <option value="n" ${term.gender === 'n' ? 'selected' : ''}>${esc(t('gloss.genderN'))}</option>
                 </select></td>
-                <td><input data-f="notes" value="${esc(t.notes)}"></td>
+                <td><input data-f="notes" value="${esc(term.notes)}"></td>
                 <td class="cnt ${cnt === 0 ? 'zero' : ''}">${cnt ?? ''}</td>
                 <td class="del"><button class="danger" data-del="${idx}" title="${esc(t('gloss.delTitle'))}">✕</button></td>
             </tr>`;
@@ -584,7 +584,7 @@ async function renderChunk(prefix, i) {
 
     app.innerHTML = `
         <div class="toolbar">
-            <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${i - 1}" ${i <= 0 ? 'hidden' : ''}>← ${i}</a>
+            <a class="btn" href="${i <= 0 ? `#/monitor/${encodeURIComponent(prefix)}` : `#/chunk/${encodeURIComponent(prefix)}/${i - 1}`}">${i <= 0 ? `← ${esc(t('mon.heading'))}` : `← ${i}`}</a>
             <h2 style="margin:0">${esc(t('chunk.heading', { i: i + 1, total }))}</h2>
             <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${i + 1}" ${i >= total - 1 ? 'hidden' : ''}>${i + 2} →</a>
             <span class="badge b-${status}">${esc(statusLabel(status))}</span>

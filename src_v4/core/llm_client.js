@@ -1,6 +1,17 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import config from '../config.js';
+
+// Translating arbitrary book prose (violence, sex, profanity in fiction) trips
+// Gemini's default safety filters, which then return zero candidates and make
+// langchain crash reading `.message` of an empty generation. Disable blocking.
+const GEMINI_SAFETY_SETTINGS = [
+    HarmCategory.HARM_CATEGORY_HARASSMENT,
+    HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+].map(category => ({ category, threshold: HarmBlockThreshold.BLOCK_NONE }));
 import { RateLimiter } from '../utils/rate_limiter.js';
 import { usageTracker } from './usage_tracker.js';
 
@@ -48,6 +59,7 @@ export function createRawClient(provider, conf) {
             model: conf.modelName, // @langchain/google-genai expects `model`, not `modelName`
             temperature: conf.temperature,
             maxOutputTokens: conf.maxOutputTokens || 8192,
+            safetySettings: GEMINI_SAFETY_SETTINGS,
         });
     }
     if (provider === 'groq') {
@@ -145,6 +157,16 @@ class LLMClient {
                     return async function (...args) {
                         await limiter.waitForToken();
                         const response = await target.invoke(...args);
+                        // Gemini (@langchain/google-genai) returns content as an
+                        // array of parts; OpenAI-compatible providers return a
+                        // plain string. Normalize to a string so all callers
+                        // (extractFromTags, etc.) can rely on String methods.
+                        if (response && Array.isArray(response.content)) {
+                            response.content = response.content
+                                .filter(part => part && part.type === 'text')
+                                .map(part => part.text)
+                                .join('');
+                        }
                         try {
                             const usage = extractUsage(response);
                             if (usage) usageTracker.record({ provider, model, ...usage });

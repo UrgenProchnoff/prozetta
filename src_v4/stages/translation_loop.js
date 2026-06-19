@@ -247,24 +247,7 @@ async function fixTranslation(client, original, badTranslation, context, comment
         new HumanMessage(prompt),
         new HumanMessage(input)
     ]);
-    //    console.log("fix tr input=", input);
-    //    console.log("fix tr prompt=", prompt);
-    console.log("fix tr response content type=", typeof response.content);
-    console.log("fix tr response content=", JSON.stringify(response.content));
-    console.log("fix tr response keys=", Object.keys(response));
-    if (response.additional_kwargs) console.log("fix tr additional_kwargs=", JSON.stringify(response.additional_kwargs));
-    if (response.response_metadata) console.log("fix tr response_metadata=", JSON.stringify(response.response_metadata));
-
-    // Handle case where content might be an array (multi-part response)
-    let content = response.content;
-    if (Array.isArray(content)) {
-        console.log("fix tr: content is ARRAY, extracting text parts...");
-        content = content
-            .filter(part => part.type === 'text')
-            .map(part => part.text)
-            .join('');
-    }
-    content = content || '';
+    const content = response.content || '';
 
     return {
         translation: extractFromTags(content, 'translate'),
