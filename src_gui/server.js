@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { jobManager } from './jobs.js';
 import { createRawClient, PROVIDER_CONFIG_KEY } from '../src_v4/core/llm_client.js';
+import { assembleBookText } from '../src_v4/core/book_assembler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -26,6 +27,18 @@ function statePath(prefix) {
 
 function glossaryPath(prefix) {
     return path.join(ROOT, `${prefix}_glossary.json`);
+}
+
+// The language suffix recorded for a project (e.g. "rus", "de"); defaults to
+// "rus" for legacy projects with no langSuffix in metadata.
+function projectSuffix(prefix) {
+    try { return readJson(statePath(prefix)).metadata?.langSuffix || 'rus'; }
+    catch { return 'rus'; }
+}
+
+// The assembled output filename for a project: <prefix>_<suffix>.txt
+function outputFileName(prefix, suffix) {
+    return `${prefix}_${suffix || projectSuffix(prefix)}.txt`;
 }
 
 function readJson(file) {
@@ -123,8 +136,9 @@ function resolveSourceFile(prefix) {
         } catch { /* fall through */ }
     }
     if (fs.existsSync(TXT_DIR)) {
+        const outName = outputFileName(prefix);
         const hit = fs.readdirSync(TXT_DIR).find(f =>
-            path.basename(f, path.extname(f)) === prefix && !f.endsWith('_rus.txt'));
+            path.basename(f, path.extname(f)) === prefix && f !== outName);
         if (hit) return path.join('txt', hit);
     }
     return path.join('txt', `${prefix}.txt`);
@@ -148,12 +162,15 @@ app.get('/api/projects', (req, res) => {
     }
     projects.sort((a, b) => (b.metadata?.updatedAt || '').localeCompare(a.metadata?.updatedAt || ''));
 
-    // Books in txt/ that have no project yet
+    // Books in txt/ that have no project yet. Skip assembled outputs: each known
+    // project's <prefix>_<suffix>.txt (suffix from its metadata), plus a legacy
+    // _rus.txt safety net for any output whose project state is unreadable.
     const known = new Set(projects.map(p => p.prefix));
+    const outputs = new Set(projects.map(p => `${p.prefix}_${p.metadata?.langSuffix || 'rus'}.txt`));
     const newBooks = [];
     if (fs.existsSync(TXT_DIR)) {
         for (const f of fs.readdirSync(TXT_DIR)) {
-            if (!f.endsWith('.txt') || f.endsWith('_rus.txt')) continue;
+            if (!f.endsWith('.txt') || f.endsWith('_rus.txt') || outputs.has(f)) continue;
             const prefix = path.basename(f, '.txt');
             if (!known.has(prefix)) newBooks.push({ file: path.join('txt', f), prefix });
         }
@@ -257,7 +274,7 @@ app.put('/api/projects/:prefix/glossary', (req, res) => {
 // --- API: jobs (run pipeline stages) ---
 
 app.post('/api/run', (req, res) => {
-    const { file, prefix: bodyPrefix, stage, model } = req.body || {};
+    const { file, prefix: bodyPrefix, stage, model, lang, suffix } = req.body || {};
 
     if (!['1', '2', 'export'].includes(String(stage))) {
         return res.status(400).json({ error: 'stage must be 1, 2 or export' });
@@ -279,8 +296,17 @@ app.post('/api/run', (req, res) => {
         return res.status(409).json({ error: 'Этап уже выполняется для этого проекта' });
     }
 
+    // suffix becomes part of an output filename — keep it filename-safe.
+    if (suffix !== undefined && suffix !== '' && !/^[\w-]{1,20}$/.test(String(suffix))) {
+        return res.status(400).json({ error: 'suffix must be 1-20 chars: letters, digits, _ or -' });
+    }
+    const cleanLang = typeof lang === 'string' ? lang.replace(/[\r\n]/g, ' ').trim().slice(0, 60) : '';
+
     const args = ['src_v4/main.js', `--stage=${stage}`, `--file=${sourceFile}`];
     if (model && model !== 'default') args.push(`--model=${model}`);
+    // Language is set once at Stage 1; passing it on other stages just overrides.
+    if (cleanLang) args.push(`--lang=${cleanLang}`);
+    if (typeof suffix === 'string' && suffix.trim() !== '') args.push(`--suffix=${suffix.trim()}`);
 
     jobManager.start(prefix, args, ROOT);
     res.json({ ok: true, prefix, args });
@@ -297,6 +323,42 @@ app.get('/api/projects/:prefix/job', (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
     res.json(jobManager.getJob(prefix));
+});
+
+// Revert the whole project to its post-Stage-1 state: keep extracted terms,
+// drop all translation output (translation, status, history) so Stage 2 can be
+// re-run from scratch. Mirrors src_v4/tools/reset_to_stage1.js. Backs up first.
+app.post('/api/projects/:prefix/reset-stage1', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — сброс заблокирован' });
+    }
+
+    const file = statePath(prefix);
+    let state;
+    try { state = readJson(file); } catch { return res.status(404).json({ error: 'Project not found' }); }
+
+    // Backup the current state before mutating.
+    const backupPath = path.join(ROOT, `${prefix}_project_state_before_reset.json.bak`);
+    fs.copyFileSync(file, backupPath);
+
+    let modified = 0;
+    state.chunks = (state.chunks || []).map(chunk => {
+        if (chunk.translation || chunk.history || chunk.translation_status) modified++;
+        return {
+            original: chunk.original,
+            extracted_terms: chunk.extracted_terms,
+            extraction_status: chunk.extraction_status,
+        };
+    });
+
+    state.metadata = state.metadata || {};
+    state.metadata.lastReset = new Date().toISOString();
+    state.metadata.updatedAt = new Date().toISOString();
+    writeJsonAtomic(file, state);
+
+    res.json({ ok: true, modified, total: state.chunks.length, backup: path.basename(backupPath) });
 });
 
 // --- API: SSE live events (log lines + state file changes) ---
@@ -350,12 +412,35 @@ app.get('/api/projects/:prefix/events', (req, res) => {
 
 // --- API: export download ---
 
-app.get('/api/projects/:prefix/output', (req, res) => {
+app.get('/api/projects/:prefix/output', async (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
-    const file = path.join(TXT_DIR, `${prefix}_rus.txt`);
-    if (!fs.existsSync(file)) return res.status(404).json({ error: 'Перевод ещё не экспортирован' });
-    res.download(file);
+
+    // Assemble on demand from the current project state so the download always
+    // reflects the latest translations, with no separate "export" step required.
+    let state;
+    try { state = readJson(statePath(prefix)); } catch { return res.status(404).json({ error: 'Project not found' }); }
+    const chunks = state.chunks || [];
+    if (!chunks.some(c => c && c.translation)) {
+        return res.status(409).json({ error: 'Нет переведённых чанков — переводить нечего' });
+    }
+
+    let modelName = '—';
+    try {
+        const cfg = await loadEffectiveConfig();
+        modelName = cfg[PROVIDER_CONFIG_KEY[cfg.activeProvider]]?.modelName || modelName;
+    } catch { /* keep placeholder */ }
+
+    const { text } = assembleBookText(chunks, modelName);
+
+    const outName = outputFileName(prefix, state.metadata?.langSuffix);
+
+    // Persist the assembled file too (so the CLI/txt dir stays in sync).
+    try { fs.writeFileSync(path.join(TXT_DIR, outName), text); } catch { /* best effort */ }
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${outName}"`);
+    res.send(text);
 });
 
 // --- API: settings (config.js defaults + config.overrides.json) ---
@@ -407,6 +492,13 @@ function describeConfig(cfg, overrides) {
     }));
     groups.push({ id: 'pipeline', kind: 'pipeline', fields: pFields });
 
+    const t = cfg.translation || {};
+    const tFields = Object.keys(t).map(key => ({
+        key, type: fieldType(t[key]), value: t[key],
+        overridden: !!(ovr.translation && Object.prototype.hasOwnProperty.call(ovr.translation, key))
+    }));
+    groups.push({ id: 'translation', kind: 'translation', fields: tFields });
+
     return groups;
 }
 
@@ -433,7 +525,7 @@ app.put('/api/config', async (req, res) => {
     try { cfg = await loadEffectiveConfig(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
     const overrides = readOverrides();
-    const validGroups = [...MODEL_GROUPS, 'pipeline'];
+    const validGroups = [...MODEL_GROUPS, 'pipeline', 'translation'];
 
     if (body.activeProvider !== undefined) {
         if (!PROVIDERS.includes(body.activeProvider)) {
@@ -462,6 +554,12 @@ app.put('/api/config', async (req, res) => {
             const coerced = coerce(fieldType(base[key]), raw);
             if (coerced === null) {
                 return res.status(400).json({ error: `Invalid value for ${groupId}.${key}` });
+            }
+            if (groupId === 'translation' && key === 'promptLang' && !['ru', 'en'].includes(coerced)) {
+                return res.status(400).json({ error: "promptLang must be 'ru' or 'en'" });
+            }
+            if (groupId === 'translation' && key === 'langSuffix' && !/^[\w-]{1,20}$/.test(coerced)) {
+                return res.status(400).json({ error: 'langSuffix must be 1-20 chars: letters, digits, _ or -' });
             }
             overrides[groupId][key] = coerced;
         }

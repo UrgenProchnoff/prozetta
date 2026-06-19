@@ -9,6 +9,22 @@ const defaults = {
     // One of: 'local' | 'google' | 'groq'. Set via the GUI settings page.
     activeProvider: 'local',
 
+    // --- Translation language settings ---
+    // These are the defaults for CLI runs and for new projects created in the GUI.
+    // Per-project values are stored in <prefix>_project_state.json metadata at
+    // Stage 1; precedence at run time is: CLI flag > project metadata > these.
+    translation: {
+        // Language the pipeline translates INTO. Free-form string injected into
+        // the prompts, so write it in the form that fits promptLang
+        // (e.g. "немецкий" for promptLang 'ru', "German" for 'en').
+        targetLanguage: 'русский',
+        // Suffix for the exported file: <prefix>_<langSuffix>.txt
+        langSuffix: 'rus',
+        // Language of the model INSTRUCTIONS (the prompt templates), not the
+        // target. One of: 'ru' | 'en'. Toggle in the GUI settings page.
+        promptLang: 'ru',
+    },
+
     logic_model: {
         baseUrl: 'http://127.0.0.1:8007/v1',
         apiKey: 'sk-no-key-required',

@@ -3,7 +3,7 @@ import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractJson } from '../utils/parsers.js';
 import config from '../config.js';
-import prompts from '../prompts.js';
+import { getPrompts } from '../prompts.js';
 
 export async function runExtractionStage(state) {
     console.log('--- SYSTEM: Starting Stage 1 (Extraction) ---');
@@ -12,6 +12,10 @@ export async function runExtractionStage(state) {
     const chunks = state.getChunks();
     const client = llmManager.getClient('logic');
     const MAX_RETRIES = config.pipeline.extractionMaxRetries;
+
+    const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
+    const prompts = getPrompts(config.translation.promptLang);
+    const prompt = prompts.extraction.system(targetLang);
 
     let processedCount = 0;
 
@@ -24,8 +28,6 @@ export async function runExtractionStage(state) {
         }
 
         console.log(`[Stage 1] Processing Chunk ${i + 1}/${chunks.length}...`);
-
-        const prompt = prompts.extraction.system;
 
         const userMessage = prompts.extraction.user(chunk.original);
 

@@ -43,6 +43,25 @@ Model settings live in [src_v4/config.js](src_v4/config.js):
 The same file holds pipeline parameters (chunk sizes, retry counts, and the
 review thresholds — approve at score ≥ 9.1, fix at ≥ 7.5, redraft below).
 
+### Target language
+
+The `translation` block in [src_v4/config.js](src_v4/config.js) sets the default
+**target language**:
+
+- **targetLanguage** — the language to translate *into* (free-form string, e.g.
+  `немецкий` or `English`). Defaults to `русский` (Russian).
+- **langSuffix** — suffix of the exported file: `<prefix>_<suffix>.txt`. Defaults to `rus`.
+- **promptLang** — language of the model **instructions** (the prompt templates), not
+  the target. `ru` or `en`.
+
+The language is fixed for a project at Stage 1 and stored in its
+`*_project_state.json`. Precedence: **CLI flag → project metadata → config.js**.
+In the GUI, `promptLang` and the default language are set on the Settings page, while
+the per-project target language/suffix are set on the Monitor when starting Stage 1.
+
+> The target language is injected into the prompts as a string, so write it in the form
+> that fits `promptLang` (e.g. `немецкий` for `ru`, `German` for `en`).
+
 **Recommended models.** `gemma4-26b-a4b` and larger give good results as the
 logic model. With the default ~1k-token chunks, give reasoning models ~32k tokens
 of context — the chunk, the glossary, and the review/reasoning trace need headroom.
@@ -55,11 +74,19 @@ node src_v4/main.js --stage=1 --file=txt/My_Book.txt --model=google
 
 # Review & edit My_Book_glossary.json (or use the GUI), then:
 
-# Stage 2 — translate (auto-exports txt/My_Book_rus.txt on completion)
+# Stage 2 — translate (auto-exports txt/My_Book_<suffix>.txt on completion)
 node src_v4/main.js --stage=2 --file=txt/My_Book.txt --model=google
 ```
 
 `--model` accepts `local` (default), `google`, or `groq`.
+
+To translate into a language other than the config.js default, pass `--lang` and
+`--suffix` at **Stage 1** (the language is then fixed for the project):
+
+```bash
+node src_v4/main.js --stage=1 --file=txt/My_Book.txt --lang=English --suffix=en
+# Stage 2 will assemble txt/My_Book_en.txt
+```
 
 ### The `--file` flag
 
@@ -95,7 +122,8 @@ to `127.0.0.1` only). Features:
 - **Dashboard** — all projects with progress; new books from `txt/`.
 - **Glossary** — table editor instead of hand-editing JSON: search, types, gender,
   notes, and a per-term occurrence counter (0 = deletion candidate).
-- **Monitor** — start/stop stages, live log, color-coded chunk map.
+- **Monitor** — start/stop stages, pick the target language and suffix for a new
+  project (at Stage 1), live log, color-coded chunk map.
 - **Chunk** — original and translation side by side, manual editing, accept/reset,
   and the full attempt history with scores.
 

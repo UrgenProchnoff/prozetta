@@ -4,10 +4,13 @@ import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
 import config from '../config.js';
-import prompts from '../prompts.js';
+import { getPrompts } from '../prompts.js';
 
 export async function runTranslationLoopStage(state) {
     console.log('--- SYSTEM: Starting Stage 2 (Smart Translation Loop) ---');
+
+    const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
+    const prompts = getPrompts(config.translation.promptLang);
 
     const chunks = state.getChunks();
     const glossaryPath = state.getGlossaryPath();
@@ -43,7 +46,7 @@ export async function runTranslationLoopStage(state) {
 
         if (history.length === 0) {
             console.log(`   -> Drafting...`);
-            const draft = await draftTranslation(client, chunk.original, globalContext);
+            const draft = await draftTranslation(client, prompts, targetLang, chunk.original, globalContext);
             currentTranslation = draft.translation;
             currentComment = draft.comment;
             console.log(`   [DEBUG] After draft: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
@@ -76,7 +79,7 @@ export async function runTranslationLoopStage(state) {
 
             console.log(`   [DEBUG] Before check: currentTranslation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
             // CHECK
-            const checkResult = await checkTranslation(client, chunk.original, currentTranslation, globalContext, currentComment);
+            const checkResult = await checkTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, currentComment);
             history.push({
                 step: `check_${attempts}`,
                 result: checkResult,
@@ -120,7 +123,7 @@ export async function runTranslationLoopStage(state) {
                     // Checker likes the direction, score is acceptable → FIX (доработка)
                     console.log(`   -> REJECTED for fixing (Score: ${checkResult.score}, Errors: ${checkResult.error}) | Reason: "${checkResult.comment}". Fixing...`);
 
-                    const fixResult = await fixTranslation(client, chunk.original, currentTranslation, globalContext, checkResult.comment);
+                    const fixResult = await fixTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, checkResult.comment);
                     currentTranslation = fixResult.translation;
                     currentComment = fixResult.comment;
                     console.log(`   [DEBUG] After fix: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
@@ -136,7 +139,7 @@ export async function runTranslationLoopStage(state) {
                     // Checker doesn't like it at all (like==0) → REDRAFT (перевод заново)
                     console.log(`   -> REJECTED for redraft (Score: ${checkResult.score}, Like: ${checkResult.like}) | Reason: "${checkResult.comment}". Retranslating from scratch...`);
 
-                    const draft = await draftTranslation(client, chunk.original, globalContext);
+                    const draft = await draftTranslation(client, prompts, targetLang, chunk.original, globalContext);
                     currentTranslation = draft.translation;
                     currentComment = draft.comment;
                     console.log(`   [DEBUG] After redraft: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
@@ -201,10 +204,10 @@ function getLocalContextString(text, glossary) {
 
 // --- LLM FUNCTIONS (Prompts from index10.js) ---
 
-async function draftTranslation(client, original, context) {
+async function draftTranslation(client, prompts, targetLang, original, context) {
     usageTracker.setStage('translate');
     const input = prompts.draft.user(original, context);
-    const prompt = prompts.draft.system;
+    const prompt = prompts.draft.system(targetLang);
 
     //console.log("draft tr prompt=", prompt);
     //console.log("draft tr input=", input);
@@ -219,11 +222,11 @@ async function draftTranslation(client, original, context) {
     };
 }
 
-async function checkTranslation(client, original, translation, context, translatorComment) {
+async function checkTranslation(client, prompts, targetLang, original, translation, context, translatorComment) {
     usageTracker.setStage('check');
     const input = prompts.check.user(context, original, translation, translatorComment);
 
-    const prompt = prompts.check.system;
+    const prompt = prompts.check.system(targetLang);
 
     const response = await client.invoke([
         new HumanMessage(prompt),
@@ -237,11 +240,11 @@ async function checkTranslation(client, original, translation, context, translat
     return extractCheckResult(response.content);
 }
 
-async function fixTranslation(client, original, badTranslation, context, comment) {
+async function fixTranslation(client, prompts, targetLang, original, badTranslation, context, comment) {
     usageTracker.setStage('fix');
     const input = prompts.fix.user(original, context, badTranslation, comment);
 
-    const prompt = prompts.fix.system;
+    const prompt = prompts.fix.system(targetLang);
 
     const response = await client.invoke([
         new HumanMessage(prompt),

@@ -4,11 +4,14 @@ import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractJson } from '../utils/parsers.js';
 import config from '../config.js';
-import prompts from '../prompts.js';
+import { getPrompts } from '../prompts.js';
 
 export async function runConsolidationStage(state) {
     console.log('--- SYSTEM: Starting Stage 1b (Consolidation + Context) ---');
     usageTracker.setStage('consolidation');
+
+    const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
+    const prompts = getPrompts(config.translation.promptLang);
 
     const chunks = state.getChunks();
     const allTerms = new Map();
@@ -98,7 +101,7 @@ export async function runConsolidationStage(state) {
             ctx: b.contexts.join(' | ').slice(0, 200) // Truncate long contexts
         }));
 
-        const prompt = prompts.consolidation.system;
+        const prompt = prompts.consolidation.system(targetLang);
 
         const userMessage = prompts.consolidation.user(promptInput);
 

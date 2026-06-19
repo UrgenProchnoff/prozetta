@@ -159,6 +159,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.danger { color: var(--red); }
 button.danger:hover { border-color: var(--red); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
+a.btn.disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
 
 input, select, textarea {
     background: var(--panel2);
@@ -187,6 +188,19 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 }
 .toolbar .spacer { flex: 1; }
 .toolbar .dirty { color: var(--yellow); font-size: 12px; }
+/* Secondary row under the monitor toolbar (language settings), non-sticky so it
+   never overlaps the main controls and keeps the layout from shifting. */
+.lang-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: -6px 0 14px;
+    font-size: 13px;
+    color: var(--muted);
+}
+.lang-row label { display: inline-flex; align-items: center; gap: 6px; }
+.lang-row-hint { color: var(--muted); font-size: 12px; }
 .mon-model { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
 .mon-model strong { color: var(--text); font-family: ui-monospace, monospace; }
 .mon-model a { color: var(--muted); }

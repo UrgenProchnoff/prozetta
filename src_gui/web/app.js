@@ -347,7 +347,17 @@ async function renderMonitor(prefix) {
             <span class="spacer"></span>
             <span id="m-status" class="badge"></span>
             <a class="btn" href="#/glossary/${encodeURIComponent(prefix)}">${esc(t('dash.glossary'))}</a>
-            <a class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">${esc(t('dash.download'))}</a>
+            <a id="m-download" class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">${esc(t('dash.download'))}</a>
+            <button id="m-reset" class="btn danger" title="${esc(t('mon.resetStage1Title'))}">${esc(t('mon.resetStage1'))}</button>
+        </div>
+        <div class="lang-row">
+            <label id="m-lang-wrap" title="${esc(t('mon.langHint'))}">${esc(t('mon.targetLangLabel'))}
+                <input id="m-lang" type="text" placeholder="${esc(t('mon.targetLangPlaceholder'))}" style="width:130px">
+            </label>
+            <label title="${esc(t('mon.langHint'))}">${esc(t('mon.suffixLabel'))}
+                <input id="m-suffix" type="text" placeholder="rus" style="width:56px" maxlength="20">
+            </label>
+            <span class="lang-row-hint">${esc(t('mon.langHint'))}</span>
         </div>
         <div id="m-hint" class="hint" hidden></div>
         <div class="monitor-grid">
@@ -379,6 +389,31 @@ async function renderMonitor(prefix) {
     const stopBtn = document.getElementById('m-stop');
     const stageSel = document.getElementById('m-stage');
     const hintEl = document.getElementById('m-hint');
+    const langInput = document.getElementById('m-lang');
+    const suffixInput = document.getElementById('m-suffix');
+
+    // Language is fixed when the project is created (Stage 1). For an existing
+    // project show its saved values, disabled; editable only before Stage 1.
+    let suffixTouched = false;
+    suffixInput.addEventListener('input', () => { suffixTouched = true; });
+    langInput.addEventListener('input', () => {
+        if (suffixTouched) return;
+        // Best-effort auto-suffix from ASCII letters of the language name.
+        const ascii = langInput.value.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
+        if (ascii) suffixInput.value = ascii;
+    });
+
+    // Reflect whether the project already exists: once created, the language is
+    // locked in and the inputs become read-only with the saved values.
+    function syncLangControls() {
+        const created = !!summary && summary.total > 0;
+        langInput.disabled = created;
+        suffixInput.disabled = created;
+        if (created) {
+            langInput.value = summary.metadata?.targetLanguage || '';
+            suffixInput.value = summary.metadata?.langSuffix || '';
+        }
+    }
 
     let activeChunk = null; // 0-based index parsed from the log
     let running = false;
@@ -424,6 +459,7 @@ async function renderMonitor(prefix) {
         }
         hintEl.hidden = false;
         hintEl.textContent = t('mon.recommendPrefix', { text: rec.text });
+        syncLangControls();
     }
 
     function setRunning(v) {
@@ -456,8 +492,18 @@ async function renderMonitor(prefix) {
     function drawUsage() {
         usageEl.innerHTML = usagePanelHtml(summary?.metadata?.usage);
     }
+    function updateDownload() {
+        const dl = document.getElementById('m-download');
+        if (!dl) return;
+        // Download = assemble the book; pointless until at least one chunk is done.
+        const done = summary ? summary.statuses.success + summary.statuses.best_effort : 0;
+        const enabled = done > 0;
+        dl.classList.toggle('disabled', !enabled);
+        dl.title = enabled ? '' : t('mon.downloadDisabled');
+    }
     function drawGrid() {
         drawUsage();
+        updateDownload();
         if (!summary) {
             grid.innerHTML = `<span class="loading">${esc(t('mon.gridEmpty'))}</span>`;
             return;
@@ -519,8 +565,15 @@ async function renderMonitor(prefix) {
         const warning = preflight(stage, summary);
         if (warning && !confirm(warning)) return;
 
+        // Language is only sent for a fresh Stage 1 run (it's set once at creation).
+        const body = { prefix, stage };
+        if (stage === '1' && !(summary && summary.total > 0)) {
+            if (langInput.value.trim()) body.lang = langInput.value.trim();
+            if (suffixInput.value.trim()) body.suffix = suffixInput.value.trim();
+        }
+
         try {
-            await api('/api/run', { method: 'POST', body: { prefix, stage } });
+            await api('/api/run', { method: 'POST', body });
             logPane.innerHTML = '';
             toast(t('mon.stageStarted', { stage }), 'ok');
         } catch (e) {
@@ -532,6 +585,18 @@ async function renderMonitor(prefix) {
         if (!confirm(t('mon.stopConfirm'))) return;
         try { await api(`/api/projects/${encodeURIComponent(prefix)}/stop`, { method: 'POST' }); }
         catch (e) { toast(e.message, 'error'); }
+    });
+
+    document.getElementById('m-reset').addEventListener('click', async () => {
+        if (running) { toast(t('mon.resetWhileRunning'), 'error'); return; }
+        if (!confirm(t('mon.resetConfirm'))) return;
+        try {
+            const r = await api(`/api/projects/${encodeURIComponent(prefix)}/reset-stage1`, { method: 'POST' });
+            toast(t('mon.resetDone', { modified: r.modified, total: r.total }), 'ok');
+            refreshGrid();
+        } catch (e) {
+            toast(e.message, 'error');
+        }
     });
 
     cleanup = () => es.close();
@@ -706,6 +771,10 @@ async function renderSettings() {
                      <span class="cfg-hint">${esc(status)}</span>`;
         } else if (f.type === 'bool') {
             input = `<input type="checkbox" id="${id}" data-type="bool" data-orig="${f.value ? '1' : ''}" ${f.value ? 'checked' : ''}>`;
+        } else if (f.key === 'promptLang') {
+            const opts = ['ru', 'en'].map(v =>
+                `<option value="${v}" ${f.value === v ? 'selected' : ''}>${esc(t('cfg.promptLang.' + v))}</option>`).join('');
+            input = `<select id="${id}" data-type="string" data-orig="${esc(f.value)}">${opts}</select>${hint}`;
         } else if (f.type === 'int' || f.type === 'float') {
             const step = f.type === 'int' ? '1' : 'any';
             input = `<input type="number" step="${step}" id="${id}" data-type="${f.type}" data-orig="${esc(f.value)}" value="${esc(f.value)}">${hint}`;
@@ -735,6 +804,7 @@ async function renderSettings() {
 
     const modelGroups = groups.filter(g => g.kind === 'model');
     const pipeGroups = groups.filter(g => g.kind === 'pipeline');
+    const transGroups = groups.filter(g => g.kind === 'translation');
     const providers = ['local', 'google', 'groq'];
     const activeProvider = data.activeProvider || 'local';
     // Show the same friendly label as each provider's card (e.g. "Custom (OpenAI-compatible)").
@@ -765,6 +835,8 @@ async function renderSettings() {
         <div class="cards cards-col">${modelGroups.map(groupHtml).join('')}</div>
         <h3>${esc(t('settings.sectionPipeline'))}</h3>
         <div class="cards cards-col">${pipeGroups.map(groupHtml).join('')}</div>
+        <h3>${esc(t('settings.sectionTranslation'))}</h3>
+        <div class="cards cards-col">${transGroups.map(groupHtml).join('')}</div>
     `;
 
     // Collect only changed fields, so config.overrides.json stays minimal.
