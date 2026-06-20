@@ -26,7 +26,7 @@ export function assembleBookText(chunks, modelName) {
         `\n\n---\n` +
         `Перевод сделан проектом prozetta — помощник переводчика.\n` +
         `Модель: ${modelName}.\n` +
-        `GitHub: <ссылка будет добавлена позже>\n`;
+        `GitHub: https://github.com/UrgenProchnoff/prozetta\n`;
 
     return { text, missing };
 }
