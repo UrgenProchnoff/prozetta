@@ -9,3 +9,4 @@ temp/
 .DS_Store
 *.log
 *.bak
+*.code-workspace

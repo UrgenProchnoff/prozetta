@@ -143,7 +143,8 @@ node src_v4/tools/reset_to_stage1.js --file=txt/My_Book.txt
 src_v4/                     # Core pipeline
   main.js                   # CLI entry point
   config.js                 # Model & pipeline settings
-  core/                     # llm_client, state_manager, tokenizer
+  prompts.js                # LLM prompts
+  core/                     # llm_client, state_manager, tokenizer, book_assembler, usage_tracker
   stages/                   # 01_extraction, 02_consolidation, translation_loop
   tools/reset_to_stage1.js  # Reset translations
   utils/                    # parsers, rate_limiter
