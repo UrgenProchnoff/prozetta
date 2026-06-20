@@ -2,6 +2,7 @@
   "name": "prozetta",
   "version": "1.0.0",
   "description": "LLM pipeline for literary translation with a consistency glossary and a self-checking quality loop",
+  "author": "Evgenii Polomannyi <urgproch@gmail.com>",
   "license": "MIT",
   "type": "module",
   "scripts": {
