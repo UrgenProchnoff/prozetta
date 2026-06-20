@@ -134,7 +134,6 @@ async function renderDashboard() {
         }
         const total = p.total || 1;
         const pct = s => (100 * (p.statuses[s] || 0) / total).toFixed(1);
-        const done = p.statuses.success + p.statuses.best_effort;
         return `
         <div class="card">
             <div class="title">${esc(p.prefix)}
@@ -156,7 +155,8 @@ async function renderDashboard() {
             <div class="row">
                 <a class="btn" href="#/monitor/${encodeURIComponent(p.prefix)}">${esc(t('dash.monitor'))}</a>
                 <a class="btn" href="#/glossary/${encodeURIComponent(p.prefix)}">${esc(t('dash.glossary'))}</a>
-                ${done > 0 ? `<a class="btn" href="/api/projects/${encodeURIComponent(p.prefix)}/output">${esc(t('dash.download'))}</a>` : ''}
+                <button class="btn" data-clone="${esc(p.prefix)}">${esc(t('dash.cloneLang'))}</button>
+                <button class="btn danger" data-delete="${esc(p.prefix)}">${esc(t('dash.delete'))}</button>
             </div>
         </div>`;
     }).join('');
@@ -175,6 +175,35 @@ async function renderDashboard() {
         ${projectCards ? `<div class="cards">${projectCards}</div>` : `<p class="loading">${esc(t('dash.noProjects'))}</p>`}
         ${newBookCards ? `<h3>${esc(t('dash.newBooks'))}</h3><div class="cards">${newBookCards}</div>` : ''}
     `;
+
+    app.querySelectorAll('[data-clone]').forEach(btn => btn.addEventListener('click', async () => {
+        const prefix = btn.dataset.clone;
+        const language = prompt(t('dash.clonePromptLang'));
+        if (!language || !language.trim()) return;
+        const suffix = prompt(t('dash.clonePromptSuffix'));
+        if (!suffix || !suffix.trim()) return;
+        try {
+            const r = await api(`/api/projects/${encodeURIComponent(prefix)}/clone`, {
+                method: 'POST', body: { language: language.trim(), suffix: suffix.trim() }
+            });
+            toast(t('dash.cloneDone', { prefix: r.prefix }), 'ok');
+            location.hash = `#/monitor/${encodeURIComponent(r.prefix)}`;
+        } catch (err) {
+            toast(err.message, 'error');
+        }
+    }));
+
+    app.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', async () => {
+        const prefix = btn.dataset.delete;
+        if (!confirm(t('dash.deleteConfirm', { prefix }))) return;
+        try {
+            await api(`/api/projects/${encodeURIComponent(prefix)}/delete`, { method: 'POST' });
+            toast(t('dash.deleteDone', { prefix }), 'ok');
+            renderDashboard();
+        } catch (err) {
+            toast(err.message, 'error');
+        }
+    }));
 }
 
 // ============================================================

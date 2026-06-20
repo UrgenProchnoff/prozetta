@@ -127,7 +127,10 @@ function exportBook(state) {
     const txtDir = path.join(state.workDir, 'txt');
     const prefix = state.filePrefix || 'RESULT_V4';
     const suffix = state.data.metadata?.langSuffix || config.translation.langSuffix;
-    const outputPath = path.join(txtDir, `${prefix}_${suffix}.txt`);
+    // Language clones carry the suffix in the prefix (e.g. "book_de" + "de"); avoid
+    // doubling it so the filename matches what the GUI download produces.
+    const outName = prefix.endsWith(`_${suffix}`) ? `${prefix}.txt` : `${prefix}_${suffix}.txt`;
+    const outputPath = path.join(txtDir, outName);
 
     console.log(`[Export] Assembling ${chunks.length} chunks to: ${outputPath}`);
 

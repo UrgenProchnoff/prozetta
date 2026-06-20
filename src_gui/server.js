@@ -36,9 +36,13 @@ function projectSuffix(prefix) {
     catch { return 'rus'; }
 }
 
-// The assembled output filename for a project: <prefix>_<suffix>.txt
+// The assembled output filename for a project: <prefix>_<suffix>.txt.
+// Language clones carry the suffix inside the prefix (e.g. "book_de" + "de"), so
+// avoid doubling it: "book_de.txt" rather than "book_de_de.txt".
 function outputFileName(prefix, suffix) {
-    return `${prefix}_${suffix || projectSuffix(prefix)}.txt`;
+    const s = suffix || projectSuffix(prefix);
+    if (prefix.endsWith(`_${s}`)) return `${prefix}.txt`;
+    return `${prefix}_${s}.txt`;
 }
 
 function readJson(file) {
@@ -166,7 +170,7 @@ app.get('/api/projects', (req, res) => {
     // project's <prefix>_<suffix>.txt (suffix from its metadata), plus a legacy
     // _rus.txt safety net for any output whose project state is unreadable.
     const known = new Set(projects.map(p => p.prefix));
-    const outputs = new Set(projects.map(p => `${p.prefix}_${p.metadata?.langSuffix || 'rus'}.txt`));
+    const outputs = new Set(projects.map(p => outputFileName(p.prefix, p.metadata?.langSuffix)));
     const newBooks = [];
     if (fs.existsSync(TXT_DIR)) {
         for (const f of fs.readdirSync(TXT_DIR)) {
@@ -359,6 +363,79 @@ app.post('/api/projects/:prefix/reset-stage1', (req, res) => {
     writeJsonAtomic(file, state);
 
     res.json({ ok: true, modified, total: state.chunks.length, backup: path.basename(backupPath) });
+});
+
+// Clone a project to translate the same book into another language. Chunking and
+// term extraction are language-independent, so we copy them as-is (extraction is
+// skipped on the clone's Stage 1); only consolidation + Stage 2 re-run for the
+// new language. The glossary is NOT copied — it would be in the wrong language.
+app.post('/api/projects/:prefix/clone', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+
+    const { language, suffix } = req.body || {};
+    if (!language || !String(language).trim()) {
+        return res.status(400).json({ error: 'language is required' });
+    }
+    if (!/^[\w-]{1,20}$/.test(suffix || '')) {
+        return res.status(400).json({ error: 'suffix must be 1-20 chars: letters, digits, _ or -' });
+    }
+
+    const newPrefix = `${prefix}_${suffix}`;
+    if (!PREFIX_RE.test(newPrefix)) return res.status(400).json({ error: 'Resulting prefix is invalid' });
+    if (newPrefix === prefix) return res.status(400).json({ error: 'Suffix produces the same project' });
+    if (fs.existsSync(statePath(newPrefix))) {
+        return res.status(409).json({ error: `Проект "${newPrefix}" уже существует` });
+    }
+
+    let src;
+    try { src = readJson(statePath(prefix)); } catch { return res.status(404).json({ error: 'Project not found' }); }
+
+    const now = new Date().toISOString();
+    const clone = {
+        chunks: (src.chunks || []).map(c => ({
+            original: c.original,
+            extracted_terms: c.extracted_terms,
+            extraction_status: c.extraction_status,
+        })),
+        metadata: {
+            ...(src.metadata || {}),
+            targetLanguage: String(language).trim(),
+            langSuffix: suffix,
+            clonedFrom: prefix,
+            createdAt: now,
+            updatedAt: now,
+        },
+    };
+    // Start usage accounting fresh for the new language.
+    delete clone.metadata.usage;
+    delete clone.metadata.lastReset;
+
+    writeJsonAtomic(statePath(newPrefix), clone);
+    res.json({ ok: true, prefix: newPrefix, chunks: clone.chunks.length });
+});
+
+// Delete a project: state, glossary and the assembled output. The source text in
+// txt/ is left untouched. The state file is backed up to .deleted.bak first.
+app.post('/api/projects/:prefix/delete', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — удаление заблокировано' });
+    }
+
+    const sp = statePath(prefix);
+    if (!fs.existsSync(sp)) return res.status(404).json({ error: 'Project not found' });
+
+    // Back up the state before removing it.
+    try { fs.copyFileSync(sp, `${sp}.deleted.bak`); } catch { /* best effort */ }
+
+    const removed = [];
+    for (const f of [sp, glossaryPath(prefix), path.join(TXT_DIR, outputFileName(prefix))]) {
+        try { if (fs.existsSync(f)) { fs.unlinkSync(f); removed.push(path.basename(f)); } } catch { /* best effort */ }
+    }
+
+    res.json({ ok: true, removed });
 });
 
 // --- API: SSE live events (log lines + state file changes) ---
