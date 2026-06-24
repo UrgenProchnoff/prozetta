@@ -143,6 +143,10 @@ h3 { margin: 24px 0 10px; font-size: 15px; color: var(--muted); }
 
 /* --- Buttons / inputs --- */
 
+/* An explicit `display` on a styled element (e.g. .btn below) overrides the UA
+   `[hidden] { display: none }` rule, leaving "hidden" elements visible. Force it. */
+[hidden] { display: none !important; }
+
 button, .btn {
     background: var(--panel2);
     color: var(--text);

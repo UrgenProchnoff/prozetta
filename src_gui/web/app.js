@@ -680,7 +680,7 @@ async function renderChunk(prefix, i) {
         <div class="toolbar">
             <a class="btn" href="${i <= 0 ? `#/monitor/${encodeURIComponent(prefix)}` : `#/chunk/${encodeURIComponent(prefix)}/${i - 1}`}">${i <= 0 ? `← ${esc(t('mon.heading'))}` : `← ${i}`}</a>
             <h2 style="margin:0">${esc(t('chunk.heading', { i: i + 1, total }))}</h2>
-            <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${i + 1}" ${i >= total - 1 ? 'hidden' : ''}>${i + 2} →</a>
+            ${i >= total - 1 ? '' : `<a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${i + 1}">${i + 2} →</a>`}
             <span class="badge b-${status}">${esc(statusLabel(status))}</span>
             <span class="badge">${esc(t('chunk.tokens', { n: chunk.tokens ?? '?' }))}</span>
             <span class="badge" title="${esc(t('chunk.termsTitle'))}">${extracted ? esc(t('chunk.termsExtracted', { n: nTerms ?? '✓' })) : esc(t('chunk.termsNot'))}</span>

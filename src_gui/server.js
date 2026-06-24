@@ -19,7 +19,22 @@ app.use(express.static(path.join(__dirname, 'web')));
 
 // --- Helpers ---
 
-const PREFIX_RE = /^[\w.-]+$/;
+// A project prefix is derived from the book's filename and becomes part of
+// on-disk filenames (`<prefix>_project_state.json`) as well as a URL path
+// segment and the Content-Disposition filename on download. So it must stay a
+// single, safe path component: we allow spaces and Unicode letters (Cyrillic,
+// etc.), but reject path separators, traversal and characters that are unsafe
+// in filenames or HTTP headers.
+const PREFIX_FORBIDDEN_RE = /[\\/:*?"<>|\x00-\x1f]/;
+
+function isValidPrefix(prefix) {
+    return typeof prefix === 'string'
+        && prefix.length > 0
+        && prefix.length <= 200
+        && !PREFIX_FORBIDDEN_RE.test(prefix)
+        && prefix !== '.'
+        && prefix !== '..';
+}
 
 function statePath(prefix) {
     return path.join(ROOT, `${prefix}_project_state.json`);
@@ -57,7 +72,7 @@ function writeJsonAtomic(file, data) {
 
 function validPrefix(req, res) {
     const prefix = req.params.prefix;
-    if (!PREFIX_RE.test(prefix)) {
+    if (!isValidPrefix(prefix)) {
         res.status(400).json({ error: 'Invalid project prefix' });
         return null;
     }
@@ -155,7 +170,7 @@ app.get('/api/projects', (req, res) => {
     for (const f of fs.readdirSync(ROOT)) {
         if (!f.endsWith('_project_state.json')) continue;
         const prefix = f.slice(0, -'_project_state.json'.length);
-        if (!PREFIX_RE.test(prefix)) continue;
+        if (!isValidPrefix(prefix)) continue;
         try {
             const s = projectSummary(prefix);
             delete s.chunks; // keep the dashboard payload small
@@ -295,7 +310,7 @@ app.post('/api/run', (req, res) => {
         return res.status(400).json({ error: 'file or prefix is required' });
     }
 
-    if (!PREFIX_RE.test(prefix)) return res.status(400).json({ error: 'Invalid prefix' });
+    if (!isValidPrefix(prefix)) return res.status(400).json({ error: 'Invalid prefix' });
     if (jobManager.isRunning(prefix)) {
         return res.status(409).json({ error: 'Этап уже выполняется для этого проекта' });
     }
@@ -382,7 +397,7 @@ app.post('/api/projects/:prefix/clone', (req, res) => {
     }
 
     const newPrefix = `${prefix}_${suffix}`;
-    if (!PREFIX_RE.test(newPrefix)) return res.status(400).json({ error: 'Resulting prefix is invalid' });
+    if (!isValidPrefix(newPrefix)) return res.status(400).json({ error: 'Resulting prefix is invalid' });
     if (newPrefix === prefix) return res.status(400).json({ error: 'Suffix produces the same project' });
     if (fs.existsSync(statePath(newPrefix))) {
         return res.status(409).json({ error: `Проект "${newPrefix}" уже существует` });
