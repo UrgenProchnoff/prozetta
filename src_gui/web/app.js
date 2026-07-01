@@ -594,9 +594,10 @@ async function renderMonitor(prefix) {
         const warning = preflight(stage, summary);
         if (warning && !confirm(warning)) return;
 
-        // Language is only sent for a fresh Stage 1 run (it's set once at creation).
+        // Language is only sent when the project is first created (Stage 1 or a
+        // direct Stage 2 run both bootstrap a fresh project).
         const body = { prefix, stage };
-        if (stage === '1' && !(summary && summary.total > 0)) {
+        if ((stage === '1' || stage === '2') && !(summary && summary.total > 0)) {
             if (langInput.value.trim()) body.lang = langInput.value.trim();
             if (suffixInput.value.trim()) body.suffix = suffixInput.value.trim();
         }

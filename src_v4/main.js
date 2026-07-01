@@ -66,8 +66,10 @@ async function main() {
     if (langArg) state.data.metadata.targetLanguage = langArg.split('=').slice(1).join('=');
     if (suffixArg) state.data.metadata.langSuffix = suffixArg.split('=')[1];
 
-    // Initial Setup for Stage 1
-    if (stage === '1' && state.getChunks().length === 0) {
+    // Bootstrap a fresh project: read the source and split it into chunks.
+    // Any LLM stage can do this, so Stage 2 works directly (translate without
+    // a glossary) — extraction is no longer a prerequisite for chunking.
+    if ((stage === '1' || stage === '2') && state.getChunks().length === 0) {
         if (!fs.existsSync(filePath)) {
             console.error(`[Error] File not found: ${filePath}`);
             process.exit(1);
@@ -109,6 +111,10 @@ async function main() {
                 exportBook(state);
                 break;
             case 'export':
+                if (state.getChunks().length === 0) {
+                    console.error('[Error] Project has no chunks yet — nothing to export.');
+                    process.exit(1);
+                }
                 exportBook(state);
                 break;
             default:

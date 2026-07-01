@@ -141,8 +141,8 @@ function projectSummary(prefix) {
     };
 }
 
-// Resolve the --file argument for a project. Stage 2/export only use it to
-// derive the prefix, so the file does not have to exist on disk.
+// Resolve the --file argument for a project. On an existing project the file
+// only identifies the prefix; on a fresh one Stage 1/2 read it to build chunks.
 function resolveSourceFile(prefix) {
     const sp = statePath(prefix);
     if (fs.existsSync(sp)) {
