@@ -271,6 +271,32 @@ table.glossary .del { text-align: center; }
     border-style: solid;
     border-color: transparent #6cc0ff transparent transparent;
 }
+/* Corner marker: the provider's content filter refused this chunk at Stage 1.
+   Mirrors the "extracted" marker but sits top-left and is red. */
+.chunk-cell.blocked::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-width: 7px 7px 0 0;
+    border-style: solid;
+    border-color: var(--red) transparent transparent transparent;
+    border-top-left-radius: 4px;
+}
+.dot.blocked-dot {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    position: relative;
+}
+.dot.blocked-dot::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-width: 6px 6px 0 0;
+    border-style: solid;
+    border-color: var(--red) transparent transparent transparent;
+}
 .chunk-cell.s-success { background: #1e5e41; border-color: var(--green); }
 .chunk-cell.s-best_effort { background: #6b5320; border-color: var(--yellow); }
 .chunk-cell.s-in_progress { background: #29456e; border-color: var(--blue); }

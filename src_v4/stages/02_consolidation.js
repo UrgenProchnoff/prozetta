@@ -72,8 +72,12 @@ export async function runConsolidationStage(state) {
     // Index existing terms by lowercase original for dedup
     const existingKeys = new Set(existingGlossary.map(t => t.original?.toLowerCase().trim()));
 
-    // 3. Prepare for LLM - Sort by frequency to prioritize important terms
+    // 3. Prepare for LLM - Sort by frequency to prioritize important terms.
+    // Terms already in the glossary are skipped up front, so a rerun (e.g. after
+    // re-extracting blocked chunks with another model) only pays for what's new
+    // and never touches existing entries, including manual edits.
     const rawList = Array.from(allTerms.values())
+        .filter(t => !existingKeys.has(t.original.toLowerCase().trim()))
         .map(t => ({
             original: t.original,
             count: t.count,
@@ -82,6 +86,12 @@ export async function runConsolidationStage(state) {
             type: t.type
         }))
         .sort((a, b) => b.count - a.count); // Most frequent first
+
+    if (rawList.length === 0) {
+        console.log('[Consolidation] All extracted terms are already in the glossary — nothing new to consolidate.');
+        return;
+    }
+    console.log(`[Consolidation] ${rawList.length} term(s) are new (not in the glossary yet).`);
 
     const BATCH_SIZE = config.pipeline.consolidationBatchSize;
     const MAX_RETRIES = config.pipeline.consolidationMaxRetries;

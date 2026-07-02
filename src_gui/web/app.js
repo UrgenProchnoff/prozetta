@@ -428,6 +428,7 @@ async function renderMonitor(prefix) {
                     <span><span class="dot" style="background:#29456e"></span>${esc(t('status.in_progress'))}</span>
                     <span><span class="dot" style="background:#1f242e"></span>${esc(t('status.pending'))}</span>
                     <span><span class="dot ext-dot"></span>${esc(t('legend.extracted'))}</span>
+                    <span><span class="dot blocked-dot"></span>${esc(t('legend.blocked'))}</span>
                 </div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
                 <details class="usage-details" open>
@@ -574,10 +575,11 @@ async function renderMonitor(prefix) {
                 : t('mon.chunkTermsNo');
             const title = t('mon.chunkTitle', { n: c.i + 1, status: statusLabel(c.status) })
                 + '\n' + t('mon.chunkTerms', { value: termsValue })
+                + (c.blocked ? '\n' + t('mon.chunkBlocked') + (c.blockedBy ? ' ' + t('mon.chunkBlockedBy', { model: c.blockedBy }) : '') : '')
                 + (c.score != null ? t('mon.chunkScore', { score: c.score }) : '')
                 + (c.attempts ? t('mon.chunkSteps', { n: c.attempts }) : '')
                 + `\n${c.preview}`;
-            return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
+            return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.blocked ? 'blocked' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
                 href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}</a>`;
         }).join('');
     }

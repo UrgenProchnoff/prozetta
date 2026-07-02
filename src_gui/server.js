@@ -86,10 +86,13 @@ function chunkStatus(chunk) {
     return 'pending';
 }
 
-// A chunk counts as extracted if Stage 1 marked it done. Older projects predate
-// the extraction_status field but still carry the extracted_terms array.
+// A chunk counts as extracted if Stage 1 marked it done — including 'blocked'
+// (the content filter refused the text; Stage 1 skipped it permanently). Older
+// projects predate the extraction_status field but still carry extracted_terms.
 function isExtracted(chunk) {
-    return chunk.extraction_status === 'success' || Array.isArray(chunk.extracted_terms);
+    return chunk.extraction_status === 'success'
+        || chunk.extraction_status === 'blocked'
+        || Array.isArray(chunk.extracted_terms);
 }
 
 function lastScore(chunk) {
@@ -117,6 +120,8 @@ function projectSummary(prefix) {
             tokens: c.tokens || null,
             status,
             extracted: ext,
+            blocked: c.extraction_status === 'blocked',
+            blockedBy: c.extraction_status === 'blocked' ? (c.blocked_by || null) : null,
             nTerms: Array.isArray(c.extracted_terms) ? c.extracted_terms.length : null,
             score: lastScore(c),
             attempts: c.history ? c.history.length : 0,
