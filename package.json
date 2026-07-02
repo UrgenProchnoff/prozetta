@@ -12,7 +12,6 @@
   "main": "src_v4/main.js",
   "dependencies": {
     "@langchain/core": "^1.1.17",
-    "@langchain/google-gauth": "^0.2.3",
     "@langchain/google-genai": "^2.1.13",
     "@langchain/groq": "^1.0.3",
     "@langchain/openai": "^1.2.3",
