@@ -5,6 +5,11 @@ terminology consistent across an entire book and self-checks its own quality.
 
 🇷🇺 [Русская версия](README.ru.md)
 
+> 🚀 **Not comfortable with the command line?** There is a [step-by-step beginner
+> guide](docs/GUIDE.ru.md) (in Russian): installation, a free Google API key and your
+> first translation — all through the GUI. Short version: run `start.bat` (Windows)
+> or `start.sh` (macOS/Linux) and the web interface opens in your browser.
+
 Most machine translation handles a chapter in isolation, so a character called
 *Wei Ying* drifts into *Weiying* and *Young Master Wei* a hundred pages later.
 prozetta works in two stages to avoid exactly that:
@@ -26,7 +31,9 @@ progress, and correcting individual chunks.
    ```
 3. An LLM source — either:
    - a **local** OpenAI-compatible server (e.g. llama.cpp / vLLM / LM Studio), or
-   - **cloud** providers via API keys:
+   - **cloud** providers via API keys. Keys can be entered on the GUI settings page
+     (stored in `src_v4/config.overrides.json`) or via environment variables for
+     the CLI:
      ```bash
      export GOOGLE_API_KEY="your_key"   # Google Gemini
      export GROQ_API_KEY="your_key"     # Groq
@@ -114,12 +121,15 @@ A web interface over the same pipeline (the CLI keeps working as before):
 
 ```bash
 npm run gui
+# or simply: start.bat (Windows) / ./start.sh (macOS, Linux) —
+# installs dependencies on first run and opens the browser
 ```
 
 Open `http://127.0.0.1:3457` (port configurable via `GUI_PORT`; the server binds
 to `127.0.0.1` only). Features:
 
-- **Dashboard** — all projects with progress; new books from `txt/`.
+- **Dashboard** — all projects with progress; upload a new book (.txt; the encoding
+  is detected and converted to UTF-8 automatically); new books from `txt/`.
 - **Glossary** — table editor instead of hand-editing JSON: search, types, gender,
   notes, and a per-term occurrence counter (0 = deletion candidate).
 - **Monitor** — start/stop stages, pick the target language and suffix for a new

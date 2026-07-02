@@ -198,6 +198,55 @@ app.get('/api/projects', (req, res) => {
     res.json({ projects, newBooks });
 });
 
+// --- API: upload a new book ---
+// Raw body + filename in the query string — no multipart parser dependency.
+// The file is decoded (UTF-8 / UTF-16 with BOM / windows-1251 fallback) and
+// always saved to txt/ as clean UTF-8 so the pipeline never sees a legacy
+// encoding. Errors carry a `code` the client maps to a localized message.
+
+function decodeBookBuffer(buf) {
+    if (buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xFE)
+        return { text: new TextDecoder('utf-16le').decode(buf.subarray(2)), encoding: 'utf-16le' };
+    if (buf.length >= 2 && buf[0] === 0xFE && buf[1] === 0xFF)
+        return { text: new TextDecoder('utf-16be').decode(buf.subarray(2)), encoding: 'utf-16be' };
+    if (buf.includes(0)) return null; // NUL bytes → not a text file
+    try {
+        return { text: new TextDecoder('utf-8', { fatal: true }).decode(buf), encoding: 'utf-8' };
+    } catch {
+        // Not valid UTF-8 → a legacy single-byte Cyrillic file is the likely case.
+        return { text: new TextDecoder('windows-1251').decode(buf), encoding: 'windows-1251' };
+    }
+}
+
+app.post('/api/upload', express.raw({ type: () => true, limit: '100mb' }), (req, res) => {
+    const base = path.basename(String(req.query.name || ''));
+    if (!/\.txt$/i.test(base)) {
+        return res.status(400).json({ code: 'not_txt', error: 'Only .txt files are supported' });
+    }
+    // The prefix becomes part of filenames and URLs — keep it a safe path component.
+    const prefix = base.slice(0, -4).replace(new RegExp(PREFIX_FORBIDDEN_RE.source, 'g'), '_').trim();
+    if (!isValidPrefix(prefix)) {
+        return res.status(400).json({ code: 'bad_name', error: 'Invalid file name' });
+    }
+
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({ code: 'empty', error: 'The file is empty' });
+    }
+    const decoded = decodeBookBuffer(req.body);
+    if (!decoded) {
+        return res.status(400).json({ code: 'binary', error: 'The file does not look like plain text' });
+    }
+
+    const target = path.join(TXT_DIR, `${prefix}.txt`);
+    if (fs.existsSync(target) || fs.existsSync(statePath(prefix))) {
+        return res.status(409).json({ code: 'exists', error: 'A book or project with this name already exists' });
+    }
+
+    fs.mkdirSync(TXT_DIR, { recursive: true });
+    fs.writeFileSync(target, decoded.text.replace(/^\uFEFF/, ''));
+    res.json({ ok: true, prefix, file: path.join('txt', `${prefix}.txt`), encoding: decoded.encoding });
+});
+
 app.get('/api/projects/:prefix/summary', (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;

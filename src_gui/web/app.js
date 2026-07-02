@@ -172,9 +172,40 @@ async function renderDashboard() {
 
     app.innerHTML = `
         <h2>${esc(t('nav.projects'))}</h2>
+        <div class="row" style="margin-bottom:14px">
+            <button id="upload-btn" class="btn primary">${esc(t('dash.upload'))}</button>
+            <input id="upload-input" type="file" accept=".txt,text/plain" hidden>
+        </div>
         ${projectCards ? `<div class="cards">${projectCards}</div>` : `<p class="loading">${esc(t('dash.noProjects'))}</p>`}
         ${newBookCards ? `<h3>${esc(t('dash.newBooks'))}</h3><div class="cards">${newBookCards}</div>` : ''}
     `;
+
+    const uploadInput = app.querySelector('#upload-input');
+    app.querySelector('#upload-btn').addEventListener('click', () => uploadInput.click());
+    uploadInput.addEventListener('change', async () => {
+        const file = uploadInput.files[0];
+        if (!file) return;
+        try {
+            // Raw body instead of multipart — see POST /api/upload on the server.
+            const r = await fetch(`/api/upload?name=${encodeURIComponent(file.name)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/octet-stream' },
+                body: file
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                const localized = data.code ? t(`upload.err.${data.code}`) : null;
+                throw new Error((localized && localized !== `upload.err.${data.code}` ? localized : data.error) || `HTTP ${r.status}`);
+            }
+            if (data.encoding !== 'utf-8') toast(t('dash.uploadRecoded', { encoding: data.encoding }), 'ok');
+            toast(t('dash.uploadDone', { prefix: data.prefix }), 'ok');
+            location.hash = `#/monitor/${encodeURIComponent(data.prefix)}`;
+        } catch (e) {
+            toast(e.message, 'error');
+        } finally {
+            uploadInput.value = '';
+        }
+    });
 
     app.querySelectorAll('[data-clone]').forEach(btn => btn.addEventListener('click', async () => {
         const prefix = btn.dataset.clone;
