@@ -105,6 +105,7 @@ function route() {
     if (parts[0] === 'settings') return renderSettings();
     if (parts[0] === 'glossary' && parts[1]) return renderGlossary(decodeURIComponent(parts[1]));
     if (parts[0] === 'monitor' && parts[1]) return renderMonitor(decodeURIComponent(parts[1]));
+    if (parts[0] === 'book' && parts[1]) return renderBook(decodeURIComponent(parts[1]));
     if (parts[0] === 'chunk' && parts[1] && parts[2] !== undefined)
         return renderChunk(decodeURIComponent(parts[1]), parseInt(parts[2], 10));
     renderDashboard();
@@ -408,6 +409,7 @@ async function renderMonitor(prefix) {
             <span id="m-status" class="badge"></span>
             <a class="btn" href="#/glossary/${encodeURIComponent(prefix)}">${esc(t('dash.glossary'))}</a>
             <a id="m-download" class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">${esc(t('dash.download'))}</a>
+            <a class="btn" href="#/book/${encodeURIComponent(prefix)}">${esc(t('mon.book'))}</a>
             <button id="m-reset" class="btn danger" title="${esc(t('mon.resetStage1Title'))}">${esc(t('mon.resetStage1'))}</button>
         </div>
         <div class="lang-row">
@@ -604,6 +606,7 @@ async function renderMonitor(prefix) {
 
     try {
         const job = await api(`/api/projects/${encodeURIComponent(prefix)}/job`);
+        if (job.fromFile && job.log.length > 0) appendLog(t('mon.logRestored'));
         for (const line of job.log) appendLog(line);
         setRunning(job.running);
     } catch { setRunning(false); }
@@ -663,6 +666,122 @@ async function renderMonitor(prefix) {
     });
 
     cleanup = () => es.close();
+}
+
+// ============================================================
+// Book (export metadata + FB2 download)
+// ============================================================
+
+async function renderBook(prefix) {
+    setCrumbs(`${crumbHome()} / <a href="#/monitor/${encodeURIComponent(prefix)}">${esc(prefix)}</a> / ${esc(t('book.crumb'))}`);
+    app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
+
+    let meta, summary = null;
+    try { meta = await api(`/api/projects/${encodeURIComponent(prefix)}/book-meta`); }
+    catch (e) { app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`; return; }
+    try { summary = await api(`/api/projects/${encodeURIComponent(prefix)}/summary`); } catch { /* optional */ }
+
+    const done = summary ? summary.statuses.success + summary.statuses.best_effort : 0;
+    const coverUrl = () => `/api/projects/${encodeURIComponent(prefix)}/cover?ts=${Date.now()}`;
+
+    app.innerHTML = `
+        <h2>📖 ${esc(t('book.heading'))}: ${esc(prefix)}</h2>
+        <div class="card book-card">
+            <div class="book-layout">
+                <div class="book-cover">
+                    <div id="b-cover-box" class="cover-box">
+                        ${meta.hasCover ? `<img id="b-cover-img" src="${esc(coverUrl())}" alt="">`
+                                        : `<span class="cover-none">${esc(t('book.coverNone'))}</span>`}
+                    </div>
+                    <div class="row">
+                        <button id="b-cover-upload" class="btn">${esc(t('book.coverUpload'))}</button>
+                        <button id="b-cover-delete" class="btn danger" ${meta.hasCover ? '' : 'hidden'}>${esc(t('book.coverDelete'))}</button>
+                        <input id="b-cover-input" type="file" accept="image/jpeg,image/png" hidden>
+                    </div>
+                    <div class="cfg-hint">${esc(t('book.coverHint'))}</div>
+                </div>
+                <div class="book-fields">
+                    <label>${esc(t('book.titleLabel'))}
+                        <input id="b-title" type="text" maxlength="300" placeholder="${esc(prefix)}" value="${esc(meta.title)}">
+                    </label>
+                    <label>${esc(t('book.authorLabel'))}
+                        <input id="b-author" type="text" maxlength="300" placeholder="${esc(t('book.authorPlaceholder'))}" value="${esc(meta.author)}">
+                    </label>
+                    <div class="cfg-hint">${esc(t('book.hint'))}</div>
+                    <div class="row">
+                        <button id="b-save" class="primary">${esc(t('common.save'))}</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row" style="margin-top:14px">
+            <a id="b-dl-fb2" class="btn primary ${done ? '' : 'disabled'}" href="/api/projects/${encodeURIComponent(prefix)}/output?format=fb2"
+               title="${done ? '' : esc(t('mon.downloadDisabled'))}">${esc(t('book.downloadFb2'))}</a>
+            <a id="b-dl-txt" class="btn ${done ? '' : 'disabled'}" href="/api/projects/${encodeURIComponent(prefix)}/output"
+               title="${done ? '' : esc(t('mon.downloadDisabled'))}">${esc(t('book.downloadTxt'))}</a>
+        </div>
+        <div class="hint" style="margin-top:10px">${esc(t('book.chaptersHint'))}</div>
+    `;
+
+    document.getElementById('b-save').addEventListener('click', async () => {
+        try {
+            await api(`/api/projects/${encodeURIComponent(prefix)}/book-meta`, {
+                method: 'PUT',
+                body: {
+                    title: document.getElementById('b-title').value,
+                    author: document.getElementById('b-author').value,
+                },
+            });
+            toast(t('book.saved'), 'ok');
+        } catch (e) {
+            toast(e.message, 'error');
+        }
+    });
+
+    const coverInput = document.getElementById('b-cover-input');
+    const coverBox = document.getElementById('b-cover-box');
+    const coverDeleteBtn = document.getElementById('b-cover-delete');
+
+    function showCover(hasCover) {
+        coverBox.innerHTML = hasCover
+            ? `<img id="b-cover-img" src="${esc(coverUrl())}" alt="">`
+            : `<span class="cover-none">${esc(t('book.coverNone'))}</span>`;
+        coverDeleteBtn.hidden = !hasCover;
+    }
+
+    document.getElementById('b-cover-upload').addEventListener('click', () => coverInput.click());
+    coverInput.addEventListener('change', async () => {
+        const file = coverInput.files[0];
+        if (!file) return;
+        try {
+            // Raw body, same pattern as the book upload — no multipart parser.
+            const r = await fetch(`/api/projects/${encodeURIComponent(prefix)}/cover`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/octet-stream' },
+                body: file,
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                throw new Error(data.code === 'bad_image' ? t('book.err.badImage') : (data.error || `HTTP ${r.status}`));
+            }
+            showCover(true);
+            toast(t('book.coverSaved'), 'ok');
+        } catch (e) {
+            toast(e.message, 'error');
+        } finally {
+            coverInput.value = '';
+        }
+    });
+
+    coverDeleteBtn.addEventListener('click', async () => {
+        try {
+            await api(`/api/projects/${encodeURIComponent(prefix)}/cover`, { method: 'DELETE' });
+            showCover(false);
+            toast(t('book.coverDeleted'), 'ok');
+        } catch (e) {
+            toast(e.message, 'error');
+        }
+    });
 }
 
 // ============================================================

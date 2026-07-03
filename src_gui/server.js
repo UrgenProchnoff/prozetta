@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { jobManager } from './jobs.js';
 import { createRawClient, PROVIDER_CONFIG_KEY } from '../src_v4/core/llm_client.js';
-import { assembleBookText } from '../src_v4/core/book_assembler.js';
+import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -44,6 +44,26 @@ function glossaryPath(prefix) {
     return path.join(ROOT, `${prefix}_glossary.json`);
 }
 
+function runLogPath(prefix) {
+    return path.join(ROOT, `${prefix}_run.log`);
+}
+
+// Tail of the persistent per-project log written by src_v4 (survives GUI
+// restarts, unlike the in-memory job log). Timestamps/levels are stripped so
+// lines look the same as live SSE output; "=== RUN ... ===" separators stay.
+const LOG_LINE_META_RE = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z (INFO|WARN|ERROR) /;
+function runLogTail(prefix, maxLines = 500) {
+    try {
+        const raw = fs.readFileSync(runLogPath(prefix), 'utf-8');
+        return raw.split('\n')
+            .filter(l => l.trim())
+            .slice(-maxLines)
+            .map(l => l.replace(LOG_LINE_META_RE, ''));
+    } catch {
+        return [];
+    }
+}
+
 // The language suffix recorded for a project (e.g. "rus", "de"); defaults to
 // "rus" for legacy projects with no langSuffix in metadata.
 function projectSuffix(prefix) {
@@ -51,13 +71,27 @@ function projectSuffix(prefix) {
     catch { return 'rus'; }
 }
 
-// The assembled output filename for a project: <prefix>_<suffix>.txt.
+// The assembled output filename for a project: <prefix>_<suffix>.<ext>.
 // Language clones carry the suffix inside the prefix (e.g. "book_de" + "de"), so
 // avoid doubling it: "book_de.txt" rather than "book_de_de.txt".
-function outputFileName(prefix, suffix) {
+function outputFileName(prefix, suffix, ext = 'txt') {
     const s = suffix || projectSuffix(prefix);
-    if (prefix.endsWith(`_${s}`)) return `${prefix}.txt`;
-    return `${prefix}_${s}.txt`;
+    if (prefix.endsWith(`_${s}`)) return `${prefix}.${ext}`;
+    return `${prefix}_${s}.${ext}`;
+}
+
+// The book cover lives next to the project state as <prefix>_cover.jpg|png.
+function coverPath(prefix, ext) {
+    return path.join(ROOT, `${prefix}_cover.${ext}`);
+}
+
+// Find the existing cover file for a project, or null.
+function findCover(prefix) {
+    for (const ext of ['jpg', 'png']) {
+        const p = coverPath(prefix, ext);
+        if (fs.existsSync(p)) return { path: p, ext, mime: ext === 'png' ? 'image/png' : 'image/jpeg' };
+    }
+    return null;
 }
 
 function readJson(file) {
@@ -395,7 +429,14 @@ app.post('/api/projects/:prefix/stop', (req, res) => {
 app.get('/api/projects/:prefix/job', (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
-    res.json(jobManager.getJob(prefix));
+    const job = jobManager.getJob(prefix);
+    // After a GUI restart the in-memory log is empty — restore history from
+    // the persistent <prefix>_run.log instead.
+    if (job.log.length === 0) {
+        const tail = runLogTail(prefix);
+        if (tail.length > 0) return res.json({ ...job, log: tail, fromFile: true });
+    }
+    res.json(job);
 });
 
 // Revert the whole project to its post-Stage-1 state: keep extracted terms,
@@ -481,6 +522,9 @@ app.post('/api/projects/:prefix/clone', (req, res) => {
     delete clone.metadata.lastReset;
 
     writeJsonAtomic(statePath(newPrefix), clone);
+    // The cover is language-independent — share it with the clone.
+    const cover = findCover(prefix);
+    if (cover) { try { fs.copyFileSync(cover.path, coverPath(newPrefix, cover.ext)); } catch { /* best effort */ } }
     res.json({ ok: true, prefix: newPrefix, chunks: clone.chunks.length });
 });
 
@@ -500,7 +544,14 @@ app.post('/api/projects/:prefix/delete', (req, res) => {
     try { fs.copyFileSync(sp, `${sp}.deleted.bak`); } catch { /* best effort */ }
 
     const removed = [];
-    for (const f of [sp, glossaryPath(prefix), path.join(TXT_DIR, outputFileName(prefix))]) {
+    const targets = [
+        sp, glossaryPath(prefix),
+        runLogPath(prefix),
+        path.join(TXT_DIR, outputFileName(prefix)),
+        path.join(TXT_DIR, outputFileName(prefix, null, 'fb2')),
+        coverPath(prefix, 'jpg'), coverPath(prefix, 'png'),
+    ];
+    for (const f of targets) {
         try { if (fs.existsSync(f)) { fs.unlinkSync(f); removed.push(path.basename(f)); } } catch { /* best effort */ }
     }
 
@@ -556,11 +607,94 @@ app.get('/api/projects/:prefix/events', (req, res) => {
     });
 });
 
+// --- API: book metadata (title/author for export) + cover ---
+
+app.get('/api/projects/:prefix/book-meta', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    let state;
+    try { state = readJson(statePath(prefix)); } catch { return res.status(404).json({ error: 'Project not found' }); }
+    const book = state.metadata?.book || {};
+    res.json({
+        title: book.title || '',
+        author: book.author || '',
+        langSuffix: state.metadata?.langSuffix || 'rus',
+        hasCover: !!findCover(prefix),
+    });
+});
+
+app.put('/api/projects/:prefix/book-meta', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — редактирование заблокировано' });
+    }
+    const file = statePath(prefix);
+    let state;
+    try { state = readJson(file); } catch { return res.status(404).json({ error: 'Project not found' }); }
+
+    const { title, author } = req.body || {};
+    state.metadata = state.metadata || {};
+    state.metadata.book = {
+        ...(state.metadata.book || {}),
+        title: String(title ?? '').trim().slice(0, 300),
+        author: String(author ?? '').trim().slice(0, 300),
+    };
+    state.metadata.updatedAt = new Date().toISOString();
+    writeJsonAtomic(file, state);
+    res.json({ ok: true });
+});
+
+// Cover upload: raw image body, like /api/upload. Type is sniffed from magic
+// bytes (JPEG/PNG only — what FB2 readers reliably support).
+app.post('/api/projects/:prefix/cover', express.raw({ type: () => true, limit: '10mb' }), (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (!fs.existsSync(statePath(prefix))) return res.status(404).json({ error: 'Project not found' });
+
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || buf.length === 0) {
+        return res.status(400).json({ code: 'empty', error: 'The file is empty' });
+    }
+    let ext = null;
+    if (buf.length > 3 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) ext = 'jpg';
+    else if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) ext = 'png';
+    if (!ext) {
+        return res.status(400).json({ code: 'bad_image', error: 'Cover must be a JPEG or PNG image' });
+    }
+
+    // Drop the other-extension leftover so there is never an ambiguous pair.
+    for (const e of ['jpg', 'png']) {
+        if (e !== ext) { try { fs.unlinkSync(coverPath(prefix, e)); } catch { /* none */ } }
+    }
+    fs.writeFileSync(coverPath(prefix, ext), buf);
+    res.json({ ok: true, ext });
+});
+
+app.get('/api/projects/:prefix/cover', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    const cover = findCover(prefix);
+    if (!cover) return res.status(404).json({ error: 'No cover' });
+    res.setHeader('Content-Type', cover.mime);
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(fs.readFileSync(cover.path));
+});
+
+app.delete('/api/projects/:prefix/cover', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    const cover = findCover(prefix);
+    if (cover) { try { fs.unlinkSync(cover.path); } catch { /* best effort */ } }
+    res.json({ ok: true });
+});
+
 // --- API: export download ---
 
 app.get('/api/projects/:prefix/output', async (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
+    const format = req.query.format === 'fb2' ? 'fb2' : 'txt';
 
     // Assemble on demand from the current project state so the download always
     // reflects the latest translations, with no separate "export" step required.
@@ -576,6 +710,26 @@ app.get('/api/projects/:prefix/output', async (req, res) => {
         const cfg = await loadEffectiveConfig();
         modelName = cfg[PROVIDER_CONFIG_KEY[cfg.activeProvider]]?.modelName || modelName;
     } catch { /* keep placeholder */ }
+
+    if (format === 'fb2') {
+        const book = state.metadata?.book || {};
+        const coverFile = findCover(prefix);
+        const cover = coverFile
+            ? { base64: fs.readFileSync(coverFile.path).toString('base64'), mime: coverFile.mime }
+            : null;
+        const { xml } = assembleBookFb2(chunks, {
+            title: book.title || prefix,
+            author: book.author || '',
+            langSuffix: state.metadata?.langSuffix,
+            modelName,
+            cover,
+        });
+        const outName = outputFileName(prefix, state.metadata?.langSuffix, 'fb2');
+        try { fs.writeFileSync(path.join(TXT_DIR, outName), xml); } catch { /* best effort */ }
+        res.setHeader('Content-Type', 'application/x-fictionbook+xml; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${outName}"`);
+        return res.send(xml);
+    }
 
     const { text } = assembleBookText(chunks, modelName);
 

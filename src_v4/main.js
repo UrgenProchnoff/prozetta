@@ -8,6 +8,7 @@ import { runTranslationLoopStage } from './stages/translation_loop.js';
 import { llmManager } from './core/llm_client.js';
 import { usageTracker } from './core/usage_tracker.js';
 import { assembleBookText } from './core/book_assembler.js';
+import { initFileLog } from './utils/logger.js';
 import config from './config.js';
 
 function reportUsage() {
@@ -46,6 +47,10 @@ async function main() {
     // Derive prefix from filename: "txt/Sterling_Junk_DNA.txt" → "Sterling_Junk_DNA"
     const fileExt = path.extname(filePath);
     const filePrefix = path.basename(filePath, fileExt);
+
+    // From here on, everything printed to the console also lands in
+    // <prefix>_run.log next to the project state file.
+    initFileLog(process.cwd(), filePrefix);
 
     console.log(`[Init] Project prefix: "${filePrefix}"`);
 

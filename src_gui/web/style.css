@@ -496,3 +496,24 @@ table.glossary .del { text-align: center; }
 }
 .usage-table tbody tr:last-child td { border-bottom: none; }
 .usage-table td:first-child { color: var(--text); }
+
+/* --- Book (FB2 export) screen --- */
+.book-card { max-width: 720px; }
+.book-layout { display: flex; gap: 20px; flex-wrap: wrap; }
+.book-cover { display: flex; flex-direction: column; gap: 8px; }
+.cover-box {
+    width: 160px;
+    height: 240px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.15);
+}
+.cover-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.cover-none { color: var(--muted); font-size: 12px; }
+.book-fields { flex: 1 1 280px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.book-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.book-fields input { width: 100%; }
