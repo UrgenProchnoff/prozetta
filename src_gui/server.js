@@ -769,7 +769,13 @@ async function loadEffectiveConfig() {
     return mod.default;
 }
 
-function fieldType(v) {
+// Keys that are always fractional. Without this, a whole-number current value
+// (e.g. temperature saved as 0) would be typed as 'int', making the browser
+// reject fractional input and parseInt truncate it on save.
+const FLOAT_KEYS = new Set(['temperature']);
+
+function fieldType(key, v) {
+    if (FLOAT_KEYS.has(key)) return 'float';
     if (typeof v === 'number') return Number.isInteger(v) ? 'int' : 'float';
     if (typeof v === 'boolean') return 'bool';
     return 'string';
@@ -787,21 +793,21 @@ function describeConfig(cfg, overrides) {
         const fields = Object.keys(m).map(key => {
             const overridden = ovr[id] && Object.prototype.hasOwnProperty.call(ovr[id], key);
             if (key === 'apiKey') return { key, type: 'secret', set: !!m[key], overridden: !!overridden };
-            return { key, type: fieldType(m[key]), value: m[key], overridden: !!overridden };
+            return { key, type: fieldType(key, m[key]), value: m[key], overridden: !!overridden };
         });
         groups.push({ id, kind: 'model', fields });
     }
 
     const p = cfg.pipeline || {};
     const pFields = Object.keys(p).map(key => ({
-        key, type: fieldType(p[key]), value: p[key],
+        key, type: fieldType(key, p[key]), value: p[key],
         overridden: !!(ovr.pipeline && Object.prototype.hasOwnProperty.call(ovr.pipeline, key))
     }));
     groups.push({ id: 'pipeline', kind: 'pipeline', fields: pFields });
 
     const t = cfg.translation || {};
     const tFields = Object.keys(t).map(key => ({
-        key, type: fieldType(t[key]), value: t[key],
+        key, type: fieldType(key, t[key]), value: t[key],
         overridden: !!(ovr.translation && Object.prototype.hasOwnProperty.call(ovr.translation, key))
     }));
     groups.push({ id: 'translation', kind: 'translation', fields: tFields });
@@ -858,7 +864,7 @@ app.put('/api/config', async (req, res) => {
                 continue;
             }
 
-            const coerced = coerce(fieldType(base[key]), raw);
+            const coerced = coerce(fieldType(key, base[key]), raw);
             if (coerced === null) {
                 return res.status(400).json({ error: `Invalid value for ${groupId}.${key}` });
             }

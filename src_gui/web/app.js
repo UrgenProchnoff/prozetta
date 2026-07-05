@@ -991,7 +991,7 @@ async function renderSettings() {
                 `<option value="${v}" ${f.value === v ? 'selected' : ''}>${esc(t('cfg.promptLang.' + v))}</option>`).join('');
             input = `<select id="${id}" data-type="string" data-orig="${esc(f.value)}">${opts}</select>${hint}`;
         } else if (f.type === 'int' || f.type === 'float') {
-            const step = f.type === 'int' ? '1' : 'any';
+            const step = f.type === 'int' ? '1' : '0.1';
             input = `<input type="number" step="${step}" id="${id}" data-type="${f.type}" data-orig="${esc(f.value)}" value="${esc(f.value)}">${hint}`;
         } else {
             input = `<input type="text" id="${id}" data-type="string" data-orig="${esc(f.value)}" value="${esc(f.value)}">${hint}`;
