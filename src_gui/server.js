@@ -286,11 +286,18 @@ app.post('/api/upload', express.raw({ type: () => true, limit: '100mb' }), (req,
     res.json({ ok: true, prefix, file: path.join('txt', `${prefix}.txt`), encoding: decoded.encoding });
 });
 
-app.get('/api/projects/:prefix/summary', (req, res) => {
+app.get('/api/projects/:prefix/summary', async (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
     if (!fs.existsSync(statePath(prefix))) return res.status(404).json({ error: 'Project not found' });
-    res.json(projectSummary(prefix));
+    const s = projectSummary(prefix);
+    // The grid colours chunk scores using the same thresholds the pipeline
+    // uses for its approve/fix/redraft decisions.
+    try {
+        const p = (await loadEffectiveConfig()).pipeline || {};
+        s.scoreThresholds = { approval: p.approvalScoreThreshold, redraft: p.redraftScoreThreshold };
+    } catch { /* config unreadable — the grid falls back to default bands */ }
+    res.json(s);
 });
 
 // --- API: chunks ---

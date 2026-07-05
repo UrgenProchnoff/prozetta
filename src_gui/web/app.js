@@ -431,6 +431,7 @@ async function renderMonitor(prefix) {
                     <span><span class="dot" style="background:#1f242e"></span>${esc(t('status.pending'))}</span>
                     <span><span class="dot ext-dot"></span>${esc(t('legend.extracted'))}</span>
                     <span><span class="dot blocked-dot"></span>${esc(t('legend.blocked'))}</span>
+                    <span><span class="legend-scores"><span class="cell-score" data-score="7">7</span>/<span class="cell-score" data-score="8.5">8.5</span>/<span class="cell-score" data-score="9.5">9.5</span></span> ${esc(t('legend.score'))}</span>
                 </div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
                 <details class="usage-details" open>
@@ -571,6 +572,34 @@ async function renderMonitor(prefix) {
             grid.innerHTML = `<span class="loading">${esc(t('mon.gridEmpty'))}</span>`;
             return;
         }
+        // Score colour is a continuous hue ramp (red → orange → yellow-green → green)
+        // anchored at the pipeline decision thresholds, so even close scores
+        // (9.2 vs 9.3) get a slightly different tone.
+        const approval = summary.scoreThresholds?.approval ?? 9.1;
+        const redraft = summary.scoreThresholds?.redraft ?? 7.5;
+        const scoreHue = s => {
+            const x = Math.min(10, Math.max(0, s));
+            const pts = [[0, 0], [redraft, 45], [approval, 100], [10, 145]];
+            let h = 145;
+            for (let i = 1; i < pts.length; i++) {
+                if (x <= pts[i][0]) {
+                    const [x0, h0] = pts[i - 1], [x1, h1] = pts[i];
+                    h = x1 <= x0 ? h1 : h0 + (h1 - h0) * (x - x0) / (x1 - x0);
+                    break;
+                }
+            }
+            return Math.round(h);
+        };
+        // The scored cell is tinted with the ramp: dark fill + saturated border,
+        // matching the brightness of the plain status colours around it.
+        const cellTint = s => {
+            const h = scoreHue(s);
+            return `background:hsl(${h}, 52%, 24%);border-color:hsl(${h}, 60%, 45%)`;
+        };
+        // Recolour the legend samples with the same ramp.
+        document.querySelectorAll('.legend .cell-score[data-score]').forEach(el => {
+            el.style.color = `hsl(${scoreHue(parseFloat(el.dataset.score))}, 75%, 66%)`;
+        });
         grid.innerHTML = summary.chunks.map(c => {
             const termsValue = c.extracted
                 ? (c.nTerms != null ? t('mon.chunkTermsYes', { n: c.nTerms }) : t('mon.chunkTermsYesNoCount'))
@@ -581,8 +610,12 @@ async function renderMonitor(prefix) {
                 + (c.score != null ? t('mon.chunkScore', { score: c.score }) : '')
                 + (c.attempts ? t('mon.chunkSteps', { n: c.attempts }) : '')
                 + `\n${c.preview}`;
+            const scoreHtml = c.score != null
+                ? `<span class="cell-score">${Math.round(c.score * 10) / 10}</span>`
+                : '';
             return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.blocked ? 'blocked' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
-                href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}</a>`;
+                ${c.score != null ? `style="${cellTint(c.score)}"` : ''}
+                href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}${scoreHtml}</a>`;
         }).join('');
     }
 
@@ -978,8 +1011,11 @@ async function renderSettings() {
                 <button class="btn cfg-test" data-group="${esc(g.id)}" data-provider="${esc(provider)}">${esc(t('settings.test'))}</button>
                 <span class="cfg-test-result" data-for="${esc(g.id)}"></span>
             </span>` : '';
-        return `<div class="card cfg-group">
-            <div class="title">${esc(t('cfg.group.' + g.id))} <span class="cfg-gid">${esc(g.id)}</span>${testArea}</div>
+        // The badge is in every provider card; CSS shows it only on .cfg-active,
+        // so switching the select just moves the class around.
+        const activeBadge = provider ? `<span class="badge cfg-active-badge">${esc(t('settings.activeBadge'))}</span>` : '';
+        return `<div class="card cfg-group ${provider === activeProvider ? 'cfg-active' : ''}" ${provider ? `data-provider="${esc(provider)}"` : ''}>
+            <div class="title">${esc(t('cfg.group.' + g.id))} <span class="cfg-gid">${esc(g.id)}</span>${activeBadge}${testArea}</div>
             ${g.fields.map(f => fieldHtml(g.id, f)).join('')}
         </div>`;
     }
@@ -1020,6 +1056,13 @@ async function renderSettings() {
         <h3>${esc(t('settings.sectionTranslation'))}</h3>
         <div class="cards cards-col">${transGroups.map(groupHtml).join('')}</div>
     `;
+
+    // Move the highlight as soon as the user picks a provider, before saving,
+    // so it's obvious which card the choice points at.
+    document.getElementById('cfg-active-provider').addEventListener('change', (e) => {
+        document.querySelectorAll('.cfg-group[data-provider]').forEach(card =>
+            card.classList.toggle('cfg-active', card.dataset.provider === e.target.value));
+    });
 
     // Collect only changed fields, so config.overrides.json stays minimal.
     function collectChanges() {

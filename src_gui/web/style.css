@@ -105,6 +105,19 @@ h3 { margin: 24px 0 10px; font-size: 15px; color: var(--muted); }
 /* Active-model selector card sits above the model cards */
 .cfg-provider { max-width: 720px; margin-bottom: 14px; }
 
+/* Highlight the card of the provider currently selected as active */
+.cfg-group.cfg-active {
+    border-color: var(--green);
+    box-shadow: 0 0 0 1px var(--green), 0 0 14px rgba(46, 169, 111, 0.25);
+}
+.cfg-group .cfg-active-badge { display: none; }
+.cfg-group.cfg-active .cfg-active-badge {
+    display: inline-block;
+    color: var(--green);
+    border: 1px solid var(--green);
+    background: rgba(46, 169, 111, 0.12);
+}
+
 .card {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -237,15 +250,22 @@ table.glossary .del { text-align: center; }
     height: 34px;
     border-radius: 5px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     font-size: 10px;
+    line-height: 1.15;
     color: rgba(255,255,255,0.85);
     background: var(--panel2);
     border: 1px solid var(--border);
     cursor: pointer;
     text-decoration: none;
 }
+/* Checker score shown under the chunk number. The colour is set inline by
+   drawGrid(): a continuous hue ramp anchored at the pipeline thresholds. */
+.cell-score { font-size: 8px; font-weight: 700; }
+.legend-scores { font-family: ui-monospace, Consolas, monospace; }
+.legend-scores .cell-score { font-size: 11px; }
 /* Corner marker: terms extracted (Stage 1). Composes with status colour. */
 .chunk-cell.extracted::after {
     content: "";
