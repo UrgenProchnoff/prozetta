@@ -129,8 +129,7 @@ export async function runConsolidationStage(state) {
                 // Check for empty/truncated response
                 const content = response.content;
                 if (!content || content.trim().length === 0) {
-                    console.warn(`[Consolidation] Empty response for batch ${batchNum}, attempt ${attempts}. Retrying...`);
-                    continue;
+                    throw new Error("Empty response");
                 }
 
                 const batchResult = extractJson(content);
@@ -138,6 +137,9 @@ export async function runConsolidationStage(state) {
                 if (Array.isArray(batchResult)) {
                     newTerms.push(...batchResult);
                     success = true;
+                    if (attempts > 1) {
+                        console.log(`[Consolidation] Batch ${batchNum} succeeded on attempt ${attempts}/${MAX_RETRIES}.`);
+                    }
                 } else {
                     throw new Error("Response is not an array");
                 }
@@ -148,6 +150,7 @@ export async function runConsolidationStage(state) {
                     skippedBatches.push({ batchNum, terms: skippedTerms });
                     console.error(`[Consolidation] SKIPPING BATCH ${batchNum}. Lost terms: ${skippedTerms.join(', ')}`);
                 } else {
+                    console.log(`[Consolidation] Retrying batch ${batchNum} in 2s (attempt ${attempts + 1}/${MAX_RETRIES})...`);
                     await new Promise(r => setTimeout(r, 2000));
                 }
             }
