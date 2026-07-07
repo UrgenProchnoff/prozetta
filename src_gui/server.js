@@ -922,7 +922,7 @@ app.post('/api/config/test', async (req, res) => {
             if (typeof raw === 'string' && raw.trim() !== '') conf.apiKey = raw; // empty → keep saved
             continue;
         }
-        const coerced = coerce(fieldType(base[key]), raw);
+        const coerced = coerce(fieldType(key, base[key]), raw);
         if (coerced !== null) conf[key] = coerced;
     }
 
