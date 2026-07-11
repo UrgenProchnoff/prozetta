@@ -20,6 +20,9 @@ body {
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
 header {
@@ -88,7 +91,23 @@ header {
 .cfg-hint { color: var(--muted); font-size: 12px; }
 .cfg-ovr { color: var(--yellow); }
 
-main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+main { padding: 20px; max-width: 1400px; margin: 0 auto; width: 100%; flex: 1; }
+
+footer {
+    padding: 14px 20px;
+    text-align: center;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+}
+footer a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 12.5px;
+}
+footer a:hover { color: var(--accent); }
 
 .loading { color: var(--muted); padding: 40px; text-align: center; }
 
@@ -222,6 +241,63 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .mon-model strong { color: var(--text); font-family: ui-monospace, monospace; }
 .mon-model a { color: var(--muted); }
 
+/* --- Monitor: header row, pipeline roadmap, params row --- */
+.mon-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.mon-head h2 { margin: 0; }
+.mon-head .spacer { flex: 1; }
+
+.pipe-card { margin-bottom: 14px; }
+.pipe-top { display: flex; align-items: flex-start; gap: 16px; }
+.pipe-reset { font-size: 12px; padding: 3px 10px; white-space: nowrap; }
+.pipe-steps { display: flex; flex: 1; align-items: flex-start; min-width: 0; overflow-x: auto; padding-bottom: 2px; }
+.pipe-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-width: 86px;
+    padding: 2px 8px;
+    border-radius: 8px;
+}
+.pipe-step.clickable { cursor: pointer; }
+.pipe-step.clickable:hover .pipe-dot { border-color: var(--accent); }
+.pipe-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--panel2);
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+}
+.pipe-step.done .pipe-dot { border-color: var(--green); background: rgba(46, 169, 111, 0.12); }
+.pipe-step.sel .pipe-dot { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.3); }
+.pipe-step.sel .pipe-name { color: var(--text); font-weight: 600; }
+.pipe-name { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.pipe-star { color: var(--accent); }
+.pipe-sub { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; min-height: 13px; }
+.pipe-line { flex: 1; height: 2px; background: var(--border); margin-top: 15px; min-width: 18px; }
+.pipe-line.done { background: var(--green); }
+.pipe-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.pipe-actions .spacer { flex: 1; }
+.pipe-hint { font-size: 13px; }
+
+.params-card { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; font-size: 13px; }
+.params-card label { display: inline-flex; align-items: center; gap: 6px; }
+.params-card .spacer { flex: 1; }
+
 table.glossary { width: 100%; border-collapse: collapse; }
 table.glossary th {
     text-align: left;
@@ -241,7 +317,14 @@ table.glossary .del { text-align: center; }
 /* --- Monitor --- */
 
 .monitor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 900px) { .monitor-grid { grid-template-columns: 1fr; } }
+/* The log column sticks under the (sticky) header and fills the viewport,
+   so the console reads "almost to the footer" no matter how long the left
+   column gets. align-self:start is required — a stretched grid item can't stick. */
+.monitor-grid > div:last-child { position: sticky; top: 56px; align-self: start; }
+@media (max-width: 900px) {
+    .monitor-grid { grid-template-columns: 1fr; }
+    .monitor-grid > div:last-child { position: static; }
+}
 
 .chunk-grid { display: flex; flex-wrap: wrap; gap: 5px; }
 .chunk-cell {
@@ -330,7 +413,10 @@ table.glossary .del { text-align: center; }
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 10px;
-    height: 480px;
+    /* Initial guess only — fitLog() in app.js measures the real offset to the
+       footer and sets the exact height, so the page doesn't get a scrollbar. */
+    height: calc(100vh - 380px);
+    min-height: 320px;
     overflow-y: auto;
     font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
     font-size: 12px;

@@ -390,29 +390,27 @@ async function renderMonitor(prefix) {
     const activeProviderLabel = t('cfg.group.' + (providerGroup[activeProvider] || 'logic_model'));
 
     app.innerHTML = `
-        <h2>${esc(t('mon.heading'))}: ${esc(prefix)}</h2>
-        <div class="toolbar">
-            <label>${esc(t('mon.stageLabel'))}
-                <select id="m-stage">
-                    <option value="1" data-base="${esc(t('mon.stage1'))}">${esc(t('mon.stage1'))}</option>
-                    <option value="2" data-base="${esc(t('mon.stage2'))}">${esc(t('mon.stage2'))}</option>
-                    <option value="export" data-base="${esc(t('mon.stageExport'))}">${esc(t('mon.stageExport'))}</option>
-                </select>
-            </label>
-            <span class="mon-model">${esc(t('mon.modelLabel'))}:
-                <strong>${esc(activeProviderLabel)}</strong>
-                <a href="#/settings" class="cfg-hint">(${esc(t('mon.modelInSettings'))})</a>
-            </span>
-            <button id="m-start" class="primary">${esc(t('mon.start'))}</button>
-            <button id="m-stop" class="danger" disabled>${esc(t('mon.stop'))}</button>
-            <span class="spacer"></span>
+        <div class="mon-head">
+            <h2>${esc(t('mon.heading'))}: ${esc(prefix)}</h2>
             <span id="m-status" class="badge"></span>
+            <span class="spacer"></span>
             <a class="btn" href="#/glossary/${encodeURIComponent(prefix)}">${esc(t('dash.glossary'))}</a>
             <a id="m-download" class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">${esc(t('dash.download'))}</a>
             <a class="btn" href="#/book/${encodeURIComponent(prefix)}">${esc(t('mon.book'))}</a>
-            <button id="m-reset" class="btn danger" title="${esc(t('mon.resetStage1Title'))}">${esc(t('mon.resetStage1'))}</button>
         </div>
-        <div class="lang-row">
+        <div class="card pipe-card">
+            <div class="pipe-top">
+                <div id="m-steps" class="pipe-steps"></div>
+                <button id="m-reset" class="btn danger pipe-reset" title="${esc(t('mon.resetStage1Title'))}">${esc(t('mon.resetStage1'))}</button>
+            </div>
+            <div class="pipe-actions">
+                <div id="m-hint" class="pipe-hint" hidden></div>
+                <span class="spacer"></span>
+                <button id="m-start" class="primary">${esc(t('mon.start'))}</button>
+                <button id="m-stop" class="danger" disabled>${esc(t('mon.stop'))}</button>
+            </div>
+        </div>
+        <div class="card params-card">
             <label id="m-lang-wrap" title="${esc(t('mon.langHint'))}">${esc(t('mon.targetLangLabel'))}
                 <input id="m-lang" type="text" placeholder="${esc(t('mon.targetLangPlaceholder'))}" style="width:130px">
             </label>
@@ -420,8 +418,12 @@ async function renderMonitor(prefix) {
                 <input id="m-suffix" type="text" placeholder="rus" style="width:56px" maxlength="20">
             </label>
             <span class="lang-row-hint">${esc(t('mon.langHint'))}</span>
+            <span class="spacer"></span>
+            <span class="mon-model">${esc(t('mon.modelLabel'))}:
+                <strong>${esc(activeProviderLabel)}</strong>
+                <a href="#/settings" class="cfg-hint">(${esc(t('mon.modelInSettings'))})</a>
+            </span>
         </div>
-        <div id="m-hint" class="hint" hidden></div>
         <div class="monitor-grid">
             <div>
                 <div class="legend">
@@ -451,10 +453,25 @@ async function renderMonitor(prefix) {
     const statusEl = document.getElementById('m-status');
     const startBtn = document.getElementById('m-start');
     const stopBtn = document.getElementById('m-stop');
-    const stageSel = document.getElementById('m-stage');
+    const stepsEl = document.getElementById('m-steps');
     const hintEl = document.getElementById('m-hint');
     const langInput = document.getElementById('m-lang');
     const suffixInput = document.getElementById('m-suffix');
+
+    // Size the console to end just above the footer instead of a fixed height:
+    // measure its document position so the page itself doesn't grow a scrollbar.
+    // Re-measured on resize and on every summary refresh (the hint line above
+    // can appear/wrap and shift the pane down).
+    const footerEl = document.querySelector('footer');
+    const gridWrap = document.querySelector('.monitor-grid');
+    function fitLog() {
+        // Measure the (non-sticky) grid container: the pane itself sits in the
+        // sticky column, so its own rect shifts once the column is stuck.
+        const docTop = gridWrap.getBoundingClientRect().top + window.scrollY;
+        const reserved = (footerEl?.offsetHeight || 0) + 20 /* main bottom padding */;
+        logPane.style.height = Math.max(320, window.innerHeight - docTop - reserved) + 'px';
+    }
+    window.addEventListener('resize', fitLog);
 
     // Language is fixed when the project is created (Stage 1). For an existing
     // project show its saved values, disabled; editable only before Stage 1.
@@ -482,6 +499,7 @@ async function renderMonitor(prefix) {
     let activeChunk = null; // 0-based index parsed from the log
     let running = false;
     let recommendApplied = false; // preselect the stage only once, then respect user choice
+    let selectedStage = '1'; // which runnable step of the roadmap Start will launch
 
     // Where is the project in the pipeline? Drives the recommended next stage.
     function recommend(s) {
@@ -510,20 +528,56 @@ async function renderMonitor(prefix) {
         return null;
     }
 
+    // Pipeline roadmap: extraction → glossary review → translation → export.
+    // Clicking a runnable step selects what Start will launch; the glossary is
+    // a human step (review the terms), so it has no data-stage and no selection.
+    function drawSteps() {
+        const s = summary;
+        const total = s?.total || 0;
+        const done = s ? s.statuses.success + s.statuses.best_effort : 0;
+        const rec = recommend(s).stage;
+        const steps = [
+            { stage: '1', name: t('mon.stepExtract'), sub: total ? `${s.extracted}/${total}` : '—', done: total > 0 && s.extracted >= total },
+            { stage: null, name: t('mon.stepGlossary'), sub: s?.glossaryCount ? t('mon.stepTermsCount', { n: s.glossaryCount }) : '—', done: !!s?.glossaryCount },
+            { stage: '2', name: t('mon.stepTranslate'), sub: total ? `${done}/${total}` : '—', done: total > 0 && done >= total },
+            { stage: 'export', name: t('mon.stepExport'), sub: '', done: false },
+        ];
+        stepsEl.innerHTML = steps.map((st, i) => {
+            const cls = ['pipe-step',
+                st.done ? 'done' : '',
+                st.stage ? 'clickable' : '',
+                st.stage && st.stage === selectedStage ? 'sel' : '',
+            ].filter(Boolean).join(' ');
+            const title = st.stage === rec ? t('mon.recommendedTag', { base: st.name }) : st.name;
+            const star = st.stage === rec ? ' <span class="pipe-star">★</span>' : '';
+            const line = i < steps.length - 1 ? `<div class="pipe-line ${st.done ? 'done' : ''}"></div>` : '';
+            return `<div class="${cls}" ${st.stage ? `data-stage="${st.stage}"` : ''} title="${esc(title)}">
+                <span class="pipe-dot">${st.done ? '✓' : ''}</span>
+                <span class="pipe-name">${esc(st.name)}${star}</span>
+                <span class="pipe-sub">${esc(st.sub)}</span>
+            </div>${line}`;
+        }).join('');
+    }
+
+    stepsEl.addEventListener('click', (e) => {
+        const step = e.target.closest('.pipe-step[data-stage]');
+        if (!step) return;
+        selectedStage = step.dataset.stage;
+        recommendApplied = true; // explicit user choice — stop auto-preselecting
+        drawSteps();
+    });
+
     function applyRecommendation() {
         const rec = recommend(summary);
-        // Annotate the recommended option and (once) preselect it
-        for (const opt of stageSel.options) {
-            const base = opt.dataset.base || opt.textContent;
-            opt.textContent = opt.value === rec.stage ? t('mon.recommendedTag', { base }) : base;
-        }
         if (!recommendApplied && !running) {
-            stageSel.value = rec.stage;
+            selectedStage = rec.stage;
             recommendApplied = true;
         }
+        drawSteps();
         hintEl.hidden = false;
         hintEl.textContent = t('mon.recommendPrefix', { text: rec.text });
         syncLangControls();
+        fitLog();
     }
 
     function setRunning(v) {
@@ -658,7 +712,7 @@ async function renderMonitor(prefix) {
     });
 
     startBtn.addEventListener('click', async () => {
-        const stage = stageSel.value;
+        const stage = selectedStage;
 
         const warning = preflight(stage, summary);
         if (warning && !confirm(warning)) return;
@@ -698,7 +752,7 @@ async function renderMonitor(prefix) {
         }
     });
 
-    cleanup = () => es.close();
+    cleanup = () => { es.close(); window.removeEventListener('resize', fitLog); };
 }
 
 // ============================================================
