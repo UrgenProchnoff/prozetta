@@ -942,6 +942,93 @@ app.post('/api/config/test', async (req, res) => {
     }
 });
 
+// Google Free-tier rate limits (RPM / TPM / RPD). These are NOT in the ListModels
+// API — they are tier-dependent and change over time, so this is a hand-curated
+// snapshot keyed by model id. Bump GOOGLE_FREE_TIER_AS_OF when you refresh it
+// (source: https://ai.google.dev/gemini-api/docs/rate-limits + AI Studio).
+const GOOGLE_FREE_TIER_AS_OF = '2026-07-24';
+const GOOGLE_FREE_TIER_LIMITS = {
+    'gemini-2.5-flash':              { rpm: 5,  tpm: 250000, rpd: 20 },
+    'gemini-2.5-flash-lite':         { rpm: 10, tpm: 250000, rpd: 20 },
+    'gemini-3-flash':                { rpm: 5,  tpm: 250000, rpd: 20 },
+    'gemini-3-flash-preview':        { rpm: 5,  tpm: 250000, rpd: 20 },
+    'gemini-3.5-flash':              { rpm: 5,  tpm: 250000, rpd: 20 },
+    'gemini-3.6-flash':              { rpm: 5,  tpm: 250000, rpd: 20 },
+    'gemini-3.1-flash-lite':         { rpm: 15, tpm: 250000, rpd: 500 },
+    'gemini-3.1-flash-lite-preview': { rpm: 15, tpm: 250000, rpd: 500 },
+    'gemini-3.5-flash-lite':         { rpm: 15, tpm: 250000, rpd: 500 },
+    'gemma-4-31b-it':                { rpm: 30, tpm: 16000,  rpd: 14400 },
+    'gemma-4-26b-a4b-it':            { rpm: 30, tpm: 16000,  rpd: 14400 },
+};
+
+// List the Google (Gemini) models available to the given key, straight from the
+// ListModels REST endpoint. Uses the apiKey from the form if present, else the
+// saved one (same rule as /test). Per-model token limits come live from the API;
+// the Free-tier rate limits (RPM/TPM/RPD) are overlaid from the curated table
+// above, since the API doesn't expose them. The UI also links to the AI Studio
+// dashboard for authoritative rate/usage numbers.
+app.post('/api/config/google/models', async (req, res) => {
+    let cfg;
+    try { cfg = await loadEffectiveConfig(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+    const saved = cfg.google_model || {};
+    const raw = req.body?.apiKey;
+    const apiKey = (typeof raw === 'string' && raw.trim() !== '') ? raw.trim() : saved.apiKey;
+    if (!apiKey) return res.status(400).json({ error: 'No API key set for Google' });
+
+    try {
+        const collected = [];
+        let pageToken = '';
+        // The endpoint paginates (default 50/page); follow nextPageToken for the rest.
+        for (let page = 0; page < 20; page++) {
+            const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
+            url.searchParams.set('key', apiKey);
+            url.searchParams.set('pageSize', '1000');
+            if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+            const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+            if (!r.ok) {
+                let msg = `HTTP ${r.status}`;
+                try { const j = await r.json(); msg = j.error?.message || msg; } catch { /* keep status */ }
+                return res.status(502).json({ error: msg });
+            }
+            const data = await r.json();
+            for (const m of data.models || []) collected.push(m);
+            pageToken = data.nextPageToken || '';
+            if (!pageToken) break;
+        }
+
+        // Keep only models usable for chat translation; strip the "models/" prefix.
+        // All fields below already come back in the ListModels payload — no extra
+        // request. Rate limits/usage still aren't here (dashboard link covers that).
+        const models = collected
+            .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+            .map(m => {
+                const methods = m.supportedGenerationMethods || [];
+                const name = String(m.name || '').replace(/^models\//, '');
+                return {
+                    name,
+                    displayName: m.displayName || '',
+                    description: m.description || '',
+                    inputTokenLimit: m.inputTokenLimit ?? null,
+                    outputTokenLimit: m.outputTokenLimit ?? null,
+                    temperature: m.temperature ?? null,
+                    maxTemperature: m.maxTemperature ?? null,
+                    thinking: !!m.thinking,
+                    caching: methods.includes('createCachedContent'),
+                    batch: methods.includes('batchGenerateContent'),
+                    freeLimits: GOOGLE_FREE_TIER_LIMITS[name] || null,
+                };
+            })
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        res.json({ ok: true, models, freeAsOf: GOOGLE_FREE_TIER_AS_OF });
+    } catch (e) {
+        const msg = e.name === 'TimeoutError' ? 'Google API timed out' : (e.message || String(e));
+        res.status(502).json({ error: msg });
+    }
+});
+
 app.listen(PORT, '127.0.0.1', () => {
     console.log(`[GUI] prozetta GUI running at http://127.0.0.1:${PORT}`);
 });

@@ -1058,6 +1058,24 @@ async function renderSettings() {
 
     const groupProvider = { logic_model: 'local', google_model: 'google', groq_model: 'groq' };
 
+    // Google-only: a "load available models" picker that fills the modelName
+    // field from the live ListModels API. Token limits come live from the API;
+    // Free-tier RPM/TPM/RPD are overlaid from the server's curated table (the API
+    // has no rate limits). The dashboard link covers authoritative rate/usage.
+    function modelsPickerHtml(g) {
+        if (g.id !== 'google_model') return '';
+        return `<div class="cfg-models" data-group="${esc(g.id)}">
+            <div class="cfg-models-bar">
+                <button class="btn cfg-load-models" type="button">${esc(t('settings.loadModels'))}</button>
+                <a class="cfg-hint cfg-dash-link" href="https://aistudio.google.com/rate-limit" target="_blank" rel="noopener">${esc(t('settings.rateDashboard'))}</a>
+                <label class="cfg-freeonly cfg-hint" hidden><input type="checkbox" class="cfg-models-freeonly"> ${esc(t('settings.freeOnly'))}</label>
+                <span class="cfg-models-status cfg-hint"></span>
+            </div>
+            <select class="cfg-models-select" hidden></select>
+            <span class="cfg-models-info cfg-hint"></span>
+        </div>`;
+    }
+
     function groupHtml(g) {
         const provider = groupProvider[g.id];
         const testArea = provider ? `
@@ -1071,6 +1089,7 @@ async function renderSettings() {
         return `<div class="card cfg-group ${provider === activeProvider ? 'cfg-active' : ''}" ${provider ? `data-provider="${esc(provider)}"` : ''}>
             <div class="title">${esc(t('cfg.group.' + g.id))} <span class="cfg-gid">${esc(g.id)}</span>${activeBadge}${testArea}</div>
             ${g.fields.map(f => fieldHtml(g.id, f)).join('')}
+            ${modelsPickerHtml(g)}
         </div>`;
     }
 
@@ -1201,6 +1220,124 @@ async function renderSettings() {
             } finally {
                 btn.disabled = false;
             }
+        });
+    });
+
+    // --- Google model picker: load available models from the live API. ---
+    // Compact token count for labels: 1048576 → "1M", 65536 → "64k".
+    const fmtTokens = (n) => {
+        if (n == null) return '?';
+        if (n >= 1e6) return `${+(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M`;
+        if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
+        return String(n);
+    };
+    // Compact count for rate limits: 250000 → "250K", 14400 → "14.4K", 500 → "500".
+    const fmtNum = (n) => {
+        if (n == null) return '?';
+        if (n >= 1e6) return `${+(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M`;
+        if (n >= 1e3) return `${+(n / 1e3).toFixed(n % 1e3 ? 1 : 0)}K`;
+        return String(n);
+    };
+
+    app.querySelectorAll('.cfg-models').forEach(box => {
+        const groupId = box.dataset.group;
+        const btn = box.querySelector('.cfg-load-models');
+        const statusEl = box.querySelector('.cfg-models-status');
+        const select = box.querySelector('.cfg-models-select');
+        const infoEl = box.querySelector('.cfg-models-info');
+        const freeOnlyEl = box.querySelector('.cfg-models-freeonly');
+        const freeOnlyLabel = box.querySelector('.cfg-freeonly');
+        const modelInput = document.getElementById(fieldId(groupId, 'modelName'));
+
+        let loaded = [];
+        let freeAsOf = '';
+
+        const showInfo = (m) => {
+            if (!m) { infoEl.innerHTML = ''; return; }
+            const badges = [];
+            if (m.thinking) badges.push(`<span class="badge mdl-badge" title="${esc(t('settings.thinkingHint'))}">${esc(t('settings.badgeThinking'))}</span>`);
+            if (m.caching) badges.push(`<span class="badge mdl-badge" title="${esc(t('settings.cachingHint'))}">${esc(t('settings.badgeCaching'))}</span>`);
+            if (m.batch) badges.push(`<span class="badge mdl-badge">${esc(t('settings.badgeBatch'))}</span>`);
+            if (m.maxTemperature != null) badges.push(`<span class="badge mdl-badge">${esc(t('settings.badgeMaxTemp', { t: m.maxTemperature }))}</span>`);
+            const limits = t('settings.modelLimits', {
+                input: (m.inputTokenLimit ?? 0).toLocaleString(),
+                output: (m.outputTokenLimit ?? 0).toLocaleString(),
+            });
+            const fl = m.freeLimits;
+            const freeLine = fl
+                ? `<span class="mdl-free">${esc(t('settings.freeLimits', {
+                    rpm: fl.rpm, tpm: fmtNum(fl.tpm), rpd: fl.rpd, asOf: freeAsOf,
+                }))}</span>`
+                : `<span class="mdl-free mdl-free-unknown">${esc(t('settings.freeUnknown'))}</span>`;
+            infoEl.innerHTML =
+                (badges.length ? `<span class="mdl-badges">${badges.join('')}</span>` : '') +
+                `<span class="mdl-limits">${esc(limits)}</span>` +
+                freeLine +
+                (m.description ? `<span class="mdl-desc">${esc(m.description)}</span>` : '');
+        };
+
+        // Option label: model id + token window, plus the two Free-tier numbers
+        // that actually decide usability (RPM and the daily cap) when known.
+        const optLabel = (m) => {
+            let s = `${m.name} · ctx ${fmtTokens(m.inputTokenLimit)}/out ${fmtTokens(m.outputTokenLimit)}`;
+            if (m.freeLimits) s += ` · free ${m.freeLimits.rpm}rpm/${m.freeLimits.rpd}rpd`;
+            return s;
+        };
+
+        // (Re)build the dropdown from `loaded`, honoring the "free only" filter.
+        const renderOptions = () => {
+            const list = freeOnlyEl.checked ? loaded.filter(m => m.freeLimits) : loaded;
+            if (list.length === 0) {
+                select.hidden = true;
+                showInfo(null);
+                statusEl.className = 'cfg-models-status cfg-hint';
+                statusEl.textContent = freeOnlyEl.checked ? t('settings.modelsNoneFiltered') : t('settings.modelsNone');
+                return;
+            }
+            const current = modelInput ? modelInput.value.trim() : '';
+            select.innerHTML = list.map(m =>
+                `<option value="${esc(m.name)}" ${m.name === current ? 'selected' : ''}>${esc(optLabel(m))}</option>`
+            ).join('');
+            select.hidden = false;
+            statusEl.className = 'cfg-models-status cfg-hint';
+            statusEl.textContent = t('settings.modelsLoaded', { n: list.length });
+            showInfo(list.find(m => m.name === select.value));
+        };
+
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            statusEl.className = 'cfg-models-status cfg-hint';
+            statusEl.textContent = t('settings.loadingModels');
+            try {
+                const keyEl = document.getElementById(fieldId(groupId, 'apiKey'));
+                const apiKey = keyEl ? keyEl.value.trim() : '';
+                const r = await api('/api/config/google/models', { method: 'POST', body: { apiKey } });
+                loaded = r.models || [];
+                freeAsOf = r.freeAsOf || '';
+                if (loaded.length === 0) {
+                    statusEl.textContent = t('settings.modelsNone');
+                    select.hidden = true;
+                    freeOnlyLabel.hidden = true;
+                    return;
+                }
+                freeOnlyLabel.hidden = false;
+                renderOptions();
+            } catch (e) {
+                statusEl.classList.add('err');
+                statusEl.textContent = t('settings.modelsFail');
+                statusEl.title = e.message;
+                select.hidden = true;
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        freeOnlyEl.addEventListener('change', renderOptions);
+
+        select.addEventListener('change', () => {
+            const m = loaded.find(x => x.name === select.value);
+            if (modelInput && select.value) modelInput.value = select.value;
+            showInfo(m);
         });
     });
 }

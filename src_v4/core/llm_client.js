@@ -82,6 +82,61 @@ class ChatGoogleGenerativeAIWithDiagnostics extends ChatGoogleGenerativeAI {
     }
 }
 
+// Parse a Google "45s" / "1.5s" / "0.75s" protobuf duration into milliseconds.
+function parseDurationMs(s) {
+    const m = /^([\d.]+)s$/.exec(String(s || '').trim());
+    return m ? Math.round(parseFloat(m[1]) * 1000) : null;
+}
+
+/**
+ * Recognize a rate-limit / quota error (HTTP 429) across providers and pull out
+ * the useful bits: which quota was hit and how long the API asks us to wait.
+ *
+ * Google (google.rpc) puts them in a structured `errorDetails` array
+ * (QuotaFailure.violations[].quotaId + RetryInfo.retryDelay); OpenAI-compatible
+ * providers (Groq, local) use a Retry-After header or an "try again in 1.5s"
+ * phrase in the message. Returns null when the error isn't a 429.
+ */
+export function parseRateLimit(error) {
+    const status = error?.status ?? error?.response?.status ?? error?.code;
+    const msg = String(error?.message || '');
+    const is429 = status === 429 || status === 'RESOURCE_EXHAUSTED'
+        || /\b429\b|too many requests|resource[_ ]?exhausted|rate.?limit|quota/i.test(msg);
+    if (!is429) return null;
+
+    let retryDelayMs = null, quotaId = null;
+
+    // Google: structured google.rpc details (array of typed objects).
+    const details = Array.isArray(error?.errorDetails) ? error.errorDetails : [];
+    for (const d of details) {
+        const type = d?.['@type'] || '';
+        if (type.includes('QuotaFailure') && Array.isArray(d.violations) && d.violations[0]) {
+            quotaId = d.violations[0].quotaId || d.violations[0].quotaMetric || quotaId;
+        }
+        if (type.includes('RetryInfo') && d.retryDelay) {
+            retryDelayMs = parseDurationMs(d.retryDelay) ?? retryDelayMs;
+        }
+    }
+
+    // OpenAI/Groq: Retry-After[-ms] header (object or Headers instance).
+    const headers = error?.headers || error?.response?.headers;
+    if (retryDelayMs == null && headers) {
+        const get = (k) => (typeof headers.get === 'function' ? headers.get(k) : headers[k]);
+        const raMs = get('retry-after-ms');
+        const ra = get('retry-after');
+        if (raMs != null && raMs !== '') retryDelayMs = parseInt(raMs, 10);
+        else if (ra != null && ra !== '') retryDelayMs = Math.round(parseFloat(ra) * 1000);
+    }
+    // Last resort: an "in 1.5s" / "in 200ms" phrase inside the message.
+    if (retryDelayMs == null) {
+        const m = /(?:try again|retry) in\s+([\d.]+)\s*(ms|s)/i.exec(msg);
+        if (m) retryDelayMs = Math.round(parseFloat(m[1]) * (m[2].toLowerCase() === 'ms' ? 1 : 1000));
+    }
+
+    if (retryDelayMs != null && !Number.isFinite(retryDelayMs)) retryDelayMs = null;
+    return { retryDelayMs, quotaId };
+}
+
 /**
  * Rewrite a failed invoke() error so the log shows the real cause.
  *
@@ -93,6 +148,20 @@ class ChatGoogleGenerativeAIWithDiagnostics extends ChatGoogleGenerativeAI {
  * filter that ignores those settings, so books with rough scenes still hit this.
  */
 export function explainInvokeError(error, provider, model) {
+    // 429 / quota: annotate with structured fields so the invoke Proxy can wait
+    // out the retryDelay, and give the log a plain-language reason.
+    const rl = parseRateLimit(error);
+    if (rl) {
+        error.rateLimited = true;
+        error.retryDelayMs = rl.retryDelayMs;
+        error.quotaId = rl.quotaId;
+        const quotaTxt = rl.quotaId ? ` (quota: ${rl.quotaId})` : '';
+        const waitTxt = rl.retryDelayMs ? `; API asks to retry after ${Math.round(rl.retryDelayMs / 1000)}s` : '';
+        error.message = `[${model}] Rate limit hit — HTTP 429${quotaTxt}${waitTxt}. ` +
+            `Lower maxRPM in settings or wait for the quota window to reset.`;
+        return error;
+    }
+
     if (provider === 'google' && error instanceof TypeError && error.message.includes("reading 'message'")) {
         const gemmaHint = /gemma/i.test(model)
             ? ' Gemma models have a built-in content filter that cannot be disabled — switch this project to a Gemini model to translate this chunk.'
@@ -231,12 +300,30 @@ class LLMClient {
             get(target, prop, receiver) {
                 if (prop === 'invoke') {
                     return async function (...args) {
-                        await limiter.waitForToken();
+                        // Wait out short-lived 429s (a per-minute quota clears by
+                        // waiting the retryDelay the API returns). A multi-minute
+                        // delay (per-day quota) won't clear soon, so we surface it
+                        // to the caller instead of blocking the whole run.
+                        const MAX_RATE_RETRIES = 3;
+                        const MAX_WAIT_MS = 65000;
                         let response;
-                        try {
-                            response = await target.invoke(...args);
-                        } catch (error) {
-                            throw explainInvokeError(error, provider, model);
+                        for (let attempt = 0; ; attempt++) {
+                            await limiter.waitForToken();
+                            try {
+                                response = await target.invoke(...args);
+                                break;
+                            } catch (rawError) {
+                                const error = explainInvokeError(rawError, provider, model);
+                                if (error.rateLimited && attempt < MAX_RATE_RETRIES) {
+                                    const waitMs = error.retryDelayMs ?? (attempt + 1) * 10000;
+                                    if (waitMs <= MAX_WAIT_MS) {
+                                        console.warn(`[LLM] ${error.message} Waiting ${Math.round(waitMs / 1000)}s, retry ${attempt + 1}/${MAX_RATE_RETRIES}...`);
+                                        await new Promise(r => setTimeout(r, waitMs));
+                                        continue;
+                                    }
+                                }
+                                throw error;
+                            }
                         }
                         // Gemini (@langchain/google-genai) returns content as an
                         // array of parts; OpenAI-compatible providers return a

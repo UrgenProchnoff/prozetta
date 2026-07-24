@@ -91,6 +91,24 @@ header {
 .cfg-hint { color: var(--muted); font-size: 12px; }
 .cfg-ovr { color: var(--yellow); }
 
+/* Google model picker */
+.cfg-models { margin-top: 10px; padding-top: 8px; border-top: 1px solid #1c212b; }
+.cfg-models-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cfg-load-models { font-size: 12px; padding: 3px 10px; }
+.cfg-dash-link { color: var(--blue); text-decoration: none; }
+.cfg-dash-link:hover { text-decoration: underline; }
+.cfg-models-status.err { color: var(--red); cursor: help; }
+.cfg-models-select { margin-top: 8px; width: 100%; font-family: ui-monospace, monospace; font-size: 12.5px; }
+.cfg-models-info { display: block; margin-top: 6px; }
+.mdl-badges { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-right: 8px; vertical-align: middle; }
+.mdl-badge { border: 1px solid #2a3140; border-radius: 4px; padding: 1px 6px; font-size: 11px; color: var(--text); cursor: help; }
+.mdl-limits { color: var(--muted); }
+.mdl-free { display: block; margin-top: 5px; color: var(--text); font-weight: 600; }
+.mdl-free-unknown { color: var(--muted); font-weight: 400; font-style: italic; }
+.mdl-desc { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.cfg-freeonly { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
+.cfg-freeonly input { margin: 0; }
+
 main { padding: 20px; max-width: 1400px; margin: 0 auto; width: 100%; flex: 1; }
 
 footer {
