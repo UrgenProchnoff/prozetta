@@ -171,6 +171,7 @@ const ru = {
     соответствуют ли переводы имен и терминов шпаргалке <context>?
     соблюдены ли решения <style> в АВТОРСКОМ ПОВЕСТВОВАНИИ (лицо, время, «ты»/«вы», род повествователя)? Нарушение <style> в повествовании — ошибка.
     ВАЖНО: прямая речь и вставные документы (письма, протоколы, стенограммы, чаты) под <style> НЕ подпадают — вежливое «вы» между персонажами там НЕ ошибка.
+    ВАЖНО про время: сверяй его с <original> ПОФРАЗОВО. Прошедшее время там, где оно стоит в оригинале (воспоминания, предыстория), — НЕ ошибка. Прежде чем объявить нарушение времени, процитируй в comment глагол оригинала в этом месте.
     перевод тебе нравится?
     поставь оценку по 10 бальной шкале
 
@@ -334,6 +335,7 @@ EVALUATE the quality of the translation by these criteria:
     do the translations of names and terms match the <context> cheat sheet?
     are the <style> decisions respected in the AUTHOR'S NARRATION (person, tense, form of address, narrator's gender)? A <style> violation in the narration is an error.
     IMPORTANT: direct speech and embedded documents (letters, transcripts, chats) are NOT governed by <style> — polite address between characters there is NOT an error.
+    IMPORTANT about tense: compare it against <original> PHRASE BY PHRASE. Past tense where the original has past (memories, backstory) is NOT an error. Before claiming a tense violation, quote the original's verb at that spot in your comment.
     do you like the translation?
     give a score on a 10-point scale
 

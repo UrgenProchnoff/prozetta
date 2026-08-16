@@ -121,7 +121,7 @@ const STYLE_WORDS = {
     ru: {
         person: { first: 'от 1-го лица', second: 'от 2-го лица («ты»/«вы» — читатель смотрит глазами персонажа)', third: 'от 3-го лица' },
         tense: { present: 'настоящее время', past: 'прошедшее время' },
-        narration: (p, t) => `Повествование: ${[p, t].filter(Boolean).join(', ')}. Сохраняй лицо и время оригинала во всём фрагменте.`,
+        narration: (p, t) => `Повествование: ${[p, t ? `основное время — ${t}` : null].filter(Boolean).join(', ')}. ЭТАЛОН ВРЕМЕНИ — ОРИГИНАЛ, фраза за фразой: где автор пишет в прошедшем (воспоминания, события до момента повествования), прошедшее сохраняется — это НЕ нарушение.`,
         address: (form) => `Обращение к читателю в АВТОРСКОМ ПОВЕСТВОВАНИИ: ${form}. Не переключайся между «ты» и «вы» в повествовании. На обращения персонажей друг к другу (диалоги, письма, протоколы, чаты) это правило НЕ распространяется — там уместно и вежливое «вы».`,
         gender: { m: 'МУЖЧИНА — все родовые формы (глаголы прошедшего времени, прилагательные, причастия), относящиеся к повествователю, мужского рода', f: 'ЖЕНЩИНА — все родовые формы (глаголы прошедшего времени, прилагательные, причастия), относящиеся к повествователю, женского рода' },
         focal: (name, genderTxt) => `Повествователь этого фрагмента: ${name}, ${genderTxt}.`,
@@ -131,7 +131,7 @@ const STYLE_WORDS = {
     en: {
         person: { first: 'first person', second: 'second person (the reader sees through a character\'s eyes)', third: 'third person' },
         tense: { present: 'present tense', past: 'past tense' },
-        narration: (p, t) => `Narration: ${[p, t].filter(Boolean).join(', ')}. Preserve the original's person and tense throughout.`,
+        narration: (p, t) => `Narration: ${[p, t ? `base tense — ${t}` : null].filter(Boolean).join(', ')}. THE TENSE AUTHORITY IS THE ORIGINAL, phrase by phrase: where the author writes in the past (memories, events before the narrative moment), the past is kept — that is NOT a violation.`,
         address: (form) => `Form of address to the reader in the AUTHOR'S NARRATION: ${form}. Never switch between formal and informal in the narration. This rule does NOT extend to characters addressing each other (dialogue, letters, transcripts, chats) — polite address is appropriate there.`,
         gender: { m: 'MALE — every gendered form (past-tense verbs, adjectives, participles) referring to the narrator must be masculine', f: 'FEMALE — every gendered form (past-tense verbs, adjectives, participles) referring to the narrator must be feminine' },
         focal: (name, genderTxt) => `The narrator of this fragment: ${name}, ${genderTxt}.`,
