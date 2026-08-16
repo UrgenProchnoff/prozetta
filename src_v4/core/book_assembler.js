@@ -3,6 +3,7 @@
 // (serves on the fly), so both produce byte-identical output.
 
 import crypto from 'node:crypto';
+import { CJK_HEADING } from './language.js';
 
 /**
  * Build the full book text: every chunk's translation in order, missing ones
@@ -55,6 +56,9 @@ const HEADING_NUMBER_WORD = new RegExp(`^${NUMBER_WORD}(?:[.:]\\s*.{0,60})?$`, '
 
 export function isHeading(line) {
     if (line.length > 80) return false;
+    // "第一章 归途", "第12話", "제3장" — scripts with no case, so none of the
+    // heuristics below can see them.
+    if (CJK_HEADING.test(line)) return true;
     if (HEADING_KEYWORD.test(line)) return true;                 // "Пролог", "Эпилог"
     if (HEADING_KEYWORD_NUMBERED.test(line)) return true;        // "Глава 7. Погоня"
     if (HEADING_NUMBER_WORD.test(line)) return true;             // "ПЯТЬ. Семья Во"
