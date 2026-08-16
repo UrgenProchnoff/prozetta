@@ -133,6 +133,15 @@ export async function runPassportStage(state) {
     // --- merge: the model's answer, then the map computed from it ---
     const passport = loadPassport(state.getPassportPath());
 
+    // Non-fiction is the answer that changes behaviour, so it has to be stated;
+    // anything unrecognized falls back to fiction, which is what the pipeline
+    // did before this field existed.
+    const kindRaw = String(answer?.kind || '').trim().toLowerCase();
+    passport.kind = /non-?fiction|нехудож|документ|публицист/.test(kindRaw) ? 'nonfiction' : 'fiction';
+    // A register is substituted into the prompt as a value: keep it a phrase.
+    const registerRaw = String(answer?.register || '').trim();
+    passport.register = registerRaw ? registerRaw.split(/[.;\n]/)[0].trim().slice(0, 80) : null;
+
     const address = normalizeAddressForm(answer?.narration?.addressForm);
     passport.narration = {
         person: normalizePerson(answer?.narration?.person) || person.person,
@@ -190,6 +199,11 @@ export async function runPassportStage(state) {
 
     // --- report ---
     const { person: p, tense, addressForm } = passport.narration;
+    console.log(`[Passport] Kind: ${passport.kind}${passport.register ? `, register: ${passport.register}` : ''}.`);
+    if (passport.kind === 'nonfiction' && p === 'second') {
+        console.log(`[Passport] Second person in non-fiction: "you" is the reader — addressed as ${passport.readerGender || 'm'}, ` +
+            `not given a character's gender.`);
+    }
     console.log(`[Passport] Narration: ${p || '—'}, ${tense || '—'}${addressForm ? `, addressing the reader as "${addressForm}"` : ''}.`);
     for (const c of passport.characters) {
         console.log(`[Passport]   ${c.name} (${c.gender || 'gender unknown'}): ${c.dossier.slice(0, 90)}`);

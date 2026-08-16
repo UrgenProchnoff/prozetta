@@ -75,8 +75,9 @@ async function main() {
 
     // Bootstrap a fresh project: read the source and split it into chunks.
     // Any LLM stage can do this, so Stage 2 works directly (translate without
-    // a glossary) — extraction is no longer a prerequisite for chunking.
-    if ((stage === '1' || stage === '2') && state.getChunks().length === 0) {
+    // a glossary) — extraction is no longer a prerequisite for chunking. The
+    // passport stage needs chunks too: its map is expressed in chunk indices.
+    if ((stage === '1' || stage === '2' || stage === 'passport') && state.getChunks().length === 0) {
         if (!fs.existsSync(filePath)) {
             console.error(`[Error] File not found: ${filePath}`);
             process.exit(1);

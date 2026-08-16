@@ -81,6 +81,13 @@ const ru = {
 
         Определи:
 
+        0. ВИД текста: "fiction" (роман, повесть, рассказ — вымышленный сюжет) или
+           "nonfiction" (руководство, эссе, учебник, статья, мемуары, документалистика).
+           Это решает, к кому обращено «ты» при повествовании от 2-го лица: к персонажу,
+           чьими глазами смотрит читатель, — или к самому читателю.
+           Плюс РЕГИСТР перевода одним словосочетанием: «разговорный», «нейтральный»,
+           «академический», «ироничный публицистический» и т.п.
+
         1. КАК ведётся повествование: от какого лица, в каком времени, и — если
            повествование от 2-го лица — как обращаться к читателю на ${targetLang}.
            Это решение принимается один раз на всю книгу.
@@ -108,6 +115,8 @@ const ru = {
         Пример ответа:
         \`\`\`json
         {
+          "kind": "fiction|nonfiction",
+          "register": "регистр одним словосочетанием",
           "narration": {
             "person": "first|second|third",
             "tense": "present|past",
@@ -254,6 +263,14 @@ const en = {
 
         Determine:
 
+        0. The KIND of text: "fiction" (a novel, a novella, a story — an invented plot)
+           or "nonfiction" (a guide, an essay, a textbook, an article, a memoir,
+           documentary writing). This decides who "you" addresses in second-person
+           narration: the character through whose eyes the reader sees — or the reader
+           themselves.
+           Plus the REGISTER of the translation as a short phrase: "conversational",
+           "neutral", "academic", "ironic journalistic", and so on.
+
         1. HOW the narration works: which person, which tense, and — if the narration
            is in the second person — how the reader should be addressed in ${targetLang}.
            This is decided once for the whole book.
@@ -283,6 +300,8 @@ const en = {
         Example response:
         \`\`\`json
         {
+          "kind": "fiction|nonfiction",
+          "register": "register as a short phrase",
           "narration": {
             "person": "first|second|third",
             "tense": "present|past",

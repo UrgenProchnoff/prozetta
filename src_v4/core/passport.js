@@ -26,6 +26,22 @@ export const PASSPORT_VERSION = 1;
  * @property {{model: string|null, generatedAt: string|null}} source
  *   Which model produced the generated parts, and when. Hand edits leave this
  *   alone, so it always answers "where did this come from".
+ * @property {'fiction'|'nonfiction'|null} kind
+ *   What kind of book this is. It decides who "you" refers to in second-person
+ *   narration — the focal character (fiction) or the reader (a guide, a manual,
+ *   an essay) — which are opposite referents dressed in the same pronoun. It
+ *   also picks the register instruction: a how-to guide translated "literarily,
+ *   preserving the author's style" is as wrong as a novel translated for
+ *   terminological precision.
+ * @property {string|null} register
+ *   Free-form, from the model: "разговорный", "академический", … Substituted
+ *   into the prompt as a value, so it stays a phrase, not a sentence.
+ * @property {'m'|'f'|'neutral'|null} readerGender
+ *   Gender to use when the narration addresses the reader and the reader is not
+ *   a character (nonfiction second person). Measured on the owner's proofread
+ *   guide: 9 masculine forms after "ты", 0 feminine — Russian defaults to
+ *   masculine for an unknown addressee. A value rather than a hard-coded rule:
+ *   some editors prefer neutral phrasing, and that is an editorial choice.
  * @property {{person: 'first'|'second'|'third'|null,
  *             tense: 'present'|'past'|null,
  *             addressForm: string|null,
@@ -60,6 +76,9 @@ export function emptyPassport() {
         version: PASSPORT_VERSION,
         updatedAt: new Date().toISOString(),
         source: { model: null, generatedAt: null },
+        kind: null,
+        register: null,
+        readerGender: 'm',
         narration: { person: null, tense: null, addressForm: null, addressNote: null },
         characters: [],
         povMap: [],
@@ -81,6 +100,11 @@ export function loadPassport(passportPath) {
         return {
             ...base,
             ...raw,
+            // Passports written before these fields existed read as fiction with
+            // the default reader gender — which is what they were.
+            kind: raw.kind ?? base.kind,
+            register: raw.register ?? base.register,
+            readerGender: raw.readerGender ?? base.readerGender,
             source: { ...base.source, ...(raw.source || {}) },
             narration: { ...base.narration, ...(raw.narration || {}) },
             characters: Array.isArray(raw.characters) ? raw.characters : [],
@@ -123,7 +147,24 @@ export function findCharacter(passport, name) {
 // Wording tables for the <style> block, keyed by prompt language.
 const STYLE_WORDS = {
     ru: {
-        person: { first: 'от 1-го лица', second: 'от 2-го лица («ты»/«вы» — читатель смотрит глазами персонажа)', third: 'от 3-го лица' },
+        person: { first: 'от 1-го лица', second: 'от 2-го лица', third: 'от 3-го лица' },
+        // Одно и то же «ты» указывает на разных людей: в художественном тексте —
+        // на персонажа, чьими глазами смотрит читатель; в руководстве или эссе —
+        // на самого читателя, которого автор не знает.
+        secondPerson: {
+            fiction: '«Ты» — это персонаж, чьими глазами читатель видит происходящее.',
+            nonfiction: '«Ты» — это ЧИТАТЕЛЬ, к которому обращается автор, а не персонаж книги.',
+        },
+        readerGender: {
+            m: 'Пол читателя неизвестен: родовые формы при обращении к нему — мужского рода (норма русского языка для неизвестного адресата).',
+            f: 'Родовые формы при обращении к читателю — женского рода.',
+            neutral: 'Пол читателя неизвестен: избегай родовых форм при обращении к нему, перестраивай фразы.',
+        },
+        register: (value) => `Регистр перевода: ${value}. Держи его на всём протяжении.`,
+        genderShort: { m: 'мужчина', f: 'женщина' },
+        precision: 'Это НЕхудожественный текст. Переводи ТОЧНО: сохраняй терминологию, факты, числа и структуру. Не украшай, не добавляй образности, которой нет в оригинале.',
+        author: (name, genderTxt) => `Автор текста: ${name}, ${genderTxt}. Когда автор говорит о себе («я»), используй этот род.`,
+        authorDossier: (text) => `Досье автора: ${text}`,
         tense: { present: 'настоящее время', past: 'прошедшее время' },
         narration: (p, t) => `Повествование: ${[p, t ? `основное время — ${t}` : null].filter(Boolean).join(', ')}. ЭТАЛОН ВРЕМЕНИ — ОРИГИНАЛ, фраза за фразой: где автор пишет в прошедшем (воспоминания, события до момента повествования), прошедшее сохраняется — это НЕ нарушение.`,
         address: (form) => `Обращение к читателю в АВТОРСКОМ ПОВЕСТВОВАНИИ: ${form}. Не переключайся между «ты» и «вы» в повествовании. На обращения персонажей друг к другу (диалоги, письма, протоколы, чаты) это правило НЕ распространяется — там уместно и вежливое «вы».`,
@@ -135,7 +176,21 @@ const STYLE_WORDS = {
         undetermined: 'Кто повествователь этого фрагмента — НЕ определено. НЕ приписывай повествователю род: держи время повествования и перестраивай фразы так, чтобы родовые формы не требовались.',
     },
     en: {
-        person: { first: 'first person', second: 'second person (the reader sees through a character\'s eyes)', third: 'third person' },
+        person: { first: 'first person', second: 'second person', third: 'third person' },
+        secondPerson: {
+            fiction: '"You" is the character through whose eyes the reader sees events.',
+            nonfiction: '"You" is the READER the author is addressing, not a character in the book.',
+        },
+        readerGender: {
+            m: 'The reader\'s gender is unknown: use masculine forms when addressing them (the default for an unknown addressee).',
+            f: 'Use feminine forms when addressing the reader.',
+            neutral: 'The reader\'s gender is unknown: avoid gendered forms when addressing them, rephrase instead.',
+        },
+        register: (value) => `Register of the translation: ${value}. Hold it throughout.`,
+        genderShort: { m: 'male', f: 'female' },
+        precision: 'This is NON-FICTION. Translate PRECISELY: preserve terminology, facts, figures and structure. Do not embellish or add imagery the original does not have.',
+        author: (name, genderTxt) => `The author: ${name}, ${genderTxt}. Use this gender when the author speaks of themselves ("I").`,
+        authorDossier: (text) => `Author's dossier: ${text}`,
         tense: { present: 'present tense', past: 'past tense' },
         narration: (p, t) => `Narration: ${[p, t ? `base tense — ${t}` : null].filter(Boolean).join(', ')}. THE TENSE AUTHORITY IS THE ORIGINAL, phrase by phrase: where the author writes in the past (memories, events before the narrative moment), the past is kept — that is NOT a violation.`,
         address: (form) => `Form of address to the reader in the AUTHOR'S NARRATION: ${form}. Never switch between formal and informal in the narration. This rule does NOT extend to characters addressing each other (dialogue, letters, transcripts, chats) — polite address is appropriate there.`,
@@ -167,14 +222,37 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
     const lines = [];
 
     const { person, tense, addressForm } = passport.narration || {};
+    const nonfiction = passport.kind === 'nonfiction';
     const personTxt = words.person[person] || null;
     const tenseTxt = words.tense[tense] || null;
     if (personTxt || tenseTxt) lines.push(words.narration(personTxt, tenseTxt));
+    if (nonfiction) lines.push(words.precision);
+    if (passport.register) lines.push(words.register(passport.register));
     if (addressForm) lines.push(words.address(addressForm));
+    // Second person hides two opposite referents behind one pronoun, so it is
+    // spelled out rather than left to the model to infer.
+    if (person === 'second') lines.push(words.secondPerson[nonfiction ? 'nonfiction' : 'fiction']);
 
     const cast = passport.characters || [];
     let focal = null;
     let dossiersShown = 0;
+
+    // Non-fiction: "you" is the reader, whose gender is a project-level decision,
+    // and the cast entry is the author — whose gender governs "I", not "you".
+    if (nonfiction) {
+        if (person === 'second') {
+            lines.push(words.readerGender[passport.readerGender || 'm'] || words.readerGender.m);
+        }
+        const author = cast[0];
+        if (author && (author.gender === 'm' || author.gender === 'f')) {
+            lines.push(words.author(author.name, words.genderShort[author.gender]));
+            if (author.dossier) {
+                lines.push(words.authorDossier(String(author.dossier).slice(0, 500)));
+                dossiersShown++;
+            }
+        }
+        return lines.join('\n');
+    }
 
     if (person === 'first' || person === 'second') {
         let focalName = povForChunk(passport, chunkIndex);
