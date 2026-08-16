@@ -11,6 +11,10 @@ export class ProjectState {
         const prefix = this.filePrefix ? `${this.filePrefix}_` : '';
         this.stateFile = path.join(this.workDir, `${prefix}project_state.json`);
         this.glossaryFile = path.join(this.workDir, `${prefix}glossary.json`);
+        // The passport lives beside the glossary rather than inside the state:
+        // both are human-edited artefacts, and neither should be lost when
+        // Stage 2 is reset.
+        this.passportFile = path.join(this.workDir, `${prefix}passport.json`);
 
         this.data = {
             metadata: {
@@ -62,6 +66,10 @@ export class ProjectState {
 
     getGlossaryPath() {
         return this.glossaryFile;
+    }
+
+    getPassportPath() {
+        return this.passportFile;
     }
 
     getChunks() {

@@ -3,6 +3,7 @@ import { llmManager } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
+import { wholeWordRegex } from '../core/text_stats.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
@@ -191,17 +192,15 @@ export async function runTranslationLoopStage(state) {
 // --- HELPERS ---
 
 // Substring matching turned nearly half the cheat sheet into noise: "HA" fired
-// inside "charles", "M" inside "memory", "ICE" inside "noticed". Match on whole
-// words instead — \b is useless here, it only knows [A-Za-z0-9_], so a Cyrillic
-// or accented neighbour would still read as a boundary.
-const WORD_CHAR = '[\\p{L}\\p{N}]';
+// inside "charles", "M" inside "memory", "ICE" inside "noticed". wholeWordRegex
+// handles that, and handles the opposite case too — in Chinese or Japanese,
+// where nothing is space-separated, it falls back to a plain substring match.
 const termRegexCache = new Map();
 
-function wholeWordRegex(term) {
+function cachedTermRegex(term) {
     let re = termRegexCache.get(term);
     if (!re) {
-        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        re = new RegExp(`(?<!${WORD_CHAR})${escaped}(?!${WORD_CHAR})`, 'iu');
+        re = wholeWordRegex(term, 'iu');
         termRegexCache.set(term, re);
     }
     return re;
@@ -212,7 +211,7 @@ function getLocalContextString(text, glossary) {
     glossary.forEach(term => {
         const original = String(term?.original || '').trim();
         if (!original) return;
-        if (wholeWordRegex(original).test(text)) {
+        if (cachedTermRegex(original).test(text)) {
             hits.push(`${original} -> ${term.translation}`);
         }
     });

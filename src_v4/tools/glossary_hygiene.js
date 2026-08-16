@@ -23,48 +23,7 @@
 import fs from 'fs';
 import path from 'path';
 import { ProjectState } from '../core/state_manager.js';
-
-const WORD_CHAR = '[\\p{L}\\p{N}]';
-
-function wholeWordRegex(term, flags = 'giu') {
-    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`(?<!${WORD_CHAR})${escaped}(?!${WORD_CHAR})`, flags);
-}
-
-function countOccurrences(text, term) {
-    return (text.match(wholeWordRegex(term)) || []).length;
-}
-
-/**
- * Gender of a name from the pronouns that follow it across the whole book.
- * A single chunk rarely shows it; the book as a whole shows it clearly.
- *
- * Counting stops at the end of the sentence rather than after a fixed number of
- * characters: a wider window picks up the pronouns of whoever is mentioned next
- * and starts inventing genders for places. Measured on 16 names with a known
- * answer, sentence scope gives 14 right, 0 wrong, 2 abstentions; a 120-char
- * window gets 2 of them wrong.
- *
- * Returns 'm' | 'f' | null (null = not enough signal, or too close to call).
- */
-export function genderFromPronouns(text, name, maxScope = 200) {
-    const re = wholeWordRegex(name);
-    let m, he = 0, she = 0;
-    while ((m = re.exec(text)) !== null) {
-        const after = text.slice(m.index + m[0].length);
-        const sentenceEnd = after.search(/[.!?\n]/);
-        const scope = after.slice(0, sentenceEnd < 0 ? maxScope : Math.min(sentenceEnd, maxScope));
-        he += (scope.match(/\b(he|him|his)\b/gi) || []).length;
-        she += (scope.match(/\b(she|her|hers)\b/gi) || []).length;
-    }
-    const total = he + she;
-    let gender = null;
-    if (total >= 3) {
-        if (he > she * 1.5) gender = 'm';
-        else if (she > he * 1.5) gender = 'f';
-    }
-    return { gender, he, she };
-}
+import { countOccurrences, genderFromPronouns } from '../core/text_stats.js';
 
 function normalizeGender(g) {
     const s = String(g || '').trim().toLowerCase();
@@ -131,7 +90,7 @@ export function analyzeGlossary(glossary, sourceText) {
     // ("Ms. Barnaby") and place names ("Portobello"), where the pronouns it
     // counts belong to whoever the sentence goes on to talk about. Sorted by
     // strength of evidence so the trustworthy rows come first.
-    const byEvidence = (a, b) => (b.he + b.she) - (a.he + a.she);
+    const byEvidence = (a, b) => (b.masculine + b.feminine) - (a.masculine + a.feminine);
 
     const missingGender = entries
         .filter(e => e.term.type === 'name' && !e.gender && e.count > 0)
@@ -188,13 +147,13 @@ function report(a, glossary) {
     console.log('  Надёжна на частых одиночных именах, врёт на составных и топонимах.\n');
 
     line('пол не проставлен, текст подсказывает', a.missingGender.length);
-    for (const { entry, gender, he, she } of a.missingGender.slice(0, 10)) {
-        console.log(`      · ${entry.original} → ${gender}   (he ${he} / she ${she})`);
+    for (const { entry, gender, masculine, feminine } of a.missingGender.slice(0, 10)) {
+        console.log(`      · ${entry.original} → ${gender}   (муж ${masculine} / жен ${feminine})`);
     }
 
     line('пол проставлен, но текст говорит иначе', a.wrongGender.length);
-    for (const { entry, gender, he, she } of a.wrongGender.slice(0, 10)) {
-        console.log(`      · ${entry.original}: в глоссарии ${entry.gender}, по тексту ${gender}   (he ${he} / she ${she})`);
+    for (const { entry, gender, masculine, feminine } of a.wrongGender.slice(0, 10)) {
+        console.log(`      · ${entry.original}: в глоссарии ${entry.gender}, по тексту ${gender}   (муж ${masculine} / жен ${feminine})`);
     }
     console.log();
 }

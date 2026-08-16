@@ -17,6 +17,12 @@
 // --- user-построители (общие для всех языков) ---
 const userBuilders = {
     extraction: (chunkText) => `Текст: \n${chunkText}`,
+    passport: (bookText, evidence) =>
+`<evidence>${JSON.stringify(evidence, null, 1)}</evidence>
+
+<book>
+${bookText}
+</book>`,
     consolidation: (items) => JSON.stringify(items),
     draft: (original, context) => `<txt>${original}</txt>\n<ctx>${context}</ctx>`,
     check: (context, original, translation, translatorComment) =>
@@ -57,6 +63,52 @@ const ru = {
         Не выдумывай. Извлекай только то, что есть в тексте.
         `,
         user: userBuilders.extraction,
+    },
+
+    // --- Паспорт книги: один вызов на весь текст (03_passport.js) ---
+    passport: {
+        system: (targetLang) => `
+        Ты - литературный аналитик. Тебе дан ПОЛНЫЙ текст книги.
+
+        В <evidence> — то, что уже посчитано по тексту механически: лицо повествования,
+        список кандидатов в персонажи с числом упоминаний, долей упоминаний в прямой речи
+        и свидетельствами о поле по местоимениям. Опирайся на эти цифры, но если текст
+        говорит иное — доверяй тексту.
+
+        Определи:
+
+        1. КАК ведётся повествование: от какого лица, в каком времени, и — если
+           повествование от 2-го лица — как обращаться к читателю на ${targetLang}.
+           Это решение принимается один раз на всю книгу.
+
+        2. ОТ ЧЬЕГО ЛИЦА идёт повествование. Нужны только фокальные персонажи — те,
+           чьими глазами читатель видит происходящее. НЕ перечисляй всех важных
+           героев: тот, о ком много говорят, но чьими глазами мы не смотрим,
+           в этот список не входит. Если фокальный персонаж один - верни одного.
+
+        3. На каждого фокального персонажа - ДОСЬЕ: род занятий, звание или должность,
+           место работы, ключевые связи с другими персонажами, приметы речи и быта.
+           Пиши телеграфно, без прозы. Проверка качества досье такая: по нему можно
+           опознать главу этого персонажа по одному абзацу, не встретив его имени.
+
+        Рассуждай шаг за шагом.
+        JSON должен быть обёрнут в тройные кавычки (markdown block).
+
+        Пример ответа:
+        \`\`\`json
+        {
+          "narration": {
+            "person": "first|second|third",
+            "tense": "present|past",
+            "addressForm": "форма обращения к читателю на ${targetLang} или null",
+            "reason": "коротко, на чём основано"
+          },
+          "povCharacters": [
+            { "name": "Имя как в оригинале", "gender": "m|f|n", "dossier": "телеграфное досье" }
+          ]
+        }
+        \`\`\``,
+        user: userBuilders.passport,
     },
 
     // --- Этап 1b: консолидация в глоссарий (02_consolidation.js) ---
@@ -166,6 +218,53 @@ const en = {
         Do not make things up. Extract only what is in the text.
         `,
         user: userBuilders.extraction,
+    },
+
+    // --- Book passport: one call over the whole text (03_passport.js) ---
+    passport: {
+        system: (targetLang) => `
+        You are a literary analyst. You are given the COMPLETE text of a book.
+
+        <evidence> holds what has already been measured mechanically: the narrative
+        person, and a list of candidate characters with mention counts, the share of
+        mentions occurring inside quoted speech, and pronoun evidence for gender. Lean
+        on those numbers, but where the text disagrees with them, trust the text.
+
+        Determine:
+
+        1. HOW the narration works: which person, which tense, and — if the narration
+           is in the second person — how the reader should be addressed in ${targetLang}.
+           This is decided once for the whole book.
+
+        2. WHOSE point of view it is told from. Only focal characters count — the ones
+           through whose eyes the reader sees events. Do NOT list every important
+           character: someone who is talked about a great deal but never the viewpoint
+           is not on this list. If there is a single focal character, return one.
+
+        3. For each focal character, a DOSSIER: occupation, rank or job title, place of
+           work, key relationships, marks of speech and daily life. Write it
+           telegraphically, not as prose. The test of a good dossier: it should let you
+           recognise that character's chapter from a single paragraph without their
+           name appearing in it.
+
+        Reason step by step.
+        The JSON must be wrapped in triple backticks (markdown block).
+
+        Example response:
+        \`\`\`json
+        {
+          "narration": {
+            "person": "first|second|third",
+            "tense": "present|past",
+            "addressForm": "form of address to the reader in ${targetLang}, or null",
+            "reason": "briefly, what this rests on"
+          },
+          "povCharacters": [
+            { "name": "Name as in the original", "gender": "m|f|n", "dossier": "telegraphic dossier" }
+          ]
+        }
+        \`\`\``,
+        user: userBuilders.passport,
     },
 
     // --- Stage 1b: consolidation into a glossary (02_consolidation.js) ---
