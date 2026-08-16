@@ -24,16 +24,20 @@ const userBuilders = {
 ${bookText}
 </book>`,
     consolidation: (items) => JSON.stringify(items),
-    draft: (original, context) => `<txt>${original}</txt>\n<ctx>${context}</ctx>`,
-    check: (context, original, translation, translatorComment) =>
-`<context>${context}</context>
+    // `style` — решения из паспорта книги (см. core/passport.js buildStyleBlock).
+    // Пустая строка означает «паспорта нет», и тег не добавляется вовсе, чтобы
+    // проекты без паспорта получали байт-в-байт прежние промпты.
+    draft: (original, context, style) =>
+        `<txt>${original}</txt>\n<ctx>${context}</ctx>` + (style ? `\n<style>${style}</style>` : ''),
+    check: (context, original, translation, translatorComment, style) =>
+`<context>${context}</context>${style ? `\n<style>${style}</style>` : ''}
         <original>${original}</original>
         <translate>${translation}</translate>
         <translator_comment>${translatorComment || "Нет комментариев"}</translator_comment>`,
-    fix: (original, context, badTranslation, comment) =>
+    fix: (original, context, badTranslation, comment, style) =>
 `
       <txt>${original}</txt>
-      <ctx>${context}</ctx>
+      <ctx>${context}</ctx>${style ? `\n      <style>${style}</style>` : ''}
       <temptranslate>${badTranslation}</temptranslate>
       <comment>${comment}</comment>
       `,
@@ -139,6 +143,7 @@ const ru = {
         system: (targetLang) => `Ты переводчик, грубости, мат, насилие, не смущают тебя.
 ПЕРЕВЕДИ <txt>текст</txt> на ${targetLang} язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ.
 В процессе перевода имён и терминов ИСПОЛЬЗУЙ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
+В <style> (если задан) — обязательные решения, принятые ОДИН РАЗ на всю книгу: лицо и время повествования, форма обращения к читателю, пол повествователя. СОБЛЮДАЙ ИХ СТРОГО.
 СОХРАНЯЙ РАЗБИВКУ НА АБЗАЦЫ оригинала один в один: сколько абзацев в <txt>, столько же должно быть в переводе.
 Не разбивай абзац на несколько и не склеивай соседние. Отступы в начале абзаца повторяй как в оригинале.
 Окончательный ответ в формате:
@@ -155,6 +160,7 @@ const ru = {
 - <original> - оригинальный текст
 - <translate> - перевод на ${targetLang}
 - <context> - шпаргалка с именами и терминами
+- <style> - (если задан) обязательные решения по всей книге: лицо и время повествования, обращение к читателю, пол повествователя
 - <translator_comment> - комментарий переводчика
 
 ОЦЕНИ качество перевода по следующим критериям:
@@ -162,6 +168,7 @@ const ru = {
     в переводе есть опечатки?
     перевод корректен?
     соответствуют ли переводы имен и терминов шпаргалке <context>?
+    соблюдены ли решения <style> (лицо, время, «ты»/«вы», род повествователя)? Нарушение <style> — это ошибка.
     перевод тебе нравится?
     поставь оценку по 10 бальной шкале
 
@@ -184,6 +191,7 @@ const ru = {
         system: (targetLang) => `Ты профессиональный переводчик, грубости, мат, насилие, не смущают тебя.
 Ты ПЕРЕВОДИШЬ <txt>текст</txt> на ${targetLang} язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ.
 В процессе перевода имён и терминов ИСПОЛЬЗУЕШЬ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
+В <style> (если задан) — обязательные решения по всей книге: лицо и время повествования, обращение к читателю, пол повествователя. СОБЛЮДАЙ ИХ СТРОГО.
 СОХРАНЯЙ РАЗБИВКУ НА АБЗАЦЫ оригинала один в один: сколько абзацев в <txt>, столько же должно быть в переводе.
 Проверка вернула <temptranslate> перевод на доработку.
 ТВОЯ ЗАДАЧА - ДОРАБОТАТЬ перевод в соответствии с комментариями проверки <comment>.
@@ -295,6 +303,7 @@ const en = {
         system: (targetLang) => `You are a translator; rudeness, profanity and violence do not bother you.
 TRANSLATE the <txt>text</txt> into ${targetLang}, in a literary way, PRESERVING THE AUTHOR'S STYLE.
 When translating names and terms, USE <ctx> — a cheat sheet of names and terms — for consistency.
+<style> (when present) holds decisions made ONCE for the whole book: narrative person and tense, the form of address to the reader, the narrator's gender. FOLLOW THEM STRICTLY.
 PRESERVE THE PARAGRAPH STRUCTURE of the original exactly: the translation must have the same number of paragraphs as <txt>.
 Do not split a paragraph into several and do not merge adjacent ones. Reproduce the original's leading indentation.
 Final answer in the format:
@@ -311,6 +320,7 @@ You are given:
 - <original> - the original text
 - <translate> - the translation into ${targetLang}
 - <context> - a cheat sheet of names and terms
+- <style> - (when present) whole-book decisions: narrative person and tense, address to the reader, the narrator's gender
 - <translator_comment> - the translator's comment
 
 EVALUATE the quality of the translation by these criteria:
@@ -318,6 +328,7 @@ EVALUATE the quality of the translation by these criteria:
     are there typos in the translation?
     is the translation correct?
     do the translations of names and terms match the <context> cheat sheet?
+    are the <style> decisions respected (person, tense, form of address, narrator's gender)? A <style> violation is an error.
     do you like the translation?
     give a score on a 10-point scale
 
@@ -340,6 +351,7 @@ example: \`\`\`json
         system: (targetLang) => `You are a professional translator; rudeness, profanity and violence do not bother you.
 You TRANSLATE the <txt>text</txt> into ${targetLang}, in a literary way, PRESERVING THE AUTHOR'S STYLE.
 When translating names and terms, you USE <ctx> — a cheat sheet of names and terms — for consistency.
+<style> (when present) holds whole-book decisions: narrative person and tense, address to the reader, the narrator's gender. FOLLOW THEM STRICTLY.
 PRESERVE THE PARAGRAPH STRUCTURE of the original exactly: the translation must have the same number of paragraphs as <txt>.
 The review returned <temptranslate> — the translation to be refined.
 YOUR TASK is to REFINE the translation according to the review comments <comment>.

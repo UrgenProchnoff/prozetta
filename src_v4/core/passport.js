@@ -116,6 +116,71 @@ export function findCharacter(passport, name) {
     return (passport.characters || []).find(c => String(c.name).toLowerCase() === key) || null;
 }
 
+// Wording tables for the <style> block, keyed by prompt language.
+const STYLE_WORDS = {
+    ru: {
+        person: { first: 'от 1-го лица', second: 'от 2-го лица («ты»/«вы» — читатель смотрит глазами персонажа)', third: 'от 3-го лица' },
+        tense: { present: 'настоящее время', past: 'прошедшее время' },
+        narration: (p, t) => `Повествование: ${[p, t].filter(Boolean).join(', ')}. Сохраняй лицо и время оригинала во всём фрагменте.`,
+        address: (form) => `Обращение к читателю в повествовании: ${form}. Не переключайся между «ты» и «вы».`,
+        gender: { m: 'МУЖЧИНА — все родовые формы (глаголы прошедшего времени, прилагательные, причастия), относящиеся к повествователю, мужского рода', f: 'ЖЕНЩИНА — все родовые формы (глаголы прошедшего времени, прилагательные, причастия), относящиеся к повествователю, женского рода' },
+        focal: (name, genderTxt) => `Повествователь этого фрагмента: ${name}, ${genderTxt}.`,
+        dossier: (text) => `Досье повествователя: ${text}`,
+        undetermined: 'Кто повествователь этого фрагмента — НЕ определено. НЕ приписывай повествователю род: держи время повествования и перестраивай фразы так, чтобы родовые формы не требовались.',
+    },
+    en: {
+        person: { first: 'first person', second: 'second person (the reader sees through a character\'s eyes)', third: 'third person' },
+        tense: { present: 'present tense', past: 'past tense' },
+        narration: (p, t) => `Narration: ${[p, t].filter(Boolean).join(', ')}. Preserve the original's person and tense throughout.`,
+        address: (form) => `Form of address to the reader in the narration: ${form}. Never switch between formal and informal.`,
+        gender: { m: 'MALE — every gendered form (past-tense verbs, adjectives, participles) referring to the narrator must be masculine', f: 'FEMALE — every gendered form (past-tense verbs, adjectives, participles) referring to the narrator must be feminine' },
+        focal: (name, genderTxt) => `The narrator of this fragment: ${name}, ${genderTxt}.`,
+        dossier: (text) => `Narrator's dossier: ${text}`,
+        undetermined: 'The narrator of this fragment is NOT determined. Do not assign the narrator a gender: keep the narrative tense and rephrase so gendered forms are not needed.',
+    },
+};
+
+/**
+ * The <style> block for one chunk's translation and review prompts — the
+ * passport's decisions rendered as hard constraints.
+ *
+ * Returns '' when there is nothing to say, so projects without a passport get
+ * byte-identical prompts to what they had before.
+ *
+ * The focal-character part only fires for first/second person narration: that
+ * is where the narrator's gender is invisible inside a chunk (measured: a coin
+ * flip, 35/36 for a female narrator). Undetermined POV is a working mode, not
+ * an error — the instruction is to avoid gendered forms, which is consistent
+ * and strictly better than guessing.
+ */
+export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru') {
+    if (!passport || isEmptyPassport(passport)) return '';
+    const words = STYLE_WORDS[promptLang] || STYLE_WORDS.ru;
+    const lines = [];
+
+    const { person, tense, addressForm } = passport.narration || {};
+    const personTxt = words.person[person] || null;
+    const tenseTxt = words.tense[tense] || null;
+    if (personTxt || tenseTxt) lines.push(words.narration(personTxt, tenseTxt));
+    if (addressForm) lines.push(words.address(addressForm));
+
+    if (person === 'first' || person === 'second') {
+        const cast = passport.characters || [];
+        let focalName = povForChunk(passport, chunkIndex);
+        if (!focalName && cast.length === 1) focalName = cast[0].name;
+        const focal = findCharacter(passport, focalName);
+
+        if (focal && (focal.gender === 'm' || focal.gender === 'f')) {
+            lines.push(words.focal(focal.name, words.gender[focal.gender]));
+            if (focal.dossier) lines.push(words.dossier(String(focal.dossier).slice(0, 500)));
+        } else if (cast.length) {
+            lines.push(words.undetermined);
+        }
+    }
+
+    return lines.join('\n');
+}
+
 /** True when the passport carries nothing worth injecting into a prompt. */
 export function isEmptyPassport(passport) {
     if (!passport) return true;

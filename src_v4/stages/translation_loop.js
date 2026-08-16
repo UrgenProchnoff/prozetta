@@ -4,6 +4,7 @@ import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
 import { wholeWordRegex } from '../core/text_stats.js';
+import { loadPassport, buildStyleBlock, isEmptyPassport } from '../core/passport.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
@@ -22,6 +23,17 @@ export async function runTranslationLoopStage(state) {
         console.log(`[Stage 2] Loaded glossary with ${glossary.length} terms.`);
     } else {
         console.warn('[Stage 2] No glossary found. Translation will proceed without it.');
+    }
+
+    // Book passport: whole-book decisions (narration person/tense, address
+    // form, per-chunk narrator gender) injected into every prompt as <style>.
+    // Missing or broken passport degrades to empty → prompts stay unchanged.
+    const passport = loadPassport(state.getPassportPath());
+    if (isEmptyPassport(passport)) {
+        console.log('[Stage 2] No passport found — translating without <style> constraints (run --stage=passport to build one).');
+    } else {
+        const n = passport.narration || {};
+        console.log(`[Stage 2] Passport loaded: narration ${n.person || '—'}/${n.tense || '—'}, ${passport.characters.length} POV character(s), ${passport.povMap.length} map span(s).`);
     }
 
     const client = llmManager.getClient('logic'); // Only one model for V4
@@ -44,10 +56,13 @@ export async function runTranslationLoopStage(state) {
         let currentTranslation = "";
         let currentComment = ""; // New field
         let globalContext = getLocalContextString(chunk.original, glossary);
+        // Whole-book constraints for THIS chunk (narrator + gender come from the
+        // POV map, so the block differs between chapters).
+        const styleBlock = buildStyleBlock(passport, i, config.translation.promptLang);
 
         if (history.length === 0) {
             console.log(`   -> Drafting...`);
-            const draft = await draftTranslation(client, prompts, targetLang, chunk.original, globalContext);
+            const draft = await draftTranslation(client, prompts, targetLang, chunk.original, globalContext, styleBlock);
             currentTranslation = draft.translation;
             currentComment = draft.comment;
             console.log(`   [DEBUG] After draft: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
@@ -80,7 +95,7 @@ export async function runTranslationLoopStage(state) {
 
             console.log(`   [DEBUG] Before check: currentTranslation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
             // CHECK
-            const checkResult = await checkTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, currentComment);
+            const checkResult = await checkTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, currentComment, styleBlock);
             history.push({
                 step: `check_${attempts}`,
                 result: checkResult,
@@ -124,7 +139,7 @@ export async function runTranslationLoopStage(state) {
                     // Checker likes the direction, score is acceptable → FIX (доработка)
                     console.log(`   -> REJECTED for fixing (Score: ${checkResult.score}, Errors: ${checkResult.error}) | Reason: "${checkResult.comment}". Fixing...`);
 
-                    const fixResult = await fixTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, checkResult.comment);
+                    const fixResult = await fixTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, checkResult.comment, styleBlock);
                     currentTranslation = fixResult.translation;
                     currentComment = fixResult.comment;
                     console.log(`   [DEBUG] After fix: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
@@ -140,7 +155,7 @@ export async function runTranslationLoopStage(state) {
                     // Checker doesn't like it at all (like==0) → REDRAFT (перевод заново)
                     console.log(`   -> REJECTED for redraft (Score: ${checkResult.score}, Like: ${checkResult.like}) | Reason: "${checkResult.comment}". Retranslating from scratch...`);
 
-                    const draft = await draftTranslation(client, prompts, targetLang, chunk.original, globalContext);
+                    const draft = await draftTranslation(client, prompts, targetLang, chunk.original, globalContext, styleBlock);
                     currentTranslation = draft.translation;
                     currentComment = draft.comment;
                     console.log(`   [DEBUG] After redraft: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
@@ -246,9 +261,9 @@ async function invokeForTranslation(client, label, messages) {
     return { translation: content.trim(), comment: extractTagOptional(content, 'comment') };
 }
 
-async function draftTranslation(client, prompts, targetLang, original, context) {
+async function draftTranslation(client, prompts, targetLang, original, context, style) {
     usageTracker.setStage('translate');
-    const input = prompts.draft.user(original, context);
+    const input = prompts.draft.user(original, context, style);
     const prompt = prompts.draft.system(targetLang);
 
     return invokeForTranslation(client, 'draft', [
@@ -257,9 +272,9 @@ async function draftTranslation(client, prompts, targetLang, original, context) 
     ]);
 }
 
-async function checkTranslation(client, prompts, targetLang, original, translation, context, translatorComment) {
+async function checkTranslation(client, prompts, targetLang, original, translation, context, translatorComment, style) {
     usageTracker.setStage('check');
-    const input = prompts.check.user(context, original, translation, translatorComment);
+    const input = prompts.check.user(context, original, translation, translatorComment, style);
 
     const prompt = prompts.check.system(targetLang);
 
@@ -275,9 +290,9 @@ async function checkTranslation(client, prompts, targetLang, original, translati
     return extractCheckResult(response.content);
 }
 
-async function fixTranslation(client, prompts, targetLang, original, badTranslation, context, comment) {
+async function fixTranslation(client, prompts, targetLang, original, badTranslation, context, comment, style) {
     usageTracker.setStage('fix');
-    const input = prompts.fix.user(original, context, badTranslation, comment);
+    const input = prompts.fix.user(original, context, badTranslation, comment, style);
 
     const prompt = prompts.fix.system(targetLang);
 
