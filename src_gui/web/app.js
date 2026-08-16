@@ -661,13 +661,14 @@ async function renderMonitor(prefix) {
             const title = t('mon.chunkTitle', { n: c.i + 1, status: statusLabel(c.status) })
                 + '\n' + t('mon.chunkTerms', { value: termsValue })
                 + (c.blocked ? '\n' + t('mon.chunkBlocked') + (c.blockedBy ? ' ' + t('mon.chunkBlockedBy', { model: c.blockedBy }) : '') : '')
+                + (c.disputed ? '\n' + t('mon.chunkDisputed') : '')
                 + (c.score != null ? t('mon.chunkScore', { score: c.score }) : '')
                 + (c.attempts ? t('mon.chunkSteps', { n: c.attempts }) : '')
                 + `\n${c.preview}`;
             const scoreHtml = c.score != null
                 ? `<span class="cell-score">${Math.round(c.score * 10) / 10}</span>`
                 : '';
-            return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.blocked ? 'blocked' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
+            return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.blocked ? 'blocked' : ''} ${c.disputed ? 'disputed' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
                 ${c.score != null ? `style="${cellTint(c.score)}"` : ''}
                 href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}${scoreHtml}</a>`;
         }).join('');
@@ -922,6 +923,7 @@ async function renderChunk(prefix, i) {
             <h2 style="margin:0">${esc(t('chunk.heading', { i: i + 1, total }))}</h2>
             ${i >= total - 1 ? '' : `<a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${i + 1}">${i + 2} →</a>`}
             <span class="badge b-${status}">${esc(statusLabel(status))}</span>
+            ${chunk.dispute ? `<span class="badge b-disputed">${esc(t('chunk.disputedBadge'))}</span>` : ''}
             <span class="badge">${esc(t('chunk.tokens', { n: chunk.tokens ?? '?' }))}</span>
             <span class="badge" title="${esc(t('chunk.termsTitle'))}">${extracted ? esc(t('chunk.termsExtracted', { n: nTerms ?? '✓' })) : esc(t('chunk.termsNot'))}</span>
             <button id="c-toggle-orig" title="${esc(t('chunk.toggleTitle'))}"></button>
@@ -935,6 +937,7 @@ async function renderChunk(prefix, i) {
             <button id="c-approve" class="primary">${esc(t('chunk.approve'))}</button>
             <button id="c-reset" class="danger">${esc(t('chunk.reset'))}</button>
         </div>
+        ${chunk.dispute ? `<div class="dispute-note">${esc(t('chunk.disputeExplain', { reason: chunk.dispute.reason || '?' }))}</div>` : ''}
         <div class="panes" id="c-panes">
             <div class="pane" id="c-pane-orig">
                 <h4>${esc(t('chunk.original'))}</h4>

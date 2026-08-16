@@ -156,6 +156,10 @@ function projectSummary(prefix) {
             extracted: ext,
             blocked: c.extraction_status === 'blocked',
             blockedBy: c.extraction_status === 'blocked' ? (c.blocked_by || null) : null,
+            // Translator and reviewer could not agree (repeated rejection of a
+            // fresh draft) — the loop stopped instead of burning budget, and a
+            // human should settle it.
+            disputed: !!c.dispute,
             nTerms: Array.isArray(c.extracted_terms) ? c.extracted_terms.length : null,
             score: lastScore(c),
             attempts: c.history ? c.history.length : 0,

@@ -418,6 +418,29 @@ table.glossary .del { text-align: center; }
     border-style: solid;
     border-color: var(--red) transparent transparent transparent;
 }
+/* Corner marker: translator and reviewer could not agree — the loop stopped
+   and a human should settle it. Bottom-left, orange, so it can coexist with
+   the blocked (top-left, red) and extracted (top-right, blue) markers. */
+.chunk-cell.disputed::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    border-width: 0 0 7px 7px;
+    border-style: solid;
+    border-color: transparent transparent var(--yellow) transparent;
+    border-bottom-left-radius: 4px;
+}
+.badge.b-disputed { color: var(--yellow); border-color: var(--yellow); }
+.dispute-note {
+    margin: 8px 0;
+    padding: 8px 12px;
+    border: 1px solid var(--yellow);
+    border-radius: 6px;
+    background: rgba(200, 160, 40, 0.12);
+    color: var(--text);
+    font-size: 13px;
+}
 .chunk-cell.s-success { background: #1e5e41; border-color: var(--green); }
 .chunk-cell.s-best_effort { background: #6b5320; border-color: var(--yellow); }
 .chunk-cell.s-in_progress { background: #29456e; border-color: var(--blue); }
