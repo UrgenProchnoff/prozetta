@@ -95,6 +95,13 @@ const ru = {
            Пиши телеграфно, без прозы. Проверка качества досье такая: по нему можно
            опознать главу этого персонажа по одному абзацу, не встретив его имени.
 
+        4. ГРАНИЦЫ смены точки зрения (только если фокальных персонажей несколько).
+           Для каждого участка укажи "startsWith" - ТОЧНУЮ дословную цитату из текста,
+           первые 6-12 слов участка, скопированные СИМВОЛ В СИМВОЛ. Не пересказывай и
+           не исправляй цитату: по ней участок будет найден в тексте автоматически.
+           Цитата должна встречаться в книге ровно один раз. Участки перечисляй строго
+           в порядке следования в тексте, от начала до конца, не пропуская смен.
+
         Рассуждай шаг за шагом.
         JSON должен быть обёрнут в тройные кавычки (markdown block).
 
@@ -109,6 +116,9 @@ const ru = {
           },
           "povCharacters": [
             { "name": "Имя как в оригинале", "gender": "m|f|n", "dossier": "телеграфное досье" }
+          ],
+          "povSpans": [
+            { "startsWith": "точная цитата первых слов участка", "character": "Имя как в оригинале" }
           ]
         }
         \`\`\``,
@@ -259,6 +269,14 @@ const en = {
            recognise that character's chapter from a single paragraph without their
            name appearing in it.
 
+        4. The BOUNDARIES where the point of view changes (only when there is more than
+           one focal character). For each stretch give "startsWith" — an EXACT verbatim
+           quote from the text, the first 6-12 words of that stretch, copied CHARACTER
+           BY CHARACTER. Do not paraphrase or correct the quote: it is what locates the
+           stretch in the text automatically. The quote must occur exactly once in the
+           book. List the stretches strictly in the order they appear, start to finish,
+           without skipping a change.
+
         Reason step by step.
         The JSON must be wrapped in triple backticks (markdown block).
 
@@ -273,6 +291,9 @@ const en = {
           },
           "povCharacters": [
             { "name": "Name as in the original", "gender": "m|f|n", "dossier": "telegraphic dossier" }
+          ],
+          "povSpans": [
+            { "startsWith": "exact quote of the stretch's first words", "character": "Name as in the original" }
           ]
         }
         \`\`\``,
