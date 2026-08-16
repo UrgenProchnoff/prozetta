@@ -48,6 +48,22 @@ function normalizeTense(value) {
     return null;
 }
 
+/**
+ * The address form must be a bare pronoun — it is substituted into prompts as a
+ * value. Models pack explanations into it anyway ("ты (с изменением
+ * грамматического рода...)"), so the first word is kept as the form and the
+ * rest is preserved separately as a note instead of being lost.
+ * @returns {{form: string|null, note: string|null}}
+ */
+function normalizeAddressForm(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return { form: null, note: null };
+    const m = s.match(/^[«"'‘]?([\p{L}]{1,15})[»"'’]?/u);
+    if (!m) return { form: null, note: s };
+    const rest = s.slice(m[0].length).replace(/^[\s—–:,-]*/, '').replace(/^\((.*)\)$/s, '$1').trim();
+    return { form: m[1], note: rest || null };
+}
+
 export async function runPassportStage(state) {
     console.log('--- SYSTEM: Building book passport ---');
     usageTracker.setStage('passport');
@@ -116,10 +132,14 @@ export async function runPassportStage(state) {
     // --- merge: the model's answer, then the map computed from it ---
     const passport = loadPassport(state.getPassportPath());
 
+    const address = normalizeAddressForm(answer?.narration?.addressForm);
     passport.narration = {
         person: normalizePerson(answer?.narration?.person) || person.person,
         tense: normalizeTense(answer?.narration?.tense),
-        addressForm: answer?.narration?.addressForm || null,
+        addressForm: address.form,
+        // Whatever the model wanted to say beyond the bare form, plus its
+        // stated reasoning — kept for the human, never substituted into prompts.
+        addressNote: [address.note, answer?.narration?.reason].filter(Boolean).join(' | ') || null,
     };
 
     const cast = Array.isArray(answer?.povCharacters) ? answer.povCharacters : [];

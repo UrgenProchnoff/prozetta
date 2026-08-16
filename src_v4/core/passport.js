@@ -28,8 +28,11 @@ export const PASSPORT_VERSION = 1;
  *   alone, so it always answers "where did this come from".
  * @property {{person: 'first'|'second'|'third'|null,
  *             tense: 'present'|'past'|null,
- *             addressForm: string|null}} narration
- *   addressForm is how the narration addresses the reader in second person.
+ *             addressForm: string|null,
+ *             addressNote: string|null}} narration
+ *   addressForm is the bare pronoun the narration addresses the reader with in
+ *   second person («ты»/«вы»/"du"/…) — it is substituted into prompts, so it
+ *   must stay a value, not a sentence; explanations live in addressNote.
  *   Preserving the original's present tense matters beyond faithfulness: in
  *   Russian the present tense carries no gender, so it sidesteps most agreement
  *   errors on its own.
@@ -57,7 +60,7 @@ export function emptyPassport() {
         version: PASSPORT_VERSION,
         updatedAt: new Date().toISOString(),
         source: { model: null, generatedAt: null },
-        narration: { person: null, tense: null, addressForm: null },
+        narration: { person: null, tense: null, addressForm: null, addressNote: null },
         characters: [],
         povMap: [],
         addressRegistry: [],

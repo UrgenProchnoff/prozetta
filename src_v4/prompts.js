@@ -104,8 +104,8 @@ const ru = {
           "narration": {
             "person": "first|second|third",
             "tense": "present|past",
-            "addressForm": "форма обращения к читателю на ${targetLang} или null",
-            "reason": "коротко, на чём основано"
+            "addressForm": "ТОЛЬКО само местоимение обращения к читателю на ${targetLang} (например «ты» или «вы»), без пояснений; null если повествование не от 2-го лица",
+            "reason": "коротко, на чём основано; сюда же любые оговорки про обращение"
           },
           "povCharacters": [
             { "name": "Имя как в оригинале", "gender": "m|f|n", "dossier": "телеграфное досье" }
@@ -268,8 +268,8 @@ const en = {
           "narration": {
             "person": "first|second|third",
             "tense": "present|past",
-            "addressForm": "form of address to the reader in ${targetLang}, or null",
-            "reason": "briefly, what this rests on"
+            "addressForm": "ONLY the bare address pronoun for the reader in ${targetLang} (e.g. «ты» or «вы»), no explanations; null unless the narration is second person",
+            "reason": "briefly, what this rests on; any caveats about the address go here too"
           },
           "povCharacters": [
             { "name": "Name as in the original", "gender": "m|f|n", "dossier": "telegraphic dossier" }
