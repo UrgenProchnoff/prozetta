@@ -97,6 +97,12 @@ const defaults = {
         translationMaxRetries: 10,
         approvalScoreThreshold: 9.1,    // Score >= this + like=1 → approved
         redraftScoreThreshold: 7.5,     // Score < this OR like=0 → retranslate from scratch
+        // A redraft repeats the very same draft call, so when the reviewer keeps
+        // rejecting redrafts it is almost always a rules conflict, not a bad
+        // translation (measured: one chunk burned 9 redrafts on a complaint the
+        // human proofread later proved wrong). Cap redrafts separately from the
+        // overall retry budget.
+        translationMaxRedrafts: 3,
     }
 };
 

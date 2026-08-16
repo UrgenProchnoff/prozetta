@@ -144,6 +144,7 @@ const ru = {
 ПЕРЕВЕДИ <txt>текст</txt> на ${targetLang} язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ.
 В процессе перевода имён и терминов ИСПОЛЬЗУЙ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
 В <style> (если задан) — обязательные решения, принятые ОДИН РАЗ на всю книгу: лицо и время повествования, форма обращения к читателю, пол повествователя. СОБЛЮДАЙ ИХ СТРОГО.
+Область действия <style> — ТОЛЬКО авторское повествование. Прямая речь, письма, протоколы, стенограммы, чаты и прочие вставные документы — вне <style>: там персонажи обращаются друг к другу согласно их отношениям, и вежливое «вы» между ними уместно.
 СОХРАНЯЙ РАЗБИВКУ НА АБЗАЦЫ оригинала один в один: сколько абзацев в <txt>, столько же должно быть в переводе.
 Не разбивай абзац на несколько и не склеивай соседние. Отступы в начале абзаца повторяй как в оригинале.
 Окончательный ответ в формате:
@@ -168,7 +169,8 @@ const ru = {
     в переводе есть опечатки?
     перевод корректен?
     соответствуют ли переводы имен и терминов шпаргалке <context>?
-    соблюдены ли решения <style> (лицо, время, «ты»/«вы», род повествователя)? Нарушение <style> — это ошибка.
+    соблюдены ли решения <style> в АВТОРСКОМ ПОВЕСТВОВАНИИ (лицо, время, «ты»/«вы», род повествователя)? Нарушение <style> в повествовании — ошибка.
+    ВАЖНО: прямая речь и вставные документы (письма, протоколы, стенограммы, чаты) под <style> НЕ подпадают — вежливое «вы» между персонажами там НЕ ошибка.
     перевод тебе нравится?
     поставь оценку по 10 бальной шкале
 
@@ -192,6 +194,7 @@ const ru = {
 Ты ПЕРЕВОДИШЬ <txt>текст</txt> на ${targetLang} язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ.
 В процессе перевода имён и терминов ИСПОЛЬЗУЕШЬ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
 В <style> (если задан) — обязательные решения по всей книге: лицо и время повествования, обращение к читателю, пол повествователя. СОБЛЮДАЙ ИХ СТРОГО.
+Область действия <style> — ТОЛЬКО авторское повествование; прямая речь и вставные документы (письма, протоколы, чаты) — вне <style>, там уместно вежливое «вы» между персонажами.
 СОХРАНЯЙ РАЗБИВКУ НА АБЗАЦЫ оригинала один в один: сколько абзацев в <txt>, столько же должно быть в переводе.
 Проверка вернула <temptranslate> перевод на доработку.
 ТВОЯ ЗАДАЧА - ДОРАБОТАТЬ перевод в соответствии с комментариями проверки <comment>.
@@ -304,6 +307,7 @@ const en = {
 TRANSLATE the <txt>text</txt> into ${targetLang}, in a literary way, PRESERVING THE AUTHOR'S STYLE.
 When translating names and terms, USE <ctx> — a cheat sheet of names and terms — for consistency.
 <style> (when present) holds decisions made ONCE for the whole book: narrative person and tense, the form of address to the reader, the narrator's gender. FOLLOW THEM STRICTLY.
+<style> governs ONLY the author's narration. Direct speech, letters, transcripts, chats and other embedded documents are outside <style>: characters address each other according to their relationships, and polite address between them is appropriate.
 PRESERVE THE PARAGRAPH STRUCTURE of the original exactly: the translation must have the same number of paragraphs as <txt>.
 Do not split a paragraph into several and do not merge adjacent ones. Reproduce the original's leading indentation.
 Final answer in the format:
@@ -328,7 +332,8 @@ EVALUATE the quality of the translation by these criteria:
     are there typos in the translation?
     is the translation correct?
     do the translations of names and terms match the <context> cheat sheet?
-    are the <style> decisions respected (person, tense, form of address, narrator's gender)? A <style> violation is an error.
+    are the <style> decisions respected in the AUTHOR'S NARRATION (person, tense, form of address, narrator's gender)? A <style> violation in the narration is an error.
+    IMPORTANT: direct speech and embedded documents (letters, transcripts, chats) are NOT governed by <style> — polite address between characters there is NOT an error.
     do you like the translation?
     give a score on a 10-point scale
 
@@ -352,6 +357,7 @@ example: \`\`\`json
 You TRANSLATE the <txt>text</txt> into ${targetLang}, in a literary way, PRESERVING THE AUTHOR'S STYLE.
 When translating names and terms, you USE <ctx> — a cheat sheet of names and terms — for consistency.
 <style> (when present) holds whole-book decisions: narrative person and tense, address to the reader, the narrator's gender. FOLLOW THEM STRICTLY.
+<style> governs ONLY the author's narration; direct speech and embedded documents (letters, transcripts, chats) are outside it — polite address between characters is appropriate there.
 PRESERVE THE PARAGRAPH STRUCTURE of the original exactly: the translation must have the same number of paragraphs as <txt>.
 The review returned <temptranslate> — the translation to be refined.
 YOUR TASK is to REFINE the translation according to the review comments <comment>.

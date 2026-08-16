@@ -87,7 +87,18 @@ export async function runTranslationLoopStage(state) {
         const MAX_RETRIES = config.pipeline.translationMaxRetries;
         const REDRAFT_SCORE_THRESHOLD = config.pipeline.redraftScoreThreshold;
         const APPROVAL_SCORE_THRESHOLD = config.pipeline.approvalScoreThreshold;
+        const MAX_REDRAFTS = config.pipeline.translationMaxRedrafts ?? 3;
         let success = false;
+        // Deadlock detection. A redraft repeats the exact same draft call, so
+        // when the reviewer rejects redrafts with the same complaint over and
+        // over, the two prompts are in conflict — the translator will keep
+        // producing the same answer and the reviewer will keep refusing it.
+        // Measured on a real run: one chunk burned 9 redrafts on a complaint the
+        // human proofread later proved wrong. Burning budget cannot resolve a
+        // rules conflict; a human can, so mark the chunk disputed and move on.
+        let redrafts = 0;
+        let lastRedraftComplaint = null;
+        let dispute = null;
 
         while (attempts < MAX_RETRIES && !success) {
             attempts++;
@@ -152,8 +163,22 @@ export async function runTranslationLoopStage(state) {
                         timestamp: new Date().toISOString()
                     });
                 } else {
-                    // Checker doesn't like it at all (like==0) → REDRAFT (перевод заново)
+                    // Checker doesn't like it at all → REDRAFT (перевод заново).
+                    // But first, recognize a deadlock: the same complaint about a
+                    // fresh draft means the next draft will earn it again.
+                    if (lastRedraftComplaint && complaintsAlike(lastRedraftComplaint, checkResult.comment)) {
+                        dispute = { reason: checkResult.comment, kind: 'repeated_complaint' };
+                        console.warn(`   -> DISPUTED: reviewer repeats the same complaint about a fresh draft — translator and reviewer are in conflict, a human should decide. | "${String(checkResult.comment).slice(0, 120)}"`);
+                        break;
+                    }
+                    if (redrafts >= MAX_REDRAFTS) {
+                        dispute = { reason: checkResult.comment, kind: 'redraft_cap' };
+                        console.warn(`   -> DISPUTED: ${redrafts} redrafts spent without agreement — stopping instead of burning budget.`);
+                        break;
+                    }
                     console.log(`   -> REJECTED for redraft (Score: ${checkResult.score}, Like: ${checkResult.like}) | Reason: "${checkResult.comment}". Retranslating from scratch...`);
+                    redrafts++;
+                    lastRedraftComplaint = checkResult.comment;
 
                     const draft = await draftTranslation(client, prompts, targetLang, chunk.original, globalContext, styleBlock);
                     currentTranslation = draft.translation;
@@ -184,11 +209,17 @@ export async function runTranslationLoopStage(state) {
                 }
             });
 
-            console.warn(`   -> Failed to reach perfection. Saving best effort (Score: ${bestScore}).`);
+            console.warn(dispute
+                ? `   -> Saving best effort (Score: ${bestScore}) and marking the chunk DISPUTED for human review.`
+                : `   -> Failed to reach perfection. Saving best effort (Score: ${bestScore}).`);
 
             state.updateChunk(i, {
                 translation: bestText,
+                // The GUI knows this status; the dispute flag rides alongside so
+                // a conflict of rules is distinguishable from a genuinely weak
+                // translation.
                 translation_status: 'failed_best_effort',
+                ...(dispute ? { dispute } : {}),
                 history: history
             });
         }
@@ -233,6 +264,27 @@ function getLocalContextString(text, glossary) {
     return hits.join('\n');
 }
 
+
+/**
+ * Do two reviewer complaints say the same thing?
+ *
+ * LLM wording varies («использовал обращение на вы» vs «используется обращение
+ * на Вы»), so words are lightly stemmed — lowercased, truncated to 6 chars —
+ * before comparing. Overlap is measured against the shorter complaint. Applied
+ * only to redraft rejections: repeated fix complaints are usually genuine
+ * errors taking several passes, repeated redraft complaints mean the reviewer
+ * keeps refusing what the translator keeps producing.
+ */
+function complaintsAlike(a, b) {
+    const words = s => new Set(
+        String(s).toLowerCase().match(/[\p{L}]{4,}/gu)?.map(w => w.slice(0, 6)) || []
+    );
+    const wa = words(a), wb = words(b);
+    if (!wa.size || !wb.size) return false;
+    let common = 0;
+    for (const w of wa) if (wb.has(w)) common++;
+    return common / Math.min(wa.size, wb.size) >= 0.4;
+}
 
 // --- LLM FUNCTIONS (Prompts from index10.js) ---
 
