@@ -138,6 +138,30 @@ export function parseRateLimit(error) {
 }
 
 /**
+ * Recognize a transient server-side failure — the provider is overloaded or
+ * briefly down, and the very same request will succeed shortly.
+ *
+ * Observed in practice: a whole-book call died on "503 Service Unavailable:
+ * This model is currently experiencing high demand", taking the stage down with
+ * a stack trace. Unlike a content block (permanent for this text) or a daily
+ * quota (won't clear soon), this is exactly the case worth waiting out — and it
+ * is worth it most on book-level calls, where an abort burns a slot from a
+ * 20-per-day allowance.
+ *
+ * Deliberately excludes 4xx other than 408/429: a bad key, a bad model name or
+ * a malformed request will fail identically no matter how long we wait.
+ */
+export function isTransientServerError(error) {
+    const status = Number(error?.status ?? error?.response?.status);
+    const msg = String(error?.message || '');
+    if ([500, 502, 503, 504, 408].includes(status)) return true;
+    // Some clients surface the status only inside the message text.
+    if (/\b(500|502|503|504)\b|service unavailable|internal (server )?error|bad gateway|gateway time-?out|overloaded|experiencing high demand/i.test(msg)) return true;
+    // Network-level blips that never reached the provider.
+    return ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'EPIPE'].includes(error?.code);
+}
+
+/**
  * Rewrite a failed invoke() error so the log shows the real cause.
  *
  * The worst offender: when the Gemini API returns zero candidates (its content
@@ -159,6 +183,12 @@ export function explainInvokeError(error, provider, model) {
         const waitTxt = rl.retryDelayMs ? `; API asks to retry after ${Math.round(rl.retryDelayMs / 1000)}s` : '';
         error.message = `[${model}] Rate limit hit — HTTP 429${quotaTxt}${waitTxt}. ` +
             `Lower maxRPM in settings or wait for the quota window to reset.`;
+        return error;
+    }
+
+    // Transient provider outage: flag it so the invoke Proxy waits it out.
+    if (isTransientServerError(error)) {
+        error.transient = true;
         return error;
     }
 
@@ -333,6 +363,13 @@ class LLMClient {
                         // to the caller instead of blocking the whole run.
                         const MAX_RATE_RETRIES = 3;
                         const MAX_WAIT_MS = 65000;
+                        // A provider outage lasts seconds to a couple of minutes,
+                        // so it gets its own budget with exponential backoff:
+                        // 5s, 10s, 20s, 40s. Losing a stage to a blip is worse
+                        // than waiting — especially on book-level calls, where an
+                        // abort costs one of 20 daily slots.
+                        const MAX_TRANSIENT_RETRIES = 4;
+                        let transientAttempts = 0;
                         let response;
                         for (let attempt = 0; ; attempt++) {
                             await limiter.waitForToken();
@@ -348,6 +385,14 @@ class LLMClient {
                                         await new Promise(r => setTimeout(r, waitMs));
                                         continue;
                                     }
+                                }
+                                if (error.transient && transientAttempts < MAX_TRANSIENT_RETRIES) {
+                                    const waitMs = 5000 * Math.pow(2, transientAttempts);
+                                    transientAttempts++;
+                                    console.warn(`[LLM] [${model}] Provider is temporarily unavailable (${String(error.message).slice(0, 120)}). ` +
+                                        `Waiting ${Math.round(waitMs / 1000)}s, retry ${transientAttempts}/${MAX_TRANSIENT_RETRIES}...`);
+                                    await new Promise(r => setTimeout(r, waitMs));
+                                    continue;
                                 }
                                 throw error;
                             }
