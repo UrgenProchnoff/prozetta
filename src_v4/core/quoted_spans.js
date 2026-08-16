@@ -65,11 +65,14 @@ export function locateQuote(haystack, quote, prepared = null) {
  * @param {Array<{original: string}>} chunks
  * @param {Array<{startsWith: string, character: string}>} spans  model's answer, in order
  * @param {string[]} cast  accepted character names; a span naming anyone else is dropped
- * @returns {{map: Array, stats: {total, located, missing, ambiguous, outOfOrder, unknownCharacter}}}
+ * @returns {{map: Array, offsets: number[], stats: {total, located, missing, ambiguous, outOfOrder, unknownCharacter}}}
+ *   `offsets` are the verified boundaries as character positions in the joined
+ *   chunk text — the splitter takes them to re-cut a book so that no chunk
+ *   straddles a change of narrator.
  */
 export function spansFromQuotes(chunks, spans, cast) {
     const stats = { total: (spans || []).length, located: 0, missing: 0, ambiguous: 0, outOfOrder: 0, unknownCharacter: 0 };
-    if (!Array.isArray(spans) || !spans.length || !chunks.length) return { map: [], stats };
+    if (!Array.isArray(spans) || !spans.length || !chunks.length) return { map: [], offsets: [], stats };
 
     // Chunks are stored as consecutive slices of the source, so their offsets
     // are simply the running length.
@@ -110,7 +113,7 @@ export function spansFromQuotes(chunks, spans, cast) {
         stats.located++;
         located.push({ offset, character: name });
     }
-    if (!located.length) return { map: [], stats };
+    if (!located.length) return { map: [], offsets: [], stats };
 
     // A boundary lands mid-chunk more often than not. The chunk it falls in is
     // assigned to whichever side owns most of it, so a boundary near the very
@@ -131,5 +134,5 @@ export function spansFromQuotes(chunks, spans, cast) {
 
     // The first boundary rarely sits at chunk 0; everything before it belongs to
     // whoever opens the book, which we do not know — leave it unassigned.
-    return { map: map.filter(s => s.toChunk >= s.fromChunk), stats };
+    return { map: map.filter(s => s.toChunk >= s.fromChunk), offsets: located.map(b => b.offset), stats };
 }

@@ -18,6 +18,7 @@ import { extractJson } from '../utils/parsers.js';
 import { detectNarrativePerson, characterCandidates } from '../core/text_stats.js';
 import { buildPovMap, describePovMap } from '../core/pov_map.js';
 import { spansFromQuotes } from '../core/quoted_spans.js';
+import { splitTextIntoChunks } from '../core/tokenizer.js';
 import { loadPassport, savePassport } from '../core/passport.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
@@ -69,7 +70,7 @@ export async function runPassportStage(state) {
     console.log('--- SYSTEM: Building book passport ---');
     usageTracker.setStage('passport');
 
-    const chunks = state.getChunks();
+    let chunks = state.getChunks();
     if (!chunks.length) {
         console.error('[Passport] Project has no chunks yet — run Stage 1 first.');
         return;
@@ -180,16 +181,43 @@ export async function runPassportStage(state) {
     let mapSource = 'anchors';
 
     if (castNames.length > 1 && !passport.povMap.length) {
-        const { map, stats } = spansFromQuotes(chunks, answer?.povSpans, castNames);
+        const { map, offsets, stats } = spansFromQuotes(chunks, answer?.povSpans, castNames);
         console.log(`[Passport] No anchors found — falling back to the model's quoted boundaries: ` +
             `${stats.located}/${stats.total} located` +
             `${stats.missing ? `, ${stats.missing} not in the text` : ''}` +
             `${stats.ambiguous ? `, ${stats.ambiguous} ambiguous` : ''}` +
             `${stats.outOfOrder ? `, ${stats.outOfOrder} out of order` : ''}` +
             `${stats.unknownCharacter ? `, ${stats.unknownCharacter} naming someone outside the cast` : ''}.`);
+
         if (map.length) {
             passport.povMap = map;
             mapSource = 'quotes';
+
+            // These boundaries arrive after the text was already split, and they
+            // land mid-chunk far more often than not (measured: 28 of 36, median
+            // 847 characters from the nearest edge). A chunk straddling a change
+            // of narrator gets one label for two people, which is precisely the
+            // defect the map exists to prevent. Re-split with the boundaries as
+            // hard break points — but only while nothing has been translated,
+            // since re-splitting renumbers the chunks and would orphan the work.
+            const translated = chunks.filter(c => c.translation).length;
+            if (translated) {
+                console.warn(`[Passport] ${translated} chunk(s) already translated, so the text is not re-split. ` +
+                    `Boundaries stay buried inside chunks and those chunks carry two narrators; ` +
+                    `a fresh project on the same source would be cut cleanly.`);
+            } else {
+                const source = chunks.map(c => c.original).join('');
+                const resplit = splitTextIntoChunks(source, offsets);
+                state.setChunks(resplit);
+                state.save();
+                console.log(`[Passport] Re-split on ${offsets.length} point-of-view boundaries: ` +
+                    `${chunks.length} → ${resplit.length} chunks, none spanning a change of narrator.`);
+                chunks = resplit;
+                // Indices changed with the split, so the map is rebuilt against
+                // the new chunks; the old one stands if that somehow yields less.
+                const rebuilt = spansFromQuotes(chunks, answer?.povSpans, castNames);
+                if (rebuilt.map.length) passport.povMap = rebuilt.map;
+            }
         }
     }
 

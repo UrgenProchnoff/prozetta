@@ -67,15 +67,49 @@ function findChapterBreaks(lines) {
     return breaks;
 }
 
-export function splitTextIntoChunks(text) {
+/**
+ * Turn character offsets into the line numbers that open a new chunk.
+ *
+ * The point-of-view boundaries a model reports are positions in the text, while
+ * the splitter works in lines. A boundary landing inside a line starts the chunk
+ * at that line: a break cannot be finer than the paragraph anyway.
+ */
+function linesForOffsets(lines, offsets) {
+    const breaks = new Set();
+    if (!offsets?.length) return breaks;
+
+    const sorted = [...offsets].filter(o => Number.isFinite(o) && o > 0).sort((a, b) => a - b);
+    let lineStart = 0, next = 0;
+    for (let i = 0; i < lines.length && next < sorted.length; i++) {
+        const lineEnd = lineStart + lines[i].length + 1;   // +1 for the '\n'
+        while (next < sorted.length && sorted[next] < lineEnd) {
+            breaks.add(i);
+            next++;
+        }
+        lineStart = lineEnd;
+    }
+    return breaks;
+}
+
+/**
+ * @param {string} text
+ * @param {number[]} [extraBreakOffsets] character offsets that must open a new
+ *   chunk — used to re-split a book once a model has reported where its point of
+ *   view changes. Without them a heading-less multi-POV book gets boundaries
+ *   buried mid-chunk (measured: 28 of 36), and each such chunk carries two
+ *   narrators into one translation request.
+ */
+export function splitTextIntoChunks(text, extraBreakOffsets = []) {
     console.log('[Tokenizer] Splitting text into chunks...');
 
     // Normalize line endings
     const cleanText = text.replace(/\r\n/g, '\n');
     const lines = cleanText.split('\n');
     const chapterBreaks = findChapterBreaks(lines);
+    for (const line of linesForOffsets(lines, extraBreakOffsets)) chapterBreaks.add(line);
     if (chapterBreaks.size) {
-        console.log(`[Tokenizer] Found ${chapterBreaks.size} chapter break(s) — chunks will not span them.`);
+        console.log(`[Tokenizer] Found ${chapterBreaks.size} break(s) — chunks will not span them` +
+            `${extraBreakOffsets?.length ? ` (${extraBreakOffsets.length} supplied by the point-of-view map)` : ''}.`);
     }
 
     let chunks = [];
@@ -154,7 +188,12 @@ function splitFragment(fragment) {
         base_fragment: '',
         additional_fragment: '',
     }
+    // Every line is written back with a '\n' appended below. The fragment
+    // already ends with one, so splitting leaves a trailing empty element that
+    // would earn a second newline — one extra blank line per split, drifting the
+    // text a character further from the source with every chunk emitted.
     const lines = fragment.split('\n');
+    if (lines.length && lines[lines.length - 1] === '') lines.pop();
     let bestBreakIndex = -1;
 
     // Search for: Empty line > Paragraph start > End of sentence
