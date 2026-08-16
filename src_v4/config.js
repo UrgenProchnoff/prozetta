@@ -52,6 +52,34 @@ const defaults = {
         maxRPM: 10 // Conservative for Groq
     },
 
+    // --- Whole-book calls ---
+    // A separate profile for the passes that read the entire book in one go:
+    // the cast of point-of-view characters and their dossiers, glossary
+    // revision, cross-chunk review. Chunk-by-chunk work wants a fast, cheap
+    // model; these want a large context window, so this profile carries its own
+    // provider instead of following activeProvider.
+    book_model: {
+        // 'local' | 'google' | 'groq'. Connection fields left empty here
+        // (apiKey, baseUrl) are inherited from that provider's own block above,
+        // so a key entered once does not have to be entered twice.
+        provider: 'google',
+        // Pinned on purpose rather than an alias like gemini-flash-latest: a
+        // moving target would change what these passes produce without warning.
+        modelName: 'gemini-3.7-flash',
+        timeout: 1800000,
+        // Low: these calls extract facts and produce structured answers, they
+        // are not supposed to invent prose.
+        temperature: 0.3,
+        // Free-tier Gemini allows 250k tokens per minute, and a single
+        // book-sized prompt already eats most of that — a second call inside the
+        // same minute gets refused regardless of the requests-per-minute quota.
+        maxRPM: 1,
+        // The models themselves allow 65536 out. Book-level answers are meant to
+        // be compact (a glossary diff, not a rewritten glossary), but a truncated
+        // answer costs a whole call, so leave headroom above what we expect.
+        maxOutputTokens: 16384,
+    },
+
     // --- Pipeline parameters ---
     pipeline: {
         // Tokenizer: chunk sizes (in tokens)

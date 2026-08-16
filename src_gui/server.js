@@ -752,7 +752,7 @@ app.get('/api/projects/:prefix/output', async (req, res) => {
 
 // --- API: settings (config.js defaults + config.overrides.json) ---
 
-const MODEL_GROUPS = ['logic_model', 'google_model', 'groq_model'];
+const MODEL_GROUPS = ['logic_model', 'google_model', 'groq_model', 'book_model'];
 const PROVIDERS = ['local', 'google', 'groq'];
 
 function readOverrides() {
@@ -954,6 +954,7 @@ const GOOGLE_FREE_TIER_LIMITS = {
     'gemini-3-flash-preview':        { rpm: 5,  tpm: 250000, rpd: 20 },
     'gemini-3.5-flash':              { rpm: 5,  tpm: 250000, rpd: 20 },
     'gemini-3.6-flash':              { rpm: 5,  tpm: 250000, rpd: 20 },
+    'gemini-3.7-flash':              { rpm: 5,  tpm: 250000, rpd: 20 },
     'gemini-3.1-flash-lite':         { rpm: 15, tpm: 250000, rpd: 500 },
     'gemini-3.1-flash-lite-preview': { rpm: 15, tpm: 250000, rpd: 500 },
     'gemini-3.5-flash-lite':         { rpm: 15, tpm: 250000, rpd: 500 },

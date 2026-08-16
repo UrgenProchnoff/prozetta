@@ -247,7 +247,8 @@ export function createRawClient(provider, conf) {
 class LLMClient {
     constructor() {
         this.clients = {
-            logic: null
+            logic: null,
+            book: null
         };
         // Default provider comes from config (GUI settings); --model overrides it.
         this.provider = config.activeProvider || 'local'; // 'local' | 'google' | 'groq'
@@ -259,40 +260,66 @@ class LLMClient {
         return conf.modelName;
     }
 
+    /**
+     * Settings for whole-book calls: the book_model block laid over the config
+     * of the provider it names, so connection details (apiKey, baseUrl) are
+     * inherited and only what differs has to be filled in.
+     */
+    getBookSettings() {
+        const book = config.book_model || {};
+        const provider = book.provider || this.provider;
+        if (!PROVIDER_CONFIG_KEY[provider]) {
+            throw new Error(`Invalid provider in book_model: ${provider}`);
+        }
+        const base = config[PROVIDER_CONFIG_KEY[provider]] || {};
+        const conf = { ...base };
+        for (const [key, value] of Object.entries(book)) {
+            if (key === 'provider') continue;
+            if (value !== undefined && value !== null && value !== '') conf[key] = value;
+        }
+        return { provider, conf };
+    }
+
     setProvider(provider) {
         if (provider !== 'local' && provider !== 'google' && provider !== 'groq') {
             throw new Error(`Invalid provider: ${provider}`);
         }
         this.provider = provider;
-        // Reset clients to ensure correct one is created
-        this.clients = { logic: null };
+        // Reset the chunk-level client so the new provider takes effect. The
+        // book client is untouched: it carries its own provider and must not
+        // follow --model or the GUI's active-provider switch.
+        this.clients.logic = null;
         console.log(`[LLM] Provider set to: ${this.provider}`);
     }
 
     /**
      * Get or initialize the requested client type.
-     * @param {'logic'} type
+     * @param {'logic'|'book'} type  'logic' — per-chunk work on the active
+     *   provider; 'book' — whole-book calls on the book_model profile.
      */
     getClient(type) {
         if (this.clients[type]) {
             return this.clients[type];
         }
 
-        if (type !== 'logic') {
+        if (type !== 'logic' && type !== 'book') {
             throw new Error(`Unknown client type: ${type}`);
         }
 
-        // Logic Model: Can be Local, Google, or Groq
-        const conf = config[PROVIDER_CONFIG_KEY[this.provider]] || config.logic_model;
+        const { provider, conf } = type === 'book'
+            ? this.getBookSettings()
+            : { provider: this.provider, conf: config[PROVIDER_CONFIG_KEY[this.provider]] || config.logic_model };
+
         const rpm = conf.maxRPM || 0;
-        console.log(`[LLM] Initializing ${this.provider.toUpperCase()} logic client (${conf.modelName}) with RPM=${rpm}...`);
-        const rawClient = createRawClient(this.provider, conf);
+        console.log(`[LLM] Initializing ${provider.toUpperCase()} ${type} client (${conf.modelName}) with RPM=${rpm}...`);
+        const rawClient = createRawClient(provider, conf);
 
         // Wrap with Rate Limiter
         const limiter = new RateLimiter(rpm);
 
         // Capture identity for usage accounting (proxy closure can't read `this`).
-        const provider = this.provider;
+        // Note this is the client's own provider, not necessarily the active one:
+        // a book client may run on Google while chunks go to a local server.
         const model = conf.modelName;
 
         // Proxy to intercept 'invoke' calls
