@@ -57,8 +57,9 @@ export async function runTranslationLoopStage(state) {
         let currentComment = ""; // New field
         let globalContext = getLocalContextString(chunk.original, glossary);
         // Whole-book constraints for THIS chunk (narrator + gender come from the
-        // POV map, so the block differs between chapters).
-        const styleBlock = buildStyleBlock(passport, i, config.translation.promptLang);
+        // POV map; other cast members named in the chunk bring their dossiers,
+        // so the block differs between chapters and scenes).
+        const styleBlock = buildStyleBlock(passport, i, config.translation.promptLang, chunk.original);
 
         if (history.length === 0) {
             console.log(`   -> Drafting...`);

@@ -15,6 +15,7 @@
  */
 
 import fs from 'fs';
+import { wholeWordRegex } from './text_stats.js';
 
 export const PASSPORT_VERSION = 1;
 
@@ -126,6 +127,8 @@ const STYLE_WORDS = {
         gender: { m: 'МУЖЧИНА — все родовые формы (глаголы прошедшего времени, прилагательные, причастия), относящиеся к повествователю, мужского рода', f: 'ЖЕНЩИНА — все родовые формы (глаголы прошедшего времени, прилагательные, причастия), относящиеся к повествователю, женского рода' },
         focal: (name, genderTxt) => `Повествователь этого фрагмента: ${name}, ${genderTxt}.`,
         dossier: (text) => `Досье повествователя: ${text}`,
+        other: (name, text) => `Также в этом фрагменте: ${name}. Досье: ${text}`,
+        dialogueAddress: 'В диалогах форму обращения («ты»/«вы») выбирай по отношениям персонажей из досье: подчинённые к начальству, свидетели к полиции, незнакомцы и деловые собеседники — обычно на «вы»; близкие, семья и приятели — на «ты».',
         undetermined: 'Кто повествователь этого фрагмента — НЕ определено. НЕ приписывай повествователю род: держи время повествования и перестраивай фразы так, чтобы родовые формы не требовались.',
     },
     en: {
@@ -136,6 +139,8 @@ const STYLE_WORDS = {
         gender: { m: 'MALE — every gendered form (past-tense verbs, adjectives, participles) referring to the narrator must be masculine', f: 'FEMALE — every gendered form (past-tense verbs, adjectives, participles) referring to the narrator must be feminine' },
         focal: (name, genderTxt) => `The narrator of this fragment: ${name}, ${genderTxt}.`,
         dossier: (text) => `Narrator's dossier: ${text}`,
+        other: (name, text) => `Also in this fragment: ${name}. Dossier: ${text}`,
+        dialogueAddress: 'In dialogue, choose the form of address (formal/informal) from the characters\' relationships in the dossiers: subordinates to superiors, witnesses to police, strangers and business contacts are usually formal; family and close friends informal.',
         undetermined: 'The narrator of this fragment is NOT determined. Do not assign the narrator a gender: keep the narrative tense and rephrase so gendered forms are not needed.',
     },
 };
@@ -153,7 +158,7 @@ const STYLE_WORDS = {
  * an error — the instruction is to avoid gendered forms, which is consistent
  * and strictly better than guessing.
  */
-export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru') {
+export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkText = '') {
     if (!passport || isEmptyPassport(passport)) return '';
     const words = STYLE_WORDS[promptLang] || STYLE_WORDS.ru;
     const lines = [];
@@ -164,19 +169,45 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru') {
     if (personTxt || tenseTxt) lines.push(words.narration(personTxt, tenseTxt));
     if (addressForm) lines.push(words.address(addressForm));
 
+    const cast = passport.characters || [];
+    let focal = null;
+    let dossiersShown = 0;
+
     if (person === 'first' || person === 'second') {
-        const cast = passport.characters || [];
         let focalName = povForChunk(passport, chunkIndex);
         if (!focalName && cast.length === 1) focalName = cast[0].name;
-        const focal = findCharacter(passport, focalName);
+        focal = findCharacter(passport, focalName);
 
         if (focal && (focal.gender === 'm' || focal.gender === 'f')) {
             lines.push(words.focal(focal.name, words.gender[focal.gender]));
-            if (focal.dossier) lines.push(words.dossier(String(focal.dossier).slice(0, 500)));
+            if (focal.dossier) {
+                lines.push(words.dossier(String(focal.dossier).slice(0, 500)));
+                dossiersShown++;
+            }
         } else if (cast.length) {
             lines.push(words.undetermined);
         }
     }
+
+    // Dossiers of the other cast members named in this chunk. The dossier
+    // carries the relationships — rank, subordination, family — that a
+    // translator needs to pick the right form of address in dialogue; a pair
+    // registry was deliberately rejected in favour of letting the translator
+    // infer address from these (owner's call: "переводчик сам разберётся,
+    // если дать ему адекватные досье").
+    if (chunkText) {
+        for (const member of cast) {
+            if (!member?.name || !member.dossier) continue;
+            if (focal && member.name.toLowerCase() === focal.name.toLowerCase()) continue;
+            if (wholeWordRegex(member.name, 'iu').test(chunkText)) {
+                lines.push(words.other(member.name, String(member.dossier).slice(0, 300)));
+                dossiersShown++;
+            }
+        }
+    }
+
+    // Only point at the dossiers when at least one is actually in the prompt.
+    if (dossiersShown > 0) lines.push(words.dialogueAddress);
 
     return lines.join('\n');
 }
