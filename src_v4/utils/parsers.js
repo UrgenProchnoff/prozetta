@@ -117,8 +117,13 @@ export function extractCheckResult(text) {
 
 /**
  * Extract content from <tag>...</tag>.
- * If tag is not found, tries unclosed <tag>... 
- * Final fallback: returns the full text trimmed.
+ * An unclosed <tag> still yields its content — that is a truncated answer, and
+ * the text after the opening tag is genuine.
+ *
+ * Returns null when the tag is absent altogether. Do NOT fall back to the whole
+ * response here: without the tag it is the model's preamble and reasoning, and
+ * returning it silently pastes that straight into the book. The caller decides
+ * whether to retry or accept the raw text.
  */
 export function extractFromTags(text, tag) {
     // Closed tag
@@ -131,8 +136,7 @@ export function extractFromTags(text, tag) {
     const startMatch = text.match(startRegex);
     if (startMatch) return startMatch[1].trim();
 
-    // Fallback: return full text
-    return text.trim();
+    return null;
 }
 
 /**

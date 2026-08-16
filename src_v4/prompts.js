@@ -87,7 +87,8 @@ const ru = {
         system: (targetLang) => `Ты переводчик, грубости, мат, насилие, не смущают тебя.
 ПЕРЕВЕДИ <txt>текст</txt> на ${targetLang} язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ.
 В процессе перевода имён и терминов ИСПОЛЬЗУЙ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
-Форматируй текст перевода. Используй отступы и перенос каретки на свой усмотрение.
+СОХРАНЯЙ РАЗБИВКУ НА АБЗАЦЫ оригинала один в один: сколько абзацев в <txt>, столько же должно быть в переводе.
+Не разбивай абзац на несколько и не склеивай соседние. Отступы в начале абзаца повторяй как в оригинале.
 Окончательный ответ в формате:
 <translate>Текст перевода</translate>
 <comment>Краткий комментарий к переводу</comment>
@@ -131,6 +132,7 @@ const ru = {
         system: (targetLang) => `Ты профессиональный переводчик, грубости, мат, насилие, не смущают тебя.
 Ты ПЕРЕВОДИШЬ <txt>текст</txt> на ${targetLang} язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ.
 В процессе перевода имён и терминов ИСПОЛЬЗУЕШЬ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
+СОХРАНЯЙ РАЗБИВКУ НА АБЗАЦЫ оригинала один в один: сколько абзацев в <txt>, столько же должно быть в переводе.
 Проверка вернула <temptranslate> перевод на доработку.
 ТВОЯ ЗАДАЧА - ДОРАБОТАТЬ перевод в соответствии с комментариями проверки <comment>.
 Окончательный ответ в формате:
@@ -194,7 +196,8 @@ const en = {
         system: (targetLang) => `You are a translator; rudeness, profanity and violence do not bother you.
 TRANSLATE the <txt>text</txt> into ${targetLang}, in a literary way, PRESERVING THE AUTHOR'S STYLE.
 When translating names and terms, USE <ctx> — a cheat sheet of names and terms — for consistency.
-Format the translated text. Use indentation and line breaks at your discretion.
+PRESERVE THE PARAGRAPH STRUCTURE of the original exactly: the translation must have the same number of paragraphs as <txt>.
+Do not split a paragraph into several and do not merge adjacent ones. Reproduce the original's leading indentation.
 Final answer in the format:
 <translate>Translated text</translate>
 <comment>Short comment on the translation</comment>
@@ -238,6 +241,7 @@ example: \`\`\`json
         system: (targetLang) => `You are a professional translator; rudeness, profanity and violence do not bother you.
 You TRANSLATE the <txt>text</txt> into ${targetLang}, in a literary way, PRESERVING THE AUTHOR'S STYLE.
 When translating names and terms, you USE <ctx> — a cheat sheet of names and terms — for consistency.
+PRESERVE THE PARAGRAPH STRUCTURE of the original exactly: the translation must have the same number of paragraphs as <txt>.
 The review returned <temptranslate> — the translation to be refined.
 YOUR TASK is to REFINE the translation according to the review comments <comment>.
 Final answer in the format:

@@ -1,5 +1,6 @@
 import { fromPreTrained } from "@lenml/tokenizer-gemma3";
 import config from '../config.js';
+import { isHeading } from './book_assembler.js';
 
 const TOKENS_LIMIT_1 = config.pipeline.chunkBaseTokens;
 const TOKENS_LIMIT_2 = config.pipeline.chunkOverflowTokens;
@@ -33,20 +34,85 @@ function countTokens(text) {
  * @param {string} text 
  * @returns {Array<{original: string, tokens: number}>}
  */
+// Minimum size of the text a heading opens for that heading to count as a real
+// chapter break. Without it every `NAME:` line in an SMS exchange ("ELAINE: WTF?")
+// would start its own chunk and shred the scene into fragments.
+const MIN_SECTION_CHARS = 800;
+
+/**
+ * Line numbers where a new chapter starts. A chunk must never span one: with a
+ * chapter break inside, a single chunk carries two different scenes — and in
+ * multi-POV books, two different narrators — into one translation request.
+ */
+// Chapters titled by their point-of-view character: "SUE: Grand Theft Automatic".
+// isHeading() rejects these (the title part has lowercase letters), yet they are
+// the real chapter breaks in multi-POV novels. The same shape also labels lines
+// in a chat transcript ("ELAINE: WTF?") — MIN_SECTION_CHARS is what separates
+// the two, so this pattern is deliberately loose.
+const SPEAKER_HEADING = /^\p{Lu}[\p{Lu}\s.'-]{1,30}:\s*\S/u;
+
+function findChapterBreaks(lines) {
+    const candidates = [];
+    lines.forEach((line, i) => {
+        const trimmed = line.trim();
+        if (isHeading(trimmed) || SPEAKER_HEADING.test(trimmed)) candidates.push(i);
+    });
+
+    const breaks = new Set();
+    candidates.forEach((idx, k) => {
+        const nextIdx = candidates[k + 1] ?? lines.length;
+        const sectionChars = lines.slice(idx, nextIdx).join('\n').length;
+        if (sectionChars >= MIN_SECTION_CHARS) breaks.add(idx);
+    });
+    return breaks;
+}
+
 export function splitTextIntoChunks(text) {
     console.log('[Tokenizer] Splitting text into chunks...');
 
     // Normalize line endings
     const cleanText = text.replace(/\r\n/g, '\n');
     const lines = cleanText.split('\n');
+    const chapterBreaks = findChapterBreaks(lines);
+    if (chapterBreaks.size) {
+        console.log(`[Tokenizer] Found ${chapterBreaks.size} chapter break(s) — chunks will not span them.`);
+    }
 
     let chunks = [];
     let base_fragment = '';
     let raw_additional_fragment = '';
 
+    // A chapter's last few paragraphs are usually too short to stand alone. They
+    // belong to the same chapter as the chunk before them (chunks never span a
+    // break), so append rather than emit a stub.
+    const MIN_TAIL_TOKENS = 300;
+    // Ceiling for the merge. In a book of many short sections the tails would
+    // otherwise pile onto the same chunk and blow it up several times over.
+    const MAX_MERGED_TOKENS = TOKENS_LIMIT_1 + TOKENS_LIMIT_2 + MIN_TAIL_TOKENS;
+
+    const flush = () => {
+        const pending = base_fragment + raw_additional_fragment;
+        base_fragment = '';
+        raw_additional_fragment = '';
+        if (!pending.trim()) return;
+
+        const tokens = countTokens(pending);
+        const prev = chunks[chunks.length - 1];
+        if (prev && tokens < MIN_TAIL_TOKENS && prev.tokens + tokens <= MAX_MERGED_TOKENS) {
+            prev.original += pending;
+            prev.tokens = countTokens(prev.original);
+            return;
+        }
+        chunks.push({ original: pending, tokens });
+    };
+
     // Simple accumulator logic adapted from index10.js but cleaned up
     for (let i = 0; i < lines.length; i++) {
         let line = lines[i] + '\n';
+
+        // A chapter starts here: close whatever has accumulated so the heading
+        // opens a fresh chunk instead of being buried mid-chunk.
+        if (chapterBreaks.has(i)) flush();
 
         // If base is empty or small, add to base
         if (countTokens(base_fragment) < TOKENS_LIMIT_1) {
@@ -76,12 +142,7 @@ export function splitTextIntoChunks(text) {
     }
 
     // Add remaining text
-    if (base_fragment || raw_additional_fragment) {
-        chunks.push({
-            original: base_fragment + raw_additional_fragment,
-            tokens: countTokens(base_fragment + raw_additional_fragment)
-        });
-    }
+    flush();
 
     console.log(`[Tokenizer] Created ${chunks.length} chunks.`);
     return chunks;

@@ -190,12 +190,30 @@ export async function runTranslationLoopStage(state) {
 
 // --- HELPERS ---
 
+// Substring matching turned nearly half the cheat sheet into noise: "HA" fired
+// inside "charles", "M" inside "memory", "ICE" inside "noticed". Match on whole
+// words instead — \b is useless here, it only knows [A-Za-z0-9_], so a Cyrillic
+// or accented neighbour would still read as a boundary.
+const WORD_CHAR = '[\\p{L}\\p{N}]';
+const termRegexCache = new Map();
+
+function wholeWordRegex(term) {
+    let re = termRegexCache.get(term);
+    if (!re) {
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        re = new RegExp(`(?<!${WORD_CHAR})${escaped}(?!${WORD_CHAR})`, 'iu');
+        termRegexCache.set(term, re);
+    }
+    return re;
+}
+
 function getLocalContextString(text, glossary) {
     const hits = [];
-    const lowerText = text.toLowerCase();
     glossary.forEach(term => {
-        if (lowerText.includes(term.original.toLowerCase())) {
-            hits.push(`${term.original} -> ${term.translation}`);
+        const original = String(term?.original || '').trim();
+        if (!original) return;
+        if (wholeWordRegex(original).test(text)) {
+            hits.push(`${original} -> ${term.translation}`);
         }
     });
     return hits.join('\n');
@@ -204,22 +222,40 @@ function getLocalContextString(text, glossary) {
 
 // --- LLM FUNCTIONS (Prompts from index10.js) ---
 
+// How many times to re-ask when the answer comes back without a <translate> tag.
+const MISSING_TAG_RETRIES = 2;
+
+/**
+ * Run a translate/fix call and pull the <translate> tag out of the answer.
+ * A missing tag means the model ignored the output format and the response is
+ * its preamble or reasoning — re-ask instead of pasting that into the book.
+ * If it keeps ignoring the format, hand the raw text back so the review loop
+ * can score it and redraft, as it did before.
+ */
+async function invokeForTranslation(client, label, messages) {
+    let content = '';
+    for (let attempt = 1; attempt <= MISSING_TAG_RETRIES + 1; attempt++) {
+        const response = await client.invoke(messages);
+        content = response.content || '';
+        const translation = extractFromTags(content, 'translate');
+        if (translation !== null) {
+            return { translation, comment: extractTagOptional(content, 'comment') };
+        }
+        console.warn(`   [WARN] ${label}: answer has no <translate> tag (attempt ${attempt}/${MISSING_TAG_RETRIES + 1}).`);
+    }
+    console.warn(`   [WARN] ${label}: still no <translate> tag — passing the raw answer to review.`);
+    return { translation: content.trim(), comment: extractTagOptional(content, 'comment') };
+}
+
 async function draftTranslation(client, prompts, targetLang, original, context) {
     usageTracker.setStage('translate');
     const input = prompts.draft.user(original, context);
     const prompt = prompts.draft.system(targetLang);
 
-    //console.log("draft tr prompt=", prompt);
-    //console.log("draft tr input=", input);
-    const response = await client.invoke([
+    return invokeForTranslation(client, 'draft', [
         new HumanMessage(prompt),
         new HumanMessage(input)
     ]);
-    //console.log("draft response=", response.content);
-    return {
-        translation: extractFromTags(response.content, 'translate'),
-        comment: extractTagOptional(response.content, 'comment')
-    };
 }
 
 async function checkTranslation(client, prompts, targetLang, original, translation, context, translatorComment) {
@@ -246,14 +282,8 @@ async function fixTranslation(client, prompts, targetLang, original, badTranslat
 
     const prompt = prompts.fix.system(targetLang);
 
-    const response = await client.invoke([
+    return invokeForTranslation(client, 'fix', [
         new HumanMessage(prompt),
         new HumanMessage(input)
     ]);
-    const content = response.content || '';
-
-    return {
-        translation: extractFromTags(content, 'translate'),
-        comment: extractTagOptional(content, 'comment')
-    };
 }

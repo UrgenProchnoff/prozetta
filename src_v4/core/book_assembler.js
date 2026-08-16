@@ -53,7 +53,7 @@ const HEADING_KEYWORD_NUMBERED = /^(глава|часть|книга|том|chap
 const NUMBER_WORD = '(ОДИН|ДВА|ТРИ|ЧЕТЫРЕ|ПЯТЬ|ШЕСТЬ|СЕМЬ|ВОСЕМЬ|ДЕВЯТЬ|ДЕСЯТЬ|ОДИННАДЦАТЬ|ДВЕНАДЦАТЬ|ТРИНАДЦАТЬ|ЧЕТЫРНАДЦАТЬ|ПЯТНАДЦАТЬ|ШЕСТНАДЦАТЬ|СЕМНАДЦАТЬ|ВОСЕМНАДЦАТЬ|ДЕВЯТНАДЦАТЬ|ДВАДЦАТЬ|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY)';
 const HEADING_NUMBER_WORD = new RegExp(`^${NUMBER_WORD}(?:[.:]\\s*.{0,60})?$`, 'u');
 
-function isHeading(line) {
+export function isHeading(line) {
     if (line.length > 80) return false;
     if (HEADING_KEYWORD.test(line)) return true;                 // "Пролог", "Эпилог"
     if (HEADING_KEYWORD_NUMBERED.test(line)) return true;        // "Глава 7. Погоня"
