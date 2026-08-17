@@ -259,10 +259,9 @@ async function renderGlossary(prefix) {
 
     let dirty = false;
     let filter = '';
-    // Findings are computed against the source text, so they are stale the
-    // moment a row is edited. Rather than recompute on every keystroke, the
-    // marker stays until the next load and the counts in the toolbar say what
-    // the last analysis flagged.
+    // Findings come from the server, which compares the saved glossary against
+    // the source text. They therefore refresh on save, not on keystroke: an
+    // in-flight edit keeps the marker it had until it is written.
     //
     // "Untranslated" is separated from the rest because it is not an error but
     // a decision: leaving LupuSoft, SOCA or CapG in Latin is a transliteration
@@ -270,8 +269,8 @@ async function renderGlossary(prefix) {
     // (96 against 20 on one book). Mixed into one filter they bury everything
     // that needs fixing.
     const isPolicy = f => f.kind === 'untranslated';
-    const defectRows = findings.filter(f => f && f.some(x => !isPolicy(x))).length;
-    const policyRows = findings.filter(f => f && f.length && f.every(isPolicy)).length;
+    const countDefects = () => findings.filter(f => f && f.some(x => !isPolicy(x))).length;
+    const countPolicy = () => findings.filter(f => f && f.length && f.every(isPolicy)).length;
     let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated'
 
     const knownTypes = [...new Set(['name', 'term', ...terms.map(t => t.type).filter(Boolean)])];
@@ -283,11 +282,7 @@ async function renderGlossary(prefix) {
             <button id="g-add">${esc(t('gloss.addTerm'))}</button>
             <span id="g-count" class="badge"></span>
             <span class="badge" title="${esc(t('gloss.junkHintTitle'))}">${esc(t('gloss.junkHint'))}</span>
-            ${(defectRows || policyRows) ? `<select id="g-issues" class="issues-select" title="${esc(t('gloss.issuesTitle'))}">
-                <option value="all">${esc(t('gloss.filterAll'))}</option>
-                ${defectRows ? `<option value="defects">${esc(t('gloss.filterDefects', { n: defectRows }))}</option>` : ''}
-                ${policyRows ? `<option value="untranslated">${esc(t('gloss.filterUntranslated', { n: policyRows }))}</option>` : ''}
-            </select>` : ''}
+            <select id="g-issues" class="issues-select" title="${esc(t('gloss.issuesTitle'))}"></select>
             <span class="spacer"></span>
             <span id="g-dirty" class="dirty" hidden>${esc(t('gloss.unsaved'))}</span>
             <button id="g-save" class="primary">${esc(t('common.save'))}</button>
@@ -311,6 +306,23 @@ async function renderGlossary(prefix) {
     const countEl = document.getElementById('g-count');
 
     function markDirty() { dirty = true; dirtyEl.hidden = false; }
+
+    // The filter is rebuilt rather than written once: after a save the server
+    // re-analyses the glossary, and the counts here have to follow — otherwise
+    // the only way to see the effect of an edit is F5.
+    function renderFilter() {
+        const box = document.getElementById('g-issues');
+        if (!box) return;
+        const defects = countDefects(), policy = countPolicy();
+        box.hidden = !(defects || policy);
+        const keep = box.value || rowFilter;
+        box.innerHTML = `<option value="all">${esc(t('gloss.filterAll'))}</option>`
+            + (defects ? `<option value="defects">${esc(t('gloss.filterDefects', { n: defects }))}</option>` : '')
+            + (policy ? `<option value="untranslated">${esc(t('gloss.filterUntranslated', { n: policy }))}</option>` : '');
+        // A filter whose category just emptied falls back to showing everything.
+        box.value = [...box.options].some(o => o.value === keep) ? keep : 'all';
+        rowFilter = box.value;
+    }
 
     function renderRows() {
         const q = filter.toLowerCase();
@@ -395,11 +407,23 @@ async function renderGlossary(prefix) {
             dirty = false;
             dirtyEl.hidden = true;
             toast(t('gloss.saved', { count: r.count }), 'ok');
+            // Re-read what the server now sees: occurrence counts and hygiene
+            // findings are computed from the saved file against the source text,
+            // so an edit only shows its effect after a round trip.
+            try {
+                const fresh = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary`);
+                terms.length = 0; terms.push(...fresh.terms);
+                counts.length = 0; counts.push(...(fresh.counts || []));
+                findings.length = 0; findings.push(...(fresh.findings || []));
+                renderFilter();
+                renderRows();
+            } catch { /* the save itself succeeded; stale markers are not worth an error */ }
         } catch (e) {
             toast(t('gloss.saveError', { msg: e.message }), 'error');
         }
     });
 
+    renderFilter();
     renderRows();
 
     cleanup = () => {
