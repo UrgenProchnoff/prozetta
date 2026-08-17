@@ -314,7 +314,7 @@ async function renderGlossary(prefix) {
         tbody.innerHTML = rows.map(({ t: term, idx }) => {
             const cnt = counts[idx];
             const issues = findings[idx] || [];
-            const worst = issues.some(i => i.kind === 'genderConflict' || i.kind === 'absent') ? 'bad' : issues.length ? 'warn' : '';
+            const worst = issues.some(i => i.kind === 'genderConflict' || i.kind === 'absent' || i.kind === 'inconsistent') ? 'bad' : issues.length ? 'warn' : '';
             const issueTitle = issues.map(i => '• ' + i.detail).join('\n');
             const typeOpts = knownTypes.map(k =>
                 `<option value="${esc(k)}" ${term.type === k ? 'selected' : ''}>${esc(k)}</option>`).join('');
