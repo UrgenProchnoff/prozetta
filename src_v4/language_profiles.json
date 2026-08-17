@@ -1,0 +1,38 @@
+{
+  "nl": {
+    "language": "nl",
+    "languageName": "нидерландский",
+    "functionWords": "de het een en van in is op te dat die niet voor met maar om",
+    "pronouns": {
+      "first": "ik me mij mijn wij we ons onze",
+      "second": "jij je jou jouw u uw jullie",
+      "third": "hij hem zijn zij ze haar het hen hun zich"
+    },
+    "gender": {
+      "masculine": "hij hem zijn",
+      "feminine": "zij haar"
+    },
+    "marksGenderOnVerbs": false,
+    "sentenceEnd": ".!?",
+    "quotePairs": [
+      [
+        "\"",
+        "\""
+      ],
+      [
+        "'",
+        "'"
+      ],
+      [
+        "„",
+        "”"
+      ],
+      [
+        "«",
+        "»"
+      ]
+    ],
+    "vocativeByComma": true,
+    "learnedAt": "2026-08-17T01:32:09.847Z"
+  }
+}

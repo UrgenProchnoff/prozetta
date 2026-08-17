@@ -134,6 +134,50 @@ const ru = {
         user: userBuilders.passport,
     },
 
+    // --- Языковой профиль: один раз на ЯЗЫК (core/language_learn.js) ---
+    languageProfile: {
+        system: () => `
+        Ты - лингвист. По фрагменту текста определи ЯЗЫК и дай данные, нужные для
+        механического разбора текстов на этом языке.
+
+        Отвечай СПИСКАМИ СЛОВ и ОТДЕЛЬНЫМИ СИМВОЛАМИ. Никаких регулярных выражений,
+        никаких пояснений внутри полей — их построит программа.
+
+        Требуется:
+        1. functionWords - 12-16 самых частых служебных слов языка (артикли, предлоги,
+           союзы, частицы). По ним язык будет опознаваться в дальнейшем.
+        2. pronouns - личные местоимения по лицам, ВСЕ падежные и притяжательные формы,
+           какие употребительны. Слово не должно попадать в два лица сразу.
+        3. gender - местоимения, различающие мужской и женский род ("он/его" против
+           "она/её"). Если язык их не различает - пустые строки.
+        4. marksGenderOnVerbs - true, если род проявляется в формах глагола или
+           прилагательного (как в русском "пошёл/пошла"), иначе false.
+        5. sentenceEnd - символы конца предложения одной строкой.
+        6. quotePairs - пары кавычек для прямой речи, в порядке употребительности.
+        7. vocativeByComma - true, если обращение по имени выделяется запятой и имя
+           стоит в той же форме, что в словаре ("Скажи, Джон?"). false, если для
+           обращения используется особый падеж или суффиксы.
+
+        Рассуждай шаг за шагом.
+        JSON должен быть обёрнут в тройные кавычки (markdown block).
+
+        Пример ответа:
+        \`\`\`json
+        {
+          "language": "код ISO 639-1",
+          "languageName": "название языка",
+          "functionWords": "слово слово слово",
+          "pronouns": { "first": "слово слово", "second": "слово слово", "third": "слово слово" },
+          "gender": { "masculine": "слово слово", "feminine": "слово слово" },
+          "marksGenderOnVerbs": true,
+          "sentenceEnd": ".!?",
+          "quotePairs": [["«", "»"], ["\\"", "\\""]],
+          "vocativeByComma": true
+        }
+        \`\`\``,
+        user: (sample) => `<sample>\n${sample}\n</sample>`,
+    },
+
     // --- Этап 1b: консолидация в глоссарий (02_consolidation.js) ---
     consolidation: {
         system: (targetLang) => `
@@ -317,6 +361,51 @@ const en = {
         }
         \`\`\``,
         user: userBuilders.passport,
+    },
+
+    // --- Language profile: once per LANGUAGE (core/language_learn.js) ---
+    languageProfile: {
+        system: () => `
+        You are a linguist. From the text sample, identify the LANGUAGE and supply the
+        data needed to parse texts in that language mechanically.
+
+        Answer with WORD LISTS and SINGLE CHARACTERS. No regular expressions, no
+        explanations inside the fields — the program builds those itself.
+
+        Required:
+        1. functionWords — the 12-16 most frequent function words of the language
+           (articles, prepositions, conjunctions, particles). The language will be
+           recognised by them later.
+        2. pronouns — personal pronouns by person, including every case and possessive
+           form in common use. A word must not appear under two different persons.
+        3. gender — pronouns that distinguish masculine from feminine ("he/his" versus
+           "she/her"). Empty strings if the language does not distinguish them.
+        4. marksGenderOnVerbs — true if gender shows up in verb or adjective forms (as
+           Russian "пошёл/пошла" does), false otherwise.
+        5. sentenceEnd — the sentence-ending characters, as one string.
+        6. quotePairs — quotation mark pairs for direct speech, most common first.
+        7. vocativeByComma — true if addressing someone by name is marked with a comma
+           and the name keeps its dictionary form ("Tell me, John?"). false if the
+           language uses a separate case or suffixes for address.
+
+        Reason step by step.
+        The JSON must be wrapped in triple backticks (markdown block).
+
+        Example response:
+        \`\`\`json
+        {
+          "language": "ISO 639-1 code",
+          "languageName": "name of the language",
+          "functionWords": "word word word",
+          "pronouns": { "first": "word word", "second": "word word", "third": "word word" },
+          "gender": { "masculine": "word word", "feminine": "word word" },
+          "marksGenderOnVerbs": true,
+          "sentenceEnd": ".!?",
+          "quotePairs": [["«", "»"], ["\\"", "\\""]],
+          "vocativeByComma": true
+        }
+        \`\`\``,
+        user: (sample) => `<sample>\n${sample}\n</sample>`,
     },
 
     // --- Stage 1b: consolidation into a glossary (02_consolidation.js) ---

@@ -1,3 +1,9 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /**
  * Everything in the deterministic layer that depends on the source language.
  *
@@ -222,10 +228,11 @@ export function detectLanguage(text) {
     const words = String(text || '').toLowerCase().match(/[\p{L}]+/gu);
     if (!words || words.length < 50) return { lang: null, share: 0, margin: 0 };
 
+    const sets = functionWordSets();
     const sample = words.slice(0, 20000);
-    const scores = Object.fromEntries(Object.keys(FUNCTION_WORD_SETS).map(l => [l, 0]));
+    const scores = Object.fromEntries(Object.keys(sets).map(l => [l, 0]));
     for (const word of sample) {
-        for (const [lang, set] of Object.entries(FUNCTION_WORD_SETS)) {
+        for (const [lang, set] of Object.entries(sets)) {
             if (set.has(word)) scores[lang]++;
         }
     }
@@ -324,8 +331,71 @@ const LANGUAGE_PROFILES = {
     tr: { person: null, gender: null, supports: { narrativePerson: false, gender: false, vocative: false } },
 };
 
+// Profiles learned from a model and validated against real text, loaded from
+// the shared file. They are data of exactly the same standing as the built-in
+// tables — the only difference is who wrote them first.
+let learnedProfiles = null;
+
+function learned() {
+    if (learnedProfiles) return learnedProfiles;
+    learnedProfiles = {};
+    try {
+        const file = path.join(__dirname, '..', 'language_profiles.json');
+        if (fs.existsSync(file)) learnedProfiles = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    } catch { /* a broken profiles file must not take down a translation run */ }
+    return learnedProfiles;
+}
+
+/** Forget the cache — used after learning a new language mid-run. */
+export function reloadLearnedProfiles() {
+    learnedProfiles = null;
+}
+
+/** Turn a stored profile (word lists and characters) into a compiled one. */
+function compileLearned(entry) {
+    const compiled = {};
+    if (entry.pronouns) {
+        compiled.person = {
+            first: words(entry.pronouns.first || ''),
+            second: words(entry.pronouns.second || ''),
+            third: words(entry.pronouns.third || ''),
+        };
+    }
+    const masc = String(entry.gender?.masculine || '').trim();
+    const fem = String(entry.gender?.feminine || '').trim();
+    compiled.gender = (masc && fem) ? { masculine: words(masc), feminine: words(fem) } : null;
+
+    if (entry.sentenceEnd) {
+        const cls = [...entry.sentenceEnd].map(c => c.replace(/[\\\]^-]/g, '\\$&')).join('');
+        compiled.sentenceEnd = new RegExp(`[${cls}\\n]`, 'u');
+    }
+    if (Array.isArray(entry.quotePairs) && entry.quotePairs.length) {
+        compiled.quotePairs = entry.quotePairs.filter(p => Array.isArray(p) && p.length === 2);
+    }
+    // The vocative pattern is the code's own; the model only says whether the
+    // language marks address that way at all.
+    if (entry.vocativeByComma === false) compiled.vocative = null;
+
+    compiled.supports = {
+        narrativePerson: !!compiled.person,
+        gender: !!compiled.gender,
+        vocative: entry.vocativeByComma !== false,
+    };
+    compiled.marksGenderOnVerbs = entry.marksGenderOnVerbs !== false;
+    return compiled;
+}
+
 export function profileForScript(script) {
     return PROFILES[script] || UNSUPPORTED;
+}
+
+/** Function words of every language known, built-in and learned alike. */
+function functionWordSets() {
+    const sets = { ...FUNCTION_WORD_SETS };
+    for (const [lang, entry] of Object.entries(learned())) {
+        if (entry?.functionWords) sets[lang] = new Set(String(entry.functionWords).toLowerCase().split(/\s+/).filter(Boolean));
+    }
+    return sets;
 }
 
 /**
@@ -353,7 +423,8 @@ export function profileForText(text) {
         return { ...profile, script, scriptShare: share, lang: null, langMargin: margin };
     }
 
-    const override = LANGUAGE_PROFILES[lang] || {};
+    const learnedEntry = learned()[lang];
+    const override = LANGUAGE_PROFILES[lang] || (learnedEntry ? compileLearned(learnedEntry) : {});
     return {
         ...base,
         ...override,

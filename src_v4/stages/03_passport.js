@@ -20,6 +20,8 @@ import { buildPovMap, describePovMap } from '../core/pov_map.js';
 import { spansFromQuotes } from '../core/quoted_spans.js';
 import { splitTextIntoChunks } from '../core/tokenizer.js';
 import { loadPassport, savePassport } from '../core/passport.js';
+import { profileForText, reloadLearnedProfiles } from '../core/language.js';
+import { learnLanguageProfile, validateLanguageProfile, saveLearnedProfile } from '../core/language_learn.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
@@ -91,6 +93,37 @@ export async function runPassportStage(state) {
         catch (e) { console.warn(`[Passport] Could not read the glossary: ${e.message}`); }
     }
 
+    const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
+    const prompts = getPrompts(config.translation.promptLang);
+
+    // --- an unknown language is learned once, before anything is measured ---
+    // Without a profile the measuring layer is blind (and, before it learned to
+    // admit that, actively wrong: Polish read as first person because "i" means
+    // "and"). The profile belongs to the language, not the book, so it is stored
+    // in a shared file and this call happens once per language ever.
+    const client = llmManager.getClient('book');
+    const { conf } = llmManager.getBookSettings();
+    const detected = profileForText(bookText);
+    if (!detected.lang) {
+        console.log(`[Passport] Language not recognised (script: ${detected.script}) — asking ${conf.modelName} for its profile...`);
+        try {
+            const proposed = await learnLanguageProfile(client, prompts, bookText);
+            const { ok, checks } = validateLanguageProfile(proposed, bookText);
+            for (const c of checks) console.log(`[Passport]   ${c.ok ? '✓' : '✗'} ${c.name}: ${c.detail}`);
+            if (ok) {
+                const lang = String(proposed.language).toLowerCase();
+                saveLearnedProfile(lang, proposed);
+                reloadLearnedProfiles();
+                console.log(`[Passport] Learned "${proposed.languageName}" (${lang}) and saved it — every check passed.`);
+            } else {
+                console.warn(`[Passport] The proposed profile failed validation and was NOT saved. ` +
+                    `Language-dependent measurements stay unavailable for this book.`);
+            }
+        } catch (e) {
+            console.warn(`[Passport] Could not learn the language profile: ${e.message}`);
+        }
+    }
+
     // --- what we can measure, measured before anything is asked ---
     const person = detectNarrativePerson(bookText);
     const candidates = characterCandidates(bookText, glossary, 25);
@@ -98,8 +131,6 @@ export async function runPassportStage(state) {
         `(${Math.round(person.share * 100)}% of counted pronouns).`);
     console.log(`[Passport] ${candidates.length} character candidate(s) prepared as evidence.`);
 
-    const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
-    const prompts = getPrompts(config.translation.promptLang);
     const evidence = {
         narrativePerson: { detected: person.person, share: Number(person.share.toFixed(2)), counts: person.counts },
         characterCandidates: candidates.map(c => ({
@@ -112,8 +143,6 @@ export async function runPassportStage(state) {
         })),
     };
 
-    const client = llmManager.getClient('book');
-    const { conf } = llmManager.getBookSettings();
     console.log(`[Passport] Asking ${conf.modelName} for the point-of-view cast and dossiers...`);
 
     let answer;
