@@ -325,9 +325,47 @@ table.glossary th {
     padding: 6px 8px;
     border-bottom: 1px solid var(--border);
 }
-table.glossary td { padding: 3px 4px; border-bottom: 1px solid #1c212b; }
+table.glossary td { padding: 3px 4px; border-bottom: 1px solid #1c212b; vertical-align: top; }
 table.glossary input { width: 100%; }
 table.glossary select { width: 100%; }
+
+/* Notes wrap to their full height instead of scrolling out of sight — a dossier
+   the model wrote runs to 114 characters, and a single-line field showed the
+   first sixty of it.
+
+   The field is a textarea laid over a hidden copy of its own text in the same
+   grid cell: the copy sizes the cell, the textarea stretches to fill it. The
+   arithmetic is the browser's, done during layout. Measuring scrollHeight per
+   field instead would force a reflow for each of the 766 rows the editor puts
+   on screen at once.
+
+   The two boxes must agree on every metric that affects wrapping, or the field
+   ends up a line short. */
+table.glossary .grow { display: grid; }
+table.glossary .grow > textarea,
+table.glossary .grow::after {
+    grid-area: 1 / 1 / 2 / 2;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+table.glossary .grow::after {
+    /* The trailing space keeps the box a line taller while a word is being
+       typed, so the caret never lands outside it. */
+    content: attr(data-val) " ";
+    visibility: hidden;
+}
+table.glossary .grow > textarea {
+    width: 100%;
+    border-color: var(--border);
+    resize: none;
+    overflow: hidden;
+}
 table.glossary .cnt { text-align: center; color: var(--muted); font-size: 12px; }
 table.glossary .cnt.zero { color: var(--red); font-weight: 600; }
 table.glossary .del { text-align: center; }
@@ -673,7 +711,10 @@ table.glossary .del { text-align: center; }
 .issue-flag {
     position: absolute;
     right: 4px;
-    top: 50%;
+    /* Level with the field, not with the cell: a wrapped note makes the row
+       several lines tall, and a marker centred in the row would float away
+       from the entry it marks. */
+    top: 18px;
     transform: translateY(-50%);
     min-width: 16px;
     height: 16px;

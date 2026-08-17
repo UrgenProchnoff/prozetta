@@ -369,7 +369,7 @@ async function renderGlossary(prefix) {
                     <option value="f" ${term.gender === 'f' ? 'selected' : ''}>${esc(t('gloss.genderF'))}</option>
                     <option value="n" ${term.gender === 'n' ? 'selected' : ''}>${esc(t('gloss.genderN'))}</option>
                 </select></td>
-                <td><input data-f="notes" value="${esc(term.notes)}"></td>
+                <td><div class="grow" data-val="${esc(term.notes)}"><textarea data-f="notes" rows="1">${esc(term.notes)}</textarea></div></td>
                 <td class="cnt ${cnt === 0 ? 'zero' : ''}">${cnt ?? ''}</td>
                 <td class="del"><button class="danger" data-del="${idx}" title="${esc(t('gloss.delTitle'))}">✕</button></td>
             </tr>` + modelIssues.map((m, mi) => reviewRow(m, idx, mi)).join('');
@@ -489,8 +489,28 @@ async function renderGlossary(prefix) {
         const f = e.target.dataset.f;
         if (!tr || !f) return;
         const term = terms[+tr.dataset.idx];
+
+        if (f === 'notes') {
+            // A note is one line of the translator's cheat sheet, where entries
+            // are separated by newlines — so a pasted line break would split one
+            // note into two and misalign everything after it. The field wraps
+            // for reading; it does not hold multiple lines.
+            if (/[\r\n]/.test(e.target.value)) {
+                const at = e.target.selectionStart;
+                e.target.value = e.target.value.replace(/[\r\n]+/g, ' ');
+                e.target.setSelectionRange(at, at);
+            }
+            // Hand the text to the hidden copy that sizes the row.
+            e.target.parentElement.dataset.val = e.target.value;
+        }
+
         term[f] = f === 'gender' && e.target.value === '' ? null : e.target.value;
         markDirty();
+    });
+
+    // Enter would grow the field by a line that is about to be stripped anyway.
+    tbody.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.target.dataset.f === 'notes') e.preventDefault();
     });
 
     tbody.addEventListener('click', (e) => {
