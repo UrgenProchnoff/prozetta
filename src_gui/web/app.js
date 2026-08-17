@@ -104,6 +104,7 @@ function route() {
     if (parts.length === 0) return renderDashboard();
     if (parts[0] === 'settings') return renderSettings();
     if (parts[0] === 'glossary' && parts[1]) return renderGlossary(decodeURIComponent(parts[1]));
+    if (parts[0] === 'passport' && parts[1]) return renderPassport(decodeURIComponent(parts[1]));
     if (parts[0] === 'monitor' && parts[1]) return renderMonitor(decodeURIComponent(parts[1]));
     if (parts[0] === 'book' && parts[1]) return renderBook(decodeURIComponent(parts[1]));
     if (parts[0] === 'chunk' && parts[1] && parts[2] !== undefined)
@@ -156,6 +157,7 @@ async function renderDashboard() {
             <div class="row">
                 <a class="btn" href="#/monitor/${encodeURIComponent(p.prefix)}">${esc(t('dash.monitor'))}</a>
                 <a class="btn" href="#/glossary/${encodeURIComponent(p.prefix)}">${esc(t('dash.glossary'))}</a>
+                ${p.passport && !p.passport.broken ? `<a class="btn" href="#/passport/${encodeURIComponent(p.prefix)}">${esc(t('dash.passport'))}</a>` : ''}
                 <button class="btn" data-clone="${esc(p.prefix)}">${esc(t('dash.cloneLang'))}</button>
                 <button class="btn danger" data-delete="${esc(p.prefix)}">${esc(t('dash.delete'))}</button>
             </div>
@@ -453,6 +455,7 @@ async function renderMonitor(prefix) {
             <span id="m-status" class="badge"></span>
             <span class="spacer"></span>
             <a class="btn" href="#/glossary/${encodeURIComponent(prefix)}">${esc(t('dash.glossary'))}</a>
+            <a class="btn" href="#/passport/${encodeURIComponent(prefix)}">${esc(t('dash.passport'))}</a>
             <a id="m-download" class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">${esc(t('dash.download'))}</a>
             <a class="btn" href="#/book/${encodeURIComponent(prefix)}">${esc(t('mon.book'))}</a>
         </div>
@@ -597,6 +600,11 @@ async function renderMonitor(prefix) {
         const steps = [
             { stage: '1', name: t('mon.stepExtract'), sub: total ? `${s.extracted}/${total}` : '—', done: total > 0 && s.extracted >= total },
             { stage: null, name: t('mon.stepGlossary'), sub: s?.glossaryCount ? t('mon.stepTermsCount', { n: s.glossaryCount }) : '—', done: !!s?.glossaryCount },
+            { stage: 'passport', name: t('mon.stepPassport'),
+              sub: s?.passport ? (s.passport.broken ? t('mon.passportBroken')
+                    : t('mon.passportSub', { n: s.passport.characters, person: t('mon.person.' + (s.passport.person || 'unknown')) }))
+                  : '—',
+              done: !!(s?.passport && !s.passport.broken) },
             { stage: '2', name: t('mon.stepTranslate'), sub: total ? `${done}/${total}` : '—', done: total > 0 && done >= total },
             { stage: 'export', name: t('mon.stepExport'), sub: '', done: false },
         ];
@@ -928,6 +936,144 @@ async function renderBook(prefix) {
             toast(e.message, 'error');
         }
     });
+}
+
+// ============================================================
+// Passport view
+// ============================================================
+
+/**
+ * The book passport: decisions that hold for the whole book, and the map of
+ * which chunk belongs to which narrator.
+ *
+ * Editable because it is a human artifact like the glossary — the model
+ * proposes, the translator decides. The point-of-view map is shown as a strip
+ * rather than a table: what a person needs to see is whether the alternation
+ * looks right, and where the gaps are, not thirty-nine rows of indices.
+ */
+async function renderPassport(prefix) {
+    setCrumbs(`${crumbHome()} / <a href="#/monitor/${encodeURIComponent(prefix)}">${esc(prefix)}</a> / ${esc(t('pass.heading'))}`);
+    app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
+
+    let data;
+    try { data = await api(`/api/projects/${encodeURIComponent(prefix)}/passport`); }
+    catch (e) { app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`; return; }
+
+    if (!data.exists) {
+        app.innerHTML = `<h2>${esc(t('pass.heading'))}: ${esc(prefix)}</h2>
+            <div class="empty-note">${esc(t('pass.missing'))}
+            <a class="btn" href="#/monitor/${encodeURIComponent(prefix)}">${esc(t('pass.toMonitor'))}</a></div>`;
+        return;
+    }
+
+    const p = data.passport;
+    const total = data.totalChunks || 0;
+    let dirty = false;
+
+    const sel = (name, value, options) => `<select data-p="${name}">`
+        + options.map(([v, label]) => `<option value="${v}" ${String(value ?? '') === v ? 'selected' : ''}>${esc(label)}</option>`).join('')
+        + `</select>`;
+
+    const povColor = (name) => {
+        // Stable colour per character so the strip reads as a pattern.
+        const cast = (p.characters || []).map(c => c.name);
+        const i = cast.indexOf(name);
+        return i < 0 ? 'var(--border)' : `hsl(${(i * 97) % 360} 55% 45%)`;
+    };
+
+    const strip = total && (p.povMap || []).length
+        ? `<div class="pov-strip">` + (p.povMap || []).map(s => {
+            const w = ((s.toChunk - s.fromChunk + 1) / total) * 100;
+            const title = t('pass.spanTitle', { from: s.fromChunk + 1, to: s.toChunk + 1, who: s.character || t('pass.unknown'), src: s.source || '—' });
+            return `<span class="pov-span" style="width:${w}%;background:${s.character ? povColor(s.character) : 'var(--panel2)'}" title="${esc(title)}">${esc(s.character || '?')}</span>`;
+        }).join('') + `</div>`
+        : `<div class="cfg-hint">${esc(t('pass.noMap'))}</div>`;
+
+    app.innerHTML = `
+        <div class="toolbar">
+            <h2 style="margin:0">${esc(t('pass.heading'))}: ${esc(prefix)}</h2>
+            <span class="spacer"></span>
+            <span id="p-dirty" class="dirty" hidden>${esc(t('gloss.unsaved'))}</span>
+            <button id="p-save" class="primary">${esc(t('common.save'))}</button>
+        </div>
+
+        <div class="card">
+            <div class="title">${esc(t('pass.narration'))}</div>
+            <div class="cfg-field"><label>${esc(t('pass.kind'))}</label><div class="cfg-input">
+                ${sel('kind', p.kind, [['fiction', t('pass.kindFiction')], ['nonfiction', t('pass.kindNonfiction')]])}
+                <span class="cfg-hint">${esc(t('pass.kindHint'))}</span></div></div>
+            <div class="cfg-field"><label>${esc(t('pass.person'))}</label><div class="cfg-input">
+                ${sel('narration.person', p.narration?.person, [['', '—'], ['first', t('mon.person.first')], ['second', t('mon.person.second')], ['third', t('mon.person.third')]])}
+                ${sel('narration.tense', p.narration?.tense, [['', '—'], ['present', t('pass.tensePresent')], ['past', t('pass.tensePast')]])}</div></div>
+            <div class="cfg-field"><label>${esc(t('pass.address'))}</label><div class="cfg-input">
+                <input type="text" data-p="narration.addressForm" value="${esc(p.narration?.addressForm || '')}" style="max-width:120px">
+                <span class="cfg-hint">${esc(t('pass.addressHint'))}</span></div></div>
+            ${p.kind === 'nonfiction' ? `<div class="cfg-field"><label>${esc(t('pass.readerGender'))}</label><div class="cfg-input">
+                ${sel('readerGender', p.readerGender || 'm', [['m', t('gloss.genderM')], ['f', t('gloss.genderF')], ['neutral', t('pass.readerNeutral')]])}
+                <span class="cfg-hint">${esc(t('pass.readerHint'))}</span></div></div>` : ''}
+            <div class="cfg-field"><label>${esc(t('pass.register'))}</label><div class="cfg-input">
+                <input type="text" data-p="register" value="${esc(p.register || '')}"></div></div>
+            ${p.narration?.addressNote ? `<div class="cfg-hint" style="margin-top:8px">${esc(t('pass.note'))}: ${esc(p.narration.addressNote)}</div>` : ''}
+        </div>
+
+        <h3>${esc(t('pass.cast'))}</h3>
+        <table class="glossary">
+            <thead><tr>
+                <th style="width:20%">${esc(t('pass.name'))}</th>
+                <th style="width:8%">${esc(t('gloss.colGender'))}</th>
+                <th>${esc(t('pass.dossier'))}</th>
+            </tr></thead>
+            <tbody id="p-cast">${(p.characters || []).map((c, i) => `<tr data-ci="${i}">
+                <td><input data-cf="name" value="${esc(c.name)}"></td>
+                <td><select data-cf="gender">
+                    <option value="" ${!c.gender ? 'selected' : ''}>—</option>
+                    <option value="m" ${c.gender === 'm' ? 'selected' : ''}>${esc(t('gloss.genderM'))}</option>
+                    <option value="f" ${c.gender === 'f' ? 'selected' : ''}>${esc(t('gloss.genderF'))}</option>
+                </select></td>
+                <td><textarea data-cf="dossier" rows="2">${esc(c.dossier || '')}</textarea></td>
+            </tr>`).join('')}</tbody>
+        </table>
+
+        <h3>${esc(t('pass.map'))}</h3>
+        ${strip}
+        <div class="cfg-hint">${esc(t('pass.mapHint', { n: (p.povMap || []).length, total }))}</div>
+        ${p.source?.model ? `<div class="cfg-hint" style="margin-top:12px">${esc(t('pass.source', { model: p.source.model, date: fmtDate(p.source.generatedAt) }))}${p.source.povMapFrom ? ` · ${esc(t('pass.mapFrom.' + p.source.povMapFrom))}` : ''}</div>` : ''}
+    `;
+
+    const dirtyEl = document.getElementById('p-dirty');
+    const markDirty = () => { dirty = true; dirtyEl.hidden = false; };
+
+    // Narration fields are addressed by dotted path so the form stays flat.
+    app.addEventListener('input', (e) => {
+        const key = e.target.dataset.p;
+        if (key) {
+            const parts = key.split('.');
+            let obj = p;
+            while (parts.length > 1) { const k = parts.shift(); obj[k] = obj[k] || {}; obj = obj[k]; }
+            obj[parts[0]] = e.target.value === '' ? null : e.target.value;
+            markDirty();
+            return;
+        }
+        const tr = e.target.closest('tr[data-ci]');
+        if (tr && e.target.dataset.cf) {
+            const c = p.characters[+tr.dataset.ci];
+            c[e.target.dataset.cf] = e.target.dataset.cf === 'gender' && e.target.value === '' ? null : e.target.value;
+            markDirty();
+        }
+    });
+
+    document.getElementById('p-save').addEventListener('click', async () => {
+        try {
+            await api(`/api/projects/${encodeURIComponent(prefix)}/passport`, { method: 'PUT', body: p });
+            dirty = false;
+            dirtyEl.hidden = true;
+            toast(t('pass.saved'), 'ok');
+        } catch (e) {
+            toast(t('gloss.saveError', { msg: e.message }), 'error');
+        }
+    });
+
+    cleanup = () => { if (dirty) { /* warn only; hash navigation cannot be cancelled cleanly */ } };
 }
 
 // ============================================================

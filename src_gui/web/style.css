@@ -691,3 +691,15 @@ table.glossary .del { text-align: center; }
 .glossary tr.issue-bad .issue-flag { color: var(--red); border-color: var(--red); }
 .glossary tr.issue-warn .issue-flag { color: var(--yellow); border-color: var(--yellow); }
 .issues-select { font-size: 13px; padding: 4px 8px; }
+
+/* Passport: the point-of-view map as a strip. The question a person asks of it
+   is "does the alternation look right and where are the gaps", which a bar
+   answers at a glance and a table of indices does not. */
+.pov-strip { display: flex; height: 26px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); margin: 8px 0; }
+.pov-span {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #fff; white-space: nowrap; overflow: hidden;
+    cursor: help; border-right: 1px solid rgba(0,0,0,.35);
+}
+.pov-span:last-child { border-right: none; }
+.empty-note { color: var(--muted); padding: 24px; text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; }

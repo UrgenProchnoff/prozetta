@@ -45,6 +45,11 @@ function glossaryPath(prefix) {
     return path.join(ROOT, `${prefix}_glossary.json`);
 }
 
+// The book passport lives beside the glossary: both are human-edited artifacts.
+function passportPath(prefix) {
+    return path.join(ROOT, `${prefix}_passport.json`);
+}
+
 function runLogPath(prefix) {
     return path.join(ROOT, `${prefix}_run.log`);
 }
@@ -168,6 +173,19 @@ function projectSummary(prefix) {
         };
     });
 
+    let passport = null;
+    if (fs.existsSync(passportPath(prefix))) {
+        try {
+            const p = readJson(passportPath(prefix));
+            passport = {
+                kind: p.kind || null,
+                person: p.narration?.person || null,
+                characters: (p.characters || []).length,
+                spans: (p.povMap || []).length,
+            };
+        } catch { passport = { broken: true }; }
+    }
+
     let glossaryCount = null;
     if (fs.existsSync(glossaryPath(prefix))) {
         try { glossaryCount = readJson(glossaryPath(prefix)).length; } catch { glossaryCount = 0; }
@@ -180,6 +198,7 @@ function projectSummary(prefix) {
         statuses,
         extracted,
         glossaryCount,
+        passport,
         running: jobManager.isRunning(prefix),
         chunks: chunkList
     };
@@ -353,6 +372,42 @@ app.put('/api/projects/:prefix/chunks/:i', (req, res) => {
     res.json({ ok: true });
 });
 
+// --- API: passport ---
+// The book passport holds decisions that hold for the whole book — narration
+// person and tense, the form of address, the point-of-view cast with their
+// dossiers, and which chunks belong to whom. It is built by --stage=passport
+// and, like the glossary, is meant to be reviewed by a human.
+
+app.get('/api/projects/:prefix/passport', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    const pp = passportPath(prefix);
+    if (!fs.existsSync(pp)) return res.json({ exists: false, passport: null });
+    try {
+        const passport = readJson(pp);
+        // Chunk count lets the map be drawn to scale even where spans are sparse.
+        let total = 0;
+        if (fs.existsSync(statePath(prefix))) total = (readJson(statePath(prefix)).chunks || []).length;
+        res.json({ exists: true, passport, totalChunks: total });
+    } catch (e) {
+        res.status(500).json({ error: `Не удалось прочитать паспорт: ${e.message}` });
+    }
+});
+
+app.put('/api/projects/:prefix/passport', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — редактирование заблокировано' });
+    }
+    const passport = req.body;
+    if (!passport || typeof passport !== 'object' || Array.isArray(passport)) {
+        return res.status(400).json({ error: 'Expected a passport object' });
+    }
+    writeJsonAtomic(passportPath(prefix), { ...passport, updatedAt: new Date().toISOString() });
+    res.json({ ok: true });
+});
+
 // --- API: glossary ---
 
 app.get('/api/projects/:prefix/glossary', (req, res) => {
@@ -407,8 +462,8 @@ app.put('/api/projects/:prefix/glossary', (req, res) => {
 app.post('/api/run', (req, res) => {
     const { file, prefix: bodyPrefix, stage, model, lang, suffix } = req.body || {};
 
-    if (!['1', '2', 'export'].includes(String(stage))) {
-        return res.status(400).json({ error: 'stage must be 1, 2 or export' });
+    if (!['1', 'passport', '2', 'export'].includes(String(stage))) {
+        return res.status(400).json({ error: 'stage must be 1, passport, 2 or export' });
     }
 
     let prefix, sourceFile;
