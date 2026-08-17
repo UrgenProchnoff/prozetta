@@ -687,6 +687,7 @@ table.glossary .del { text-align: center; }
     text-align: center;
     cursor: help;
 }
+.glossary tr.issue-note td:first-child { box-shadow: inset 3px 0 0 var(--border); }
 .glossary tr.issue-bad .issue-flag { color: var(--red); border-color: var(--red); }
 .glossary tr.issue-warn .issue-flag { color: var(--yellow); border-color: var(--yellow); }
-.issues-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.issues-select { font-size: 13px; padding: 4px 8px; }

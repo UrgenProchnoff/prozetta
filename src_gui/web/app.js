@@ -259,12 +259,20 @@ async function renderGlossary(prefix) {
 
     let dirty = false;
     let filter = '';
-    let onlyIssues = false;
     // Findings are computed against the source text, so they are stale the
     // moment a row is edited. Rather than recompute on every keystroke, the
-    // marker stays until the next load and the count in the toolbar says how
-    // many rows the last analysis flagged.
-    const issueCount = findings.filter(f => f && f.length).length;
+    // marker stays until the next load and the counts in the toolbar say what
+    // the last analysis flagged.
+    //
+    // "Untranslated" is separated from the rest because it is not an error but
+    // a decision: leaving LupuSoft, SOCA or CapG in Latin is a transliteration
+    // policy, and on real glossaries those entries outnumber the actual defects
+    // (96 against 20 on one book). Mixed into one filter they bury everything
+    // that needs fixing.
+    const isPolicy = f => f.kind === 'untranslated';
+    const defectRows = findings.filter(f => f && f.some(x => !isPolicy(x))).length;
+    const policyRows = findings.filter(f => f && f.length && f.every(isPolicy)).length;
+    let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated'
 
     const knownTypes = [...new Set(['name', 'term', ...terms.map(t => t.type).filter(Boolean)])];
 
@@ -275,7 +283,11 @@ async function renderGlossary(prefix) {
             <button id="g-add">${esc(t('gloss.addTerm'))}</button>
             <span id="g-count" class="badge"></span>
             <span class="badge" title="${esc(t('gloss.junkHintTitle'))}">${esc(t('gloss.junkHint'))}</span>
-            ${issueCount ? `<label class="issues-toggle" title="${esc(t('gloss.issuesTitle'))}"><input type="checkbox" id="g-issues"> ${esc(t('gloss.issuesFilter', { n: issueCount }))}</label>` : ''}
+            ${(defectRows || policyRows) ? `<select id="g-issues" class="issues-select" title="${esc(t('gloss.issuesTitle'))}">
+                <option value="all">${esc(t('gloss.filterAll'))}</option>
+                ${defectRows ? `<option value="defects">${esc(t('gloss.filterDefects', { n: defectRows }))}</option>` : ''}
+                ${policyRows ? `<option value="untranslated">${esc(t('gloss.filterUntranslated', { n: policyRows }))}</option>` : ''}
+            </select>` : ''}
             <span class="spacer"></span>
             <span id="g-dirty" class="dirty" hidden>${esc(t('gloss.unsaved'))}</span>
             <button id="g-save" class="primary">${esc(t('common.save'))}</button>
@@ -303,7 +315,11 @@ async function renderGlossary(prefix) {
     function renderRows() {
         const q = filter.toLowerCase();
         const rows = terms.map((t, idx) => ({ t, idx }))
-            .filter(({ idx }) => !onlyIssues || (findings[idx] && findings[idx].length))
+            .filter(({ idx }) => {
+                if (rowFilter === 'all') return true;
+                const f = findings[idx] || [];
+                return rowFilter === 'defects' ? f.some(x => !isPolicy(x)) : f.some(isPolicy);
+            })
             .filter(({ t }) => !q
                 || (t.original || '').toLowerCase().includes(q)
                 || (t.translation || '').toLowerCase().includes(q)
@@ -314,13 +330,15 @@ async function renderGlossary(prefix) {
         tbody.innerHTML = rows.map(({ t: term, idx }) => {
             const cnt = counts[idx];
             const issues = findings[idx] || [];
-            const worst = issues.some(i => i.kind === 'genderConflict' || i.kind === 'absent' || i.kind === 'inconsistent') ? 'bad' : issues.length ? 'warn' : '';
+            const defects = issues.filter(i => !isPolicy(i));
+            const worst = defects.some(i => i.kind === 'genderConflict' || i.kind === 'absent' || i.kind === 'inconsistent')
+                ? 'bad' : defects.length ? 'warn' : issues.length ? 'note' : '';
             const issueTitle = issues.map(i => '• ' + i.detail).join('\n');
             const typeOpts = knownTypes.map(k =>
                 `<option value="${esc(k)}" ${term.type === k ? 'selected' : ''}>${esc(k)}</option>`).join('');
             return `<tr data-idx="${idx}" class="${worst ? 'has-issue issue-' + worst : ''}">
                 <td><input data-f="original" value="${esc(term.original)}">${issues.length
-                    ? `<span class="issue-flag" title="${esc(issueTitle)}">${issues.length > 1 ? issues.length : '!'}</span>` : ''}</td>
+                    ? `<span class="issue-flag" title="${esc(issueTitle)}">${worst === 'note' ? '·' : issues.length > 1 ? issues.length : '!'}</span>` : ''}</td>
                 <td><input data-f="translation" value="${esc(term.translation)}"></td>
                 <td><select data-f="type">${typeOpts}</select></td>
                 <td><select data-f="gender">
@@ -337,7 +355,7 @@ async function renderGlossary(prefix) {
     }
 
     const issuesBox = document.getElementById('g-issues');
-    if (issuesBox) issuesBox.addEventListener('change', () => { onlyIssues = issuesBox.checked; renderRows(); });
+    if (issuesBox) issuesBox.addEventListener('change', () => { rowFilter = issuesBox.value; renderRows(); });
 
     tbody.addEventListener('input', (e) => {
         const tr = e.target.closest('tr');
