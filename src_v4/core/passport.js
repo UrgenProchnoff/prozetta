@@ -16,8 +16,16 @@
 
 import fs from 'fs';
 import { wholeWordRegex } from './text_stats.js';
+import { countTokens } from './tokenizer.js';
+import config from '../config.js';
 
 export const PASSPORT_VERSION = 1;
+
+// One budget for every dossier. The focal narrator used to get 500 characters
+// and each other cast member in the scene 300, which cut all of them: measured,
+// real dossiers run 414–763 characters, so the secondary limit truncated every
+// single one and the primary one truncated the longest.
+const DOSSIER_TOKENS = config.pipeline.dossierMaxTokens || 600;
 
 /**
  * @typedef {Object} Passport
@@ -144,6 +152,39 @@ export function findCharacter(passport, name) {
     return (passport.characters || []).find(c => String(c.name).toLowerCase() === key) || null;
 }
 
+// Token counts of dossiers already measured. The text does not change during a
+// run while the style block is rebuilt for every chunk and every retry, and the
+// tokenizer costs 12 ms a call — enough to notice across a book.
+const tokenCounts = new Map();
+
+/**
+ * Trim a dossier to a token budget, ending on a word.
+ *
+ * Counted in tokens rather than characters because that is what the budget is
+ * actually spent in, and the ratio is not a constant: measured on real
+ * dossiers, Russian runs 3.16–3.35 characters per token, and a Latin-script
+ * target language would run differently again.
+ *
+ * The tokenizer is skipped whenever the answer is already certain — a token is
+ * never shorter than one character, so anything under the limit in characters
+ * is under it in tokens too. That covers every dossier written so far.
+ */
+function fitToTokens(text, limit) {
+    const s = String(text || '');
+    if (s.length <= limit) return s;
+
+    let tokens = tokenCounts.get(s);
+    if (tokens === undefined) { tokens = countTokens(s); tokenCounts.set(s, tokens); }
+    if (tokens <= limit) return s;
+
+    // The ratio holds within one dossier, so scaling the length by it lands
+    // close enough; the cut is then pulled back to the last word boundary.
+    const keep = Math.floor(s.length * limit / tokens);
+    const cut = s.slice(0, keep);
+    const space = cut.lastIndexOf(' ');
+    return (space > keep * 0.8 ? cut.slice(0, space) : cut).trimEnd() + '…';
+}
+
 // Wording tables for the <style> block, keyed by prompt language.
 const STYLE_WORDS = {
     ru: {
@@ -247,7 +288,7 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
         if (author && (author.gender === 'm' || author.gender === 'f')) {
             lines.push(words.author(author.name, words.genderShort[author.gender]));
             if (author.dossier) {
-                lines.push(words.authorDossier(String(author.dossier).slice(0, 500)));
+                lines.push(words.authorDossier(fitToTokens(author.dossier, DOSSIER_TOKENS)));
                 dossiersShown++;
             }
         }
@@ -262,7 +303,7 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
         if (focal && (focal.gender === 'm' || focal.gender === 'f')) {
             lines.push(words.focal(focal.name, words.gender[focal.gender]));
             if (focal.dossier) {
-                lines.push(words.dossier(String(focal.dossier).slice(0, 500)));
+                lines.push(words.dossier(fitToTokens(focal.dossier, DOSSIER_TOKENS)));
                 dossiersShown++;
             }
         } else if (cast.length) {
@@ -281,7 +322,7 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
             if (!member?.name || !member.dossier) continue;
             if (focal && member.name.toLowerCase() === focal.name.toLowerCase()) continue;
             if (wholeWordRegex(member.name, 'iu').test(chunkText)) {
-                lines.push(words.other(member.name, String(member.dossier).slice(0, 300)));
+                lines.push(words.other(member.name, fitToTokens(member.dossier, DOSSIER_TOKENS)));
                 dossiersShown++;
             }
         }

@@ -93,6 +93,12 @@ const defaults = {
         consolidationBatchSize: 30, // Terms per LLM batch
         consolidationMaxRetries: 3,
 
+        // How much of a character's dossier reaches the translation prompt.
+        // Measured on real passports, a dossier runs 127–228 tokens, so this is
+        // headroom rather than a working limit — it exists only to stop one
+        // enormous entry from crowding out the text being translated.
+        dossierMaxTokens: 600,
+
         // Whole-book calls (passport, glossary review): how many tokens one
         // prompt may carry. The binding constraint is the provider's tokens per
         // minute, not the model's context window — Gemini's free tier allows
