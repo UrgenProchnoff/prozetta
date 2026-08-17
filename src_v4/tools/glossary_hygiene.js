@@ -231,7 +231,15 @@ function main() {
         return;
     }
 
-    const backupPath = `${glossaryPath}.bak`;
+    // Never overwrite an existing backup. A second --apply run is harmless in
+    // itself (the fixes are idempotent), but copying the already-cleaned file
+    // over the .bak destroys the only copy of the original — which is exactly
+    // what happened the first time this ran twice on the same project.
+    let backupPath = `${glossaryPath}.bak`;
+    if (fs.existsSync(backupPath)) {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        backupPath = `${glossaryPath}.${stamp}.bak`;
+    }
     fs.copyFileSync(glossaryPath, backupPath);
 
     const { cleaned, merged, removed } = applySafeFixes(glossary, analysis);
