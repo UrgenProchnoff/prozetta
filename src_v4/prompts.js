@@ -206,6 +206,7 @@ const ru = {
         system: (targetLang) => `Ты переводчик, грубости, мат, насилие, не смущают тебя.
 ПЕРЕВЕДИ <txt>текст</txt> на ${targetLang} язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ.
 В процессе перевода имён и терминов ИСПОЛЬЗУЙ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
+Строка шпаргалки: оригинал -> перевод (пол персонажа) — пояснение. Пол указан для людей: согласуй с ним глаголы, прилагательные и причастия, относящиеся к этому персонажу. Пояснение говорит, кто это или что это — используй его, чтобы не спутать похожие имена и выбрать верное значение.
 В <style> (если задан) — обязательные решения, принятые ОДИН РАЗ на всю книгу: лицо и время повествования, форма обращения к читателю, пол повествователя. СОБЛЮДАЙ ИХ СТРОГО.
 Область действия <style> — ТОЛЬКО авторское повествование. Прямая речь, письма, протоколы, стенограммы, чаты и прочие вставные документы — вне <style>: там персонажи обращаются друг к другу согласно их отношениям, и вежливое «вы» между ними уместно.
 СОХРАНЯЙ РАЗБИВКУ НА АБЗАЦЫ оригинала один в один: сколько абзацев в <txt>, столько же должно быть в переводе.
@@ -223,7 +224,7 @@ const ru = {
 Тебе предоставлены:
 - <original> - оригинальный текст
 - <translate> - перевод на ${targetLang}
-- <context> - шпаргалка с именами и терминами
+- <context> - шпаргалка: оригинал -> перевод (пол персонажа) — пояснение
 - <style> - (если задан) обязательные решения по всей книге: лицо и время повествования, обращение к читателю, пол повествователя
 - <translator_comment> - комментарий переводчика
 
@@ -232,6 +233,7 @@ const ru = {
     в переводе есть опечатки?
     перевод корректен?
     соответствуют ли переводы имен и терминов шпаргалке <context>?
+    согласованы ли родовые формы с полом персонажей, указанным в <context>?
     соблюдены ли решения <style> в АВТОРСКОМ ПОВЕСТВОВАНИИ (лицо, время, «ты»/«вы», род повествователя)? Нарушение <style> в повествовании — ошибка.
     ВАЖНО: прямая речь и вставные документы (письма, протоколы, стенограммы, чаты) под <style> НЕ подпадают — вежливое «вы» между персонажами там НЕ ошибка.
     ВАЖНО про время: сверяй его с <original> ПОФРАЗОВО. Прошедшее время там, где оно стоит в оригинале (воспоминания, предыстория), — НЕ ошибка. Прежде чем объявить нарушение времени, процитируй в comment глагол оригинала в этом месте.
@@ -257,6 +259,7 @@ const ru = {
         system: (targetLang) => `Ты профессиональный переводчик, грубости, мат, насилие, не смущают тебя.
 Ты ПЕРЕВОДИШЬ <txt>текст</txt> на ${targetLang} язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ.
 В процессе перевода имён и терминов ИСПОЛЬЗУЕШЬ <ctx> - шпаргалку с именами и терминами, для единообразия перевода.
+Строка шпаргалки: оригинал -> перевод (пол персонажа) — пояснение. Пол указан для людей: согласуй с ним родовые формы.
 В <style> (если задан) — обязательные решения по всей книге: лицо и время повествования, обращение к читателю, пол повествователя. СОБЛЮДАЙ ИХ СТРОГО.
 Область действия <style> — ТОЛЬКО авторское повествование; прямая речь и вставные документы (письма, протоколы, чаты) — вне <style>, там уместно вежливое «вы» между персонажами.
 СОХРАНЯЙ РАЗБИВКУ НА АБЗАЦЫ оригинала один в один: сколько абзацев в <txt>, столько же должно быть в переводе.
@@ -436,6 +439,7 @@ const en = {
         system: (targetLang) => `You are a translator; rudeness, profanity and violence do not bother you.
 TRANSLATE the <txt>text</txt> into ${targetLang}, in a literary way, PRESERVING THE AUTHOR'S STYLE.
 When translating names and terms, USE <ctx> — a cheat sheet of names and terms — for consistency.
+A cheat-sheet line reads: original -> translation (character's gender) — note. Gender is given for people: make verbs, adjectives and participles referring to that character agree with it. The note says who or what this is — use it to tell similar names apart and to pick the right sense.
 <style> (when present) holds decisions made ONCE for the whole book: narrative person and tense, the form of address to the reader, the narrator's gender. FOLLOW THEM STRICTLY.
 <style> governs ONLY the author's narration. Direct speech, letters, transcripts, chats and other embedded documents are outside <style>: characters address each other according to their relationships, and polite address between them is appropriate.
 PRESERVE THE PARAGRAPH STRUCTURE of the original exactly: the translation must have the same number of paragraphs as <txt>.
@@ -453,7 +457,7 @@ Final answer in the format:
 You are given:
 - <original> - the original text
 - <translate> - the translation into ${targetLang}
-- <context> - a cheat sheet of names and terms
+- <context> - a cheat sheet: original -> translation (character's gender) — note
 - <style> - (when present) whole-book decisions: narrative person and tense, address to the reader, the narrator's gender
 - <translator_comment> - the translator's comment
 
@@ -462,6 +466,7 @@ EVALUATE the quality of the translation by these criteria:
     are there typos in the translation?
     is the translation correct?
     do the translations of names and terms match the <context> cheat sheet?
+    do gendered forms agree with the character genders given in <context>?
     are the <style> decisions respected in the AUTHOR'S NARRATION (person, tense, form of address, narrator's gender)? A <style> violation in the narration is an error.
     IMPORTANT: direct speech and embedded documents (letters, transcripts, chats) are NOT governed by <style> — polite address between characters there is NOT an error.
     IMPORTANT about tense: compare it against <original> PHRASE BY PHRASE. Past tense where the original has past (memories, backstory) is NOT an error. Before claiming a tense violation, quote the original's verb at that spot in your comment.
@@ -487,6 +492,7 @@ example: \`\`\`json
         system: (targetLang) => `You are a professional translator; rudeness, profanity and violence do not bother you.
 You TRANSLATE the <txt>text</txt> into ${targetLang}, in a literary way, PRESERVING THE AUTHOR'S STYLE.
 When translating names and terms, you USE <ctx> — a cheat sheet of names and terms — for consistency.
+A cheat-sheet line reads: original -> translation (character's gender) — note. Gender is given for people: make gendered forms agree with it.
 <style> (when present) holds whole-book decisions: narrative person and tense, address to the reader, the narrator's gender. FOLLOW THEM STRICTLY.
 <style> governs ONLY the author's narration; direct speech and embedded documents (letters, transcripts, chats) are outside it — polite address between characters is appropriate there.
 PRESERVE THE PARAGRAPH STRUCTURE of the original exactly: the translation must have the same number of paragraphs as <txt>.

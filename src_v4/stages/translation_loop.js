@@ -21,6 +21,9 @@ export async function runTranslationLoopStage(state) {
     if (fs.existsSync(glossaryPath)) {
         glossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf-8'));
         console.log(`[Stage 2] Loaded glossary with ${glossary.length} terms.`);
+        const named = glossary.filter(t => t?.type === 'name' && t.gender).length;
+        const noted = glossary.filter(t => String(t?.notes || '').trim()).length;
+        console.log(`[Stage 2] Cheat sheet carries gender for ${named} character(s) and notes for ${noted} entr(ies).`);
     } else {
         console.warn('[Stage 2] No glossary found. Translation will proceed without it.');
     }
@@ -34,6 +37,14 @@ export async function runTranslationLoopStage(state) {
     } else {
         const n = passport.narration || {};
         console.log(`[Stage 2] Passport loaded: narration ${n.person || '—'}/${n.tense || '—'}, ${passport.characters.length} POV character(s), ${passport.povMap.length} map span(s).`);
+    }
+
+    // Names the glossary genders two ways travel without a gender rather than
+    // with a wrong one. Computed once: the glossary does not change mid-run.
+    const contradicted = contradictedNames(glossary);
+    if (contradicted.size) {
+        console.warn(`[Stage 2] ${contradicted.size} name(s) carry contradictory genders in the glossary ` +
+            `and will be sent without one — run tools/glossary_hygiene.js or open the glossary editor to settle them.`);
     }
 
     const client = llmManager.getClient('logic'); // Only one model for V4
@@ -55,7 +66,7 @@ export async function runTranslationLoopStage(state) {
         // 1. DRAFTING
         let currentTranslation = "";
         let currentComment = ""; // New field
-        let globalContext = getLocalContextString(chunk.original, glossary);
+        let globalContext = getLocalContextString(chunk.original, glossary, contradicted);
         // Whole-book constraints for THIS chunk (narrator + gender come from the
         // POV map; other cast members named in the chunk bring their dossiers,
         // so the block differs between chapters and scenes).
@@ -253,14 +264,71 @@ function cachedTermRegex(term) {
     return re;
 }
 
-function getLocalContextString(text, glossary) {
+// A note long enough to be a paragraph is a dossier, not a cheat-sheet entry.
+// Measured on real glossaries: median note 32 characters, 90th percentile 51.
+const MAX_NOTE_CHARS = 120;
+
+/**
+ * Names whose gender the glossary states two ways.
+ *
+ * Stage 1 files one character under several entries, and they can disagree —
+ * "Detective Sergeant Smith"=m beside "Sue Smith"=f for the same woman. Passing
+ * that into the prompt is worse than passing nothing: it would order masculine
+ * agreement in a female narrator's chapters. The hygiene tool reports these for
+ * a human to settle, but the pipeline must stay safe on a glossary nobody has
+ * cleaned yet, so a contradicted name simply travels without its gender.
+ */
+function contradictedNames(glossary) {
+    const singles = new Map();
+    for (const term of glossary) {
+        const name = String(term?.original || '').trim();
+        if (term?.type === 'name' && name && !/\s/.test(name)) singles.set(name.toLowerCase(), term);
+    }
+
+    const contradicted = new Set();
+    for (const term of glossary) {
+        const name = String(term?.original || '').trim();
+        if (term?.type !== 'name' || !name || !/\s/.test(name)) continue;
+        for (const part of name.split(/\s+/)) {
+            if (part.length <= 2) continue;
+            const inner = singles.get(part.toLowerCase());
+            if (inner && term.gender && inner.gender && term.gender !== inner.gender) {
+                contradicted.add(name.toLowerCase());
+                contradicted.add(String(inner.original).toLowerCase());
+            }
+        }
+    }
+    return contradicted;
+}
+
+const GENDER_WORD = { m: 'муж', f: 'жен', n: 'ср' };
+
+/**
+ * The cheat sheet for one chunk: every glossary entry the text mentions.
+ *
+ * Carries more than the translation. Gender is what Russian agreement needs for
+ * any character named in the chunk ("Элейн сказала", not "сказал"), and the
+ * note is what tells a translator which of two same-named people this is. Both
+ * sat unused in the glossary while the prompt saw only "original -> translation".
+ */
+function getLocalContextString(text, glossary, contradicted = new Set()) {
     const hits = [];
     glossary.forEach(term => {
         const original = String(term?.original || '').trim();
         if (!original) return;
-        if (cachedTermRegex(original).test(text)) {
-            hits.push(`${original} -> ${term.translation}`);
-        }
+        if (!cachedTermRegex(original).test(text)) return;
+
+        let line = `${original} -> ${term.translation}`;
+        // Gender only for people: on a term it is the grammatical gender of the
+        // translation, which the model can see for itself and which is wrong
+        // often enough in the glossary to be worth leaving out.
+        const gender = term.type === 'name' ? GENDER_WORD[term.gender] : null;
+        if (gender && !contradicted.has(original.toLowerCase())) line += ` (${gender})`;
+
+        const note = String(term.notes || '').trim();
+        if (note) line += ` — ${note.length > MAX_NOTE_CHARS ? note.slice(0, MAX_NOTE_CHARS) + '…' : note}`;
+
+        hits.push(line);
     });
     return hits.join('\n');
 }
