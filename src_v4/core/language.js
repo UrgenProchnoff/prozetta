@@ -40,8 +40,13 @@ const SCRIPT_TESTS = [
  * Japanese rather than Chinese, so kana is checked before Han and wins on a much
  * lower share.
  */
+// How much of a text is enough to identify it. Both detectors read the head
+// only: script and language are properties of the whole book, and a chapter's
+// worth settles them.
+const SAMPLE_CHARS = 200000;
+
 export function detectScript(text) {
-    const sample = String(text || '').slice(0, 200000);
+    const sample = String(text || '').slice(0, SAMPLE_CHARS);
     const counts = {};
     for (const [id, re] of SCRIPT_TESTS) {
         const global = new RegExp(re.source, 'gu');
@@ -225,7 +230,11 @@ const FUNCTION_WORD_SETS = Object.fromEntries(
  *   script profile, or to no profile at all.
  */
 export function detectLanguage(text) {
-    const words = String(text || '').toLowerCase().match(/[\p{L}]+/gu);
+    // Tokenise the head of the text, not all of it. Only the first 20 000 words
+    // are scored anyway, and 200 000 characters hold well over that in any
+    // spaced script — but tokenising a whole novel to then discard 80% of it
+    // cost 50 ms a call.
+    const words = String(text || '').slice(0, SAMPLE_CHARS).toLowerCase().match(/[\p{L}]+/gu);
     if (!words || words.length < 50) return { lang: null, share: 0, margin: 0 };
 
     const sets = functionWordSets();
@@ -349,6 +358,7 @@ function learned() {
 /** Forget the cache — used after learning a new language mid-run. */
 export function reloadLearnedProfiles() {
     learnedProfiles = null;
+    profileCache = { text: null, profile: null };
 }
 
 /** Turn a stored profile (word lists and characters) into a compiled one. */
@@ -407,6 +417,22 @@ function functionWordSets() {
  * ones.
  */
 export function profileForText(text) {
+    const key = text || '';
+    if (profileCache.text === key) return profileCache.profile;
+    const profile = computeProfile(key);
+    profileCache = { text: key, profile };
+    return profile;
+}
+
+// Deriving the profile costs ~50 ms on a novel — the whole text is scanned for
+// script and tokenised for function words. Callers ask per name, so a glossary
+// of 257 names paid that 257 times: 8.5 s of a 8.9 s hygiene pass was this one
+// function. One slot is enough, because every caller runs a batch against a
+// single text; the key is the string itself, so a different text can never be
+// served a stale profile.
+let profileCache = { text: null, profile: null };
+
+function computeProfile(text) {
     const { script, share } = detectScript(text);
     const { lang, margin } = detectLanguage(text);
     const base = profileForScript(script);

@@ -117,13 +117,22 @@ export function genderFromPronouns(text, name, maxScope = null) {
     const scopeCap = maxScope ?? (profile.spaced ? 200 : 60);
 
     const re = wholeWordRegex(name);
+    // Compiled once per name, not once per occurrence: a name mentioned 200
+    // times used to build 400 regexes, and the pronoun tables are the largest
+    // patterns in the file.
+    const masculineRe = new RegExp(profile.gender.masculine.source, profile.gender.masculine.flags);
+    const feminineRe = new RegExp(profile.gender.feminine.source, profile.gender.feminine.flags);
+
     let m, masculine = 0, feminine = 0;
     while ((m = re.exec(text)) !== null) {
-        const after = text.slice(m.index + m[0].length);
+        // Bound the slice by the widest scope that can be read, instead of
+        // copying the rest of the book at every occurrence.
+        const start = m.index + m[0].length;
+        const after = text.slice(start, start + scopeCap);
         const sentenceEnd = profile.genderScope === 'sentence' ? after.search(profile.sentenceEnd) : -1;
-        const scope = after.slice(0, sentenceEnd < 0 ? scopeCap : Math.min(sentenceEnd, scopeCap));
-        masculine += (scope.match(new RegExp(profile.gender.masculine.source, profile.gender.masculine.flags)) || []).length;
-        feminine += (scope.match(new RegExp(profile.gender.feminine.source, profile.gender.feminine.flags)) || []).length;
+        const scope = sentenceEnd < 0 ? after : after.slice(0, sentenceEnd);
+        masculine += (scope.match(masculineRe) || []).length;
+        feminine += (scope.match(feminineRe) || []).length;
     }
 
     let gender = null;
