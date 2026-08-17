@@ -248,13 +248,15 @@ async function renderGlossary(prefix) {
     setCrumbs(`${crumbHome()} / ${esc(prefix)} / ${esc(t('gloss.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
-    let terms, counts, findings, review;
+    let terms, counts, findings, review, estimate, running;
     try {
         const data = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary`);
         terms = data.terms;
         counts = data.counts;
         findings = data.findings || [];
         review = data.review || null;
+        estimate = data.estimate || {};
+        running = !!data.running;
     } catch (e) {
         app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
         return;
@@ -262,6 +264,7 @@ async function renderGlossary(prefix) {
 
     let dirty = false;
     let filter = '';
+    const cleanupTimers = [];
     // Findings come from the server, which compares the saved glossary against
     // the source text. They therefore refresh on save, not on keystroke: an
     // in-flight edit keeps the marker it had until it is written.
@@ -276,6 +279,11 @@ async function renderGlossary(prefix) {
     const countDefects = () => findings.filter(f => f && f.some(x => !isPolicy(x) && !isModel(x))).length;
     const countPolicy = () => findings.filter(f => f && f.length && f.every(isPolicy)).length;
     const countModel = () => findings.filter(f => f && f.some(isModel)).length;
+    // Counted from what is on screen rather than taken from the server, so that
+    // applying or dismissing the last finding frees the "ask" button at once
+    // instead of after a round trip.
+    const countOutstanding = () =>
+        findings.reduce((n, f) => n + (f || []).filter(isModel).length, 0) + (review?.additions?.length || 0);
     let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated' | 'model'
 
     const knownTypes = [...new Set(['name', 'term', ...terms.map(t => t.type).filter(Boolean)])];
@@ -285,6 +293,8 @@ async function renderGlossary(prefix) {
         <div class="toolbar">
             <input id="g-search" type="search" placeholder="${esc(t('gloss.search'))}" style="width:220px">
             <button id="g-add">${esc(t('gloss.addTerm'))}</button>
+            <button id="g-ask">${esc(t('gloss.ask'))}</button>
+            <span id="g-ask-note" class="ask-note"></span>
             <span id="g-count" class="badge"></span>
             <span class="badge" title="${esc(t('gloss.junkHintTitle'))}">${esc(t('gloss.junkHint'))}</span>
             <select id="g-issues" class="issues-select" title="${esc(t('gloss.issuesTitle'))}"></select>
@@ -311,7 +321,42 @@ async function renderGlossary(prefix) {
     const dirtyEl = document.getElementById('g-dirty');
     const countEl = document.getElementById('g-count');
 
-    function markDirty() { dirty = true; dirtyEl.hidden = false; }
+    function markDirty() { dirty = true; dirtyEl.hidden = false; updateAsk(); }
+
+    // --- "Ask the model": one whole-book call, run from here ---
+    //
+    // Guarded rather than merely offered. The call is expensive and rate-limited
+    // (a free tier allows twenty a day), it reads the glossary from disk rather
+    // than from this screen, and its findings are addressed to the entries as
+    // they are now. Each of those is a reason it must not be pressed at the
+    // wrong moment, and the reason is stated on the button rather than left for
+    // the user to discover from a confusing result.
+    let asking = false;
+
+    function askState() {
+        if (asking || running) return { ok: false, why: t('gloss.askBusyTitle') };
+        if (dirty) return { ok: false, why: t('gloss.askDirtyTitle') };
+        const pending = countOutstanding();
+        if (pending > 0) return { ok: false, why: t('gloss.askPendingTitle', { n: pending }) };
+        const total = (estimate.bookTokens || 0) + (estimate.glossaryTokens || 0);
+        if (estimate.budget && total > estimate.budget) {
+            return { ok: false, why: t('gloss.askTooBig', { n: fmtNum(total), budget: fmtNum(estimate.budget) }) };
+        }
+        return { ok: true, why: t('gloss.askTitle', { n: fmtNum(total) }) };
+    }
+
+    const fmtNum = n => Number(n || 0).toLocaleString();
+
+    function updateAsk() {
+        const btn = document.getElementById('g-ask');
+        if (!btn) return;
+        const { ok, why } = askState();
+        btn.disabled = !ok;
+        btn.title = why;
+        btn.textContent = asking ? t('gloss.askRunning') : t('gloss.ask');
+        const note = document.getElementById('g-ask-note');
+        if (note) note.textContent = ok || asking ? '' : why;
+    }
 
     // The filter is rebuilt rather than written once: after a save the server
     // re-analyses the glossary, and the counts here have to follow — otherwise
@@ -374,6 +419,10 @@ async function renderGlossary(prefix) {
                 <td class="del"><button class="danger" data-del="${idx}" title="${esc(t('gloss.delTitle'))}">✕</button></td>
             </tr>` + modelIssues.map((m, mi) => reviewRow(m, idx, mi)).join('');
         }).join('');
+
+        // Every path that changes a finding ends here, so the guard on the
+        // "ask the model" button is refreshed in one place rather than six.
+        updateAsk();
     }
 
     // A model finding gets its own row under the entry rather than a tooltip:
@@ -412,7 +461,7 @@ async function renderGlossary(prefix) {
             ? ` ${esc(t('gloss.rvHidden', { n: review.hidden }))} <a href="#" id="rv-restore">${esc(t('gloss.rvRestore'))}</a>`
             : '';
         const head = `<div class="rv-bar">${esc(t('gloss.rvBar', {
-            n: review.outstanding, total: review.total, model: review.model || '—', when }))}${hidden}</div>`;
+            n: countOutstanding(), total: review.total, model: review.model || '—', when }))}${hidden}</div>`;
         const adds = (review.additions || []).map((a, i) => `
             <div class="rv-add">
                 <div class="rv-head"><span class="rv-action rv-add-tag">${esc(t('gloss.rv_add'))}</span>
@@ -475,9 +524,12 @@ async function renderGlossary(prefix) {
             const fresh = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary`);
             findings.length = 0; findings.push(...(fresh.findings || []));
             review = fresh.review || null;
+            estimate = fresh.estimate || estimate;
+            running = !!fresh.running;
             renderFilter();
             renderReview();
             renderRows();
+            updateAsk();
         } catch { /* leave the screen as it is rather than blanking it */ }
     }
 
@@ -572,6 +624,55 @@ async function renderGlossary(prefix) {
         renderRows();
     });
 
+    document.getElementById('g-ask').addEventListener('click', async () => {
+        if (!askState().ok) return;
+        const total = (estimate.bookTokens || 0) + (estimate.glossaryTokens || 0);
+        if (!confirm(t('gloss.askConfirm', { n: fmtNum(total) }))) return;
+
+        asking = true;
+        updateAsk();
+        try {
+            await api('/api/run', { method: 'POST', body: { prefix, stage: 'glossary' } });
+        } catch (e) {
+            asking = false;
+            updateAsk();
+            toast(t('gloss.askError', { msg: e.message }), 'error');
+            return;
+        }
+        toast(t('gloss.askStarted'), 'ok');
+        watchAsk();
+    });
+
+    // The stage runs as a detached process, so its progress has to be read back.
+    // The editor stays where it is: the point of running it from here is not to
+    // be sent to the monitor and back.
+    function watchAsk() {
+        const note = document.getElementById('g-ask-note');
+        const timer = setInterval(async () => {
+            let job;
+            try { job = await api(`/api/projects/${encodeURIComponent(prefix)}/job`); }
+            catch { return; }   // a hiccup in polling is not a failed run
+
+            const last = (job.log || []).filter(Boolean).slice(-1)[0] || '';
+            if (note) note.textContent = last.replace(/^\[[^\]]+\]\s*/, '').slice(0, 90);
+            if (job.running) return;
+
+            clearInterval(timer);
+            asking = false;
+            if (note) note.textContent = '';
+            if (job.exitCode) {
+                updateAsk();
+                toast(t('gloss.askFailed'), 'error');
+                return;
+            }
+            await reloadReview();
+            updateAsk();
+            toast(t('gloss.askDone', { n: review?.outstanding ?? 0 }), 'ok');
+        }, 2000);
+
+        cleanupTimers.push(() => clearInterval(timer));
+    }
+
     document.getElementById('g-add').addEventListener('click', () => {
         terms.unshift({ original: '', translation: '', type: 'name', gender: null, notes: '' });
         counts.unshift(null);
@@ -595,13 +696,15 @@ async function renderGlossary(prefix) {
                 terms.length = 0; terms.push(...fresh.terms);
                 counts.length = 0; counts.push(...(fresh.counts || []));
                 findings.length = 0; findings.push(...(fresh.findings || []));
-                // A saved glossary no longer matches the fingerprint the review
-                // was made against, so the server marks it stale and the banner
-                // says so — the findings that were acted on are already applied.
+                // Findings resolve against the saved glossary, so the ones just
+                // acted on drop out here and the rest stay outstanding.
                 review = fresh.review || null;
+                estimate = fresh.estimate || estimate;
+                running = !!fresh.running;
                 renderFilter();
                 renderReview();
                 renderRows();
+                updateAsk();
             } catch { /* the save itself succeeded; stale markers are not worth an error */ }
         } catch (e) {
             toast(t('gloss.saveError', { msg: e.message }), 'error');
@@ -611,8 +714,13 @@ async function renderGlossary(prefix) {
     renderFilter();
     renderReview();
     renderRows();
+    updateAsk();
 
     cleanup = () => {
+        // The poll outlives the page otherwise, and would keep writing into
+        // elements that no longer exist.
+        for (const stop of cleanupTimers) stop();
+        cleanupTimers.length = 0;
         if (dirty && !confirm(t('gloss.leaveConfirm'))) {
             // too late to cancel hash navigation cleanly — just warn
         }

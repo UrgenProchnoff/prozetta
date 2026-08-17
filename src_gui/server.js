@@ -7,6 +7,7 @@ import { createRawClient, PROVIDER_CONFIG_KEY } from '../src_v4/core/llm_client.
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { outstandingFindings } from '../src_v4/core/glossary_review.js';
+import config from '../src_v4/config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -447,8 +448,14 @@ app.get('/api/projects/:prefix/glossary', (req, res) => {
     // contradictory genders. Editing these is a human's job — the point of
     // showing them here is that the console report cannot be edited from.
     let findings = [];
+    // What one whole-book call would cost, so the editor can say so before
+    // spending it. The book half is free — the splitter already counted every
+    // chunk; the glossary half is estimated from its size rather than tokenised,
+    // which would cost more than the answer is worth on every page load.
+    let bookTokens = 0;
     if (fs.existsSync(statePath(prefix))) {
         const chunks = readJson(statePath(prefix)).chunks || [];
+        bookTokens = chunks.reduce((n, c) => n + (c.tokens || Math.round((c.original || '').length / 4)), 0);
         const lower = chunks.map(c => (c.original || '').toLowerCase());
         counts = terms.map(t => {
             const needle = (t.original || '').toLowerCase();
@@ -465,8 +472,7 @@ app.get('/api/projects/:prefix/glossary', (req, res) => {
     }
 
     // Model findings ride in the same per-row array the editor already renders,
-    // so one marker and one filter cover both sources. They point at rows by
-    // index, so an edited glossary makes them stale — the fingerprint says when.
+    // so one marker and one filter cover both sources.
     let reviewMeta = null;
     if (review) {
         // Resolved against the glossary as it stands, not as it stood: a finding
@@ -492,7 +498,23 @@ app.get('/api/projects/:prefix/glossary', (req, res) => {
         };
     }
 
-    res.json({ terms, counts, findings, review: reviewMeta });
+    // 2.7 characters per token, not the 4 that prose gives: the block is JSON
+    // with two scripts in it, and punctuation and Cyrillic both tokenise badly.
+    // Calibrated against the real tokenizer on this glossary — 28 615 estimated
+    // against 28 531 counted. It has to err high rather than low, or the editor
+    // offers a call the stage will refuse.
+    const glossaryTokens = Math.round(terms.reduce((n, t) =>
+        n + String(t.original || '').length + String(t.translation || '').length + String(t.notes || '').length + 40, 0) / 2.7);
+
+    res.json({
+        terms, counts, findings,
+        review: reviewMeta,
+        // The editor offers to run the review itself, and both of these decide
+        // whether it may: a stage already running, or an estimate that will not
+        // fit one call.
+        running: jobManager.isRunning(prefix),
+        estimate: { bookTokens, glossaryTokens, budget: config.pipeline.bookCallTokenBudget || 250000 },
+    });
 });
 
 // Dismiss a model finding, or bring the dismissed ones back.

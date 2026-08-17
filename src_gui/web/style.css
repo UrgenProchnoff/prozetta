@@ -732,6 +732,9 @@ table.glossary .del { text-align: center; }
 .glossary tr.issue-bad .issue-flag { color: var(--red); border-color: var(--red); }
 .glossary tr.issue-warn .issue-flag { color: var(--yellow); border-color: var(--yellow); }
 .issues-select { font-size: 13px; padding: 4px 8px; }
+/* Why the "ask the model" button is refusing, next to the button rather than
+   only in its tooltip — a disabled control that says nothing reads as broken. */
+.ask-note { color: var(--muted); font-size: 12px; }
 
 /* --- Glossary review: findings from the whole-book model call ---
    Each finding is a row of its own under the entry it concerns, because it

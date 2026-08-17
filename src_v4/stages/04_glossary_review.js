@@ -34,12 +34,14 @@ export async function runGlossaryReviewStage(state) {
     const chunks = state.getChunks();
     if (!chunks.length) {
         console.error('[Review] Project has no chunks yet — run Stage 1 first.');
+        process.exitCode = 1;
         return;
     }
 
     const glossaryPath = state.getGlossaryPath();
     if (!fs.existsSync(glossaryPath)) {
         console.error(`[Review] No glossary to review: ${glossaryPath}`);
+        process.exitCode = 1;
         return;
     }
     let glossary;
@@ -47,10 +49,12 @@ export async function runGlossaryReviewStage(state) {
         glossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf-8'));
     } catch (e) {
         console.error(`[Review] Could not read the glossary: ${e.message}`);
+        process.exitCode = 1;
         return;
     }
     if (!Array.isArray(glossary) || !glossary.length) {
         console.error('[Review] The glossary is empty — nothing to review.');
+        process.exitCode = 1;
         return;
     }
 
@@ -94,6 +98,7 @@ export async function runGlossaryReviewStage(state) {
         console.error(`[Review] half a glossary cannot show that one character occupies two entries, and`);
         console.error(`[Review] half a book cannot show how a term is actually used. Splitting would not review, it would guess.`);
         console.error(`[Review] Either raise the limit for a paid tier, or review this book's glossary by hand.\n`);
+        process.exitCode = 1;
         return;
     }
 
@@ -113,6 +118,7 @@ export async function runGlossaryReviewStage(state) {
         if (e.contentBlocked) {
             console.error('[Review] The provider refused the text. Retrying will not help — switch the book_model provider.');
         }
+        process.exitCode = 1;
         return;
     }
 
