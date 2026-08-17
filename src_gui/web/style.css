@@ -126,6 +126,37 @@ footer a {
     font-size: 12.5px;
 }
 footer a:hover { color: var(--accent); }
+/* Version next to the GitHub link, so "which build is this" is answerable from
+   any page without hunting for an About box. Monospace because the eye compares
+   it to a commit hash somewhere else. */
+.version-link {
+    margin-left: 18px;
+    font-family: ui-monospace, monospace;
+    font-size: 12px !important;
+}
+
+/* --- Changelog --- */
+.changelog { max-width: 860px; line-height: 1.55; }
+.changelog h2 {
+    margin: 28px 0 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    font-size: 19px;
+}
+.changelog h2:first-child { margin-top: 0; }
+.changelog h3 { margin: 20px 0 4px; font-size: 15px; color: var(--accent); }
+.changelog h4 { margin: 14px 0 4px; font-size: 13.5px; color: var(--muted); }
+.changelog p { margin: 8px 0; color: var(--muted); }
+.changelog ul { margin: 6px 0 12px; padding-left: 20px; }
+.changelog li { margin: 4px 0; }
+.changelog code {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--panel2);
+    font-family: ui-monospace, monospace;
+    font-size: 12.5px;
+}
+.changelog a { color: var(--blue); }
 
 .loading { color: var(--muted); padding: 40px; text-align: center; }
 

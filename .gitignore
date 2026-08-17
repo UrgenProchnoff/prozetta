@@ -12,3 +12,8 @@ temp/
 *.log
 *.bak
 *.code-workspace
+*.old
+# Book text and translations live in txt/, which is ignored above — but drafts
+# and proofread copies get dropped in the project root too, and those are
+# someone else's copyrighted work. Nothing in this repository is a .txt file.
+/*.txt

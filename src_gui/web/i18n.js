@@ -25,6 +25,10 @@
 
             'nav.projects': 'Проекты',
 
+            'ver.changelog': 'Что изменилось',
+            'ver.title': 'prozetta {version}\nКоммит: {commit} ({branch}), {date}{dirty}\nНажмите, чтобы посмотреть список изменений',
+            'ver.dirty': '\nВ рабочем каталоге есть правки, не зафиксированные в git — этот запуск не соответствует коммиту точно',
+
             'status.success': 'принято',
             'status.best_effort': 'лучшая попытка',
             'status.in_progress': 'в работе',
@@ -338,6 +342,10 @@
             'header.lang': 'Язык / Language',
 
             'nav.projects': 'Projects',
+
+            'ver.changelog': 'What changed',
+            'ver.title': 'prozetta {version}\nCommit: {commit} ({branch}), {date}{dirty}\nClick to see the list of changes',
+            'ver.dirty': '\nThe working tree has changes not committed to git — this run matches no commit exactly',
 
             'status.success': 'approved',
             'status.best_effort': 'best effort',

@@ -103,6 +103,7 @@ function route() {
 
     if (parts.length === 0) return renderDashboard();
     if (parts[0] === 'settings') return renderSettings();
+    if (parts[0] === 'changelog') return renderChangelog();
     if (parts[0] === 'glossary' && parts[1]) return renderGlossary(decodeURIComponent(parts[1]));
     if (parts[0] === 'passport' && parts[1]) return renderPassport(decodeURIComponent(parts[1]));
     if (parts[0] === 'monitor' && parts[1]) return renderMonitor(decodeURIComponent(parts[1]));
@@ -116,6 +117,99 @@ window.addEventListener('hashchange', route);
 
 function setCrumbs(html) { breadcrumbs.innerHTML = html; }
 function crumbHome() { return `<a href="#/">${esc(t('nav.projects'))}</a>`; }
+
+// ============================================================
+// Version and changelog
+// ============================================================
+
+// Shown in the footer of every page. The commit is what identifies a build —
+// the package version moves rarely, the code moves daily — and the plus sign
+// says the working tree has edits, so this instance matches no commit exactly.
+async function renderVersion() {
+    const el = document.getElementById('version-link');
+    if (!el) return;
+    let v;
+    try { v = await api('/api/version'); } catch { return; }
+
+    const parts = [`v${v.version}`];
+    if (v.commit) parts.push(v.commit + (v.dirty ? '+' : ''));
+    el.textContent = parts.join(' · ');
+    el.title = t('ver.title', {
+        version: v.version,
+        commit: v.commit || '—',
+        branch: v.branch || '—',
+        date: v.commitDate ? fmtDate(v.commitDate) : '—',
+        dirty: v.dirty ? t('ver.dirty') : '',
+    });
+    if (!v.changelog) el.removeAttribute('href');
+}
+
+/**
+ * The changelog, rendered from Markdown.
+ *
+ * A deliberately small subset — headings, lists, bold, code, links — because
+ * that is all a changelog uses and the GUI carries no dependencies. Text is
+ * escaped before any of it is applied, so the file cannot inject markup into
+ * the page whatever it contains.
+ */
+function renderMarkdown(src) {
+    const inline = s => esc(s)
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+    // Paragraphs and bullets are buffered rather than emitted line by line: the
+    // file is hard-wrapped at 80 columns, so a line break inside one is where
+    // the text was folded, not where it ends. Buffering also means the inline
+    // pass sees whole sentences, so bold or code spanning a fold still works.
+    const out = [];
+    let list = false, item = null, para = [];
+    const flushItem = () => { if (item !== null) { out.push(`<li>${inline(item)}</li>`); item = null; } };
+    const closeList = () => { flushItem(); if (list) { out.push('</ul>'); list = false; } };
+    const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; } };
+
+    for (const raw of String(src).split('\n')) {
+        const line = raw.trim();
+
+        if (!line) { flushPara(); closeList(); continue; }
+
+        const heading = line.match(/^(#{1,4})\s+(.*)$/);
+        if (heading) {
+            flushPara(); closeList();
+            const level = Math.min(heading[1].length + 1, 5);   // "# Changelog" is the page title
+            out.push(`<h${level}>${inline(heading[2])}</h${level}>`);
+            continue;
+        }
+
+        const bullet = line.match(/^[-*]\s+(.*)$/);
+        if (bullet) {
+            flushPara(); flushItem();
+            if (!list) { out.push('<ul>'); list = true; }
+            item = bullet[1];
+            continue;
+        }
+
+        // An indented line under a bullet continues it.
+        if (item !== null && /^\s+\S/.test(raw)) { item += ' ' + line; continue; }
+
+        closeList();
+        para.push(line);
+    }
+    flushPara();
+    closeList();
+    return out.join('\n');
+}
+
+async function renderChangelog() {
+    setCrumbs(`${crumbHome()} / ${esc(t('ver.changelog'))}`);
+    app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
+    try {
+        const { text } = await api('/api/changelog');
+        app.innerHTML = `<div class="changelog">${renderMarkdown(text)}</div>`;
+    } catch (e) {
+        app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
+    }
+}
 
 // ============================================================
 // Dashboard
@@ -344,8 +438,6 @@ async function renderGlossary(prefix) {
         }
         return { ok: true, why: t('gloss.askTitle', { n: fmtNum(total) }) };
     }
-
-    const fmtNum = n => Number(n || 0).toLocaleString();
 
     function updateAsk() {
         const btn = document.getElementById('g-ask');
@@ -1866,10 +1958,12 @@ function initLangSwitcher() {
         i18n.setLang(sel.value);
         sel.title = t('header.lang');
         if (settingsLink) settingsLink.title = t('nav.settings');
+        renderVersion();   // its tooltip is written in the interface language
         route(); // re-render current view in the new language
     });
 }
 
 // --- Go ---
 initLangSwitcher();
+renderVersion();
 route();

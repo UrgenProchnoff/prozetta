@@ -9,6 +9,8 @@ import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { outstandingFindings } from '../src_v4/core/glossary_review.js';
 import config from '../src_v4/config.js';
 
+import { execFileSync } from 'child_process';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const TXT_DIR = path.join(ROOT, 'txt');
@@ -51,6 +53,51 @@ function glossaryPath(prefix) {
 function reviewPath(prefix) {
     return path.join(ROOT, `${prefix}_glossary_review.json`);
 }
+
+/**
+ * What version is running, resolved once at startup.
+ *
+ * The commit is the part that actually identifies a build: the package version
+ * moves rarely, while the thing a person is looking at moves every day. Read
+ * through git rather than from a baked file so it cannot drift from reality —
+ * and it degrades to the package version alone when there is no checkout, which
+ * is how an install from an archive looks.
+ *
+ * `dirty` matters more than it looks: most of the time this runs from a working
+ * tree with edits in it, and a bare commit hash would then name a build that
+ * does not exist anywhere.
+ */
+const VERSION = (() => {
+    let version = '0.0.0';
+    try { version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).version || version; }
+    catch { /* keep the placeholder */ }
+
+    const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf-8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    try {
+        return {
+            version,
+            commit: git('rev-parse', '--short', 'HEAD'),
+            commitDate: git('log', '-1', '--format=%cI'),
+            branch: git('rev-parse', '--abbrev-ref', 'HEAD'),
+            dirty: git('status', '--porcelain', '--untracked-files=no').length > 0,
+        };
+    } catch {
+        return { version, commit: null, commitDate: null, branch: null, dirty: false };
+    }
+})();
+
+app.get('/api/version', (req, res) => {
+    res.json({ ...VERSION, changelog: fs.existsSync(path.join(ROOT, 'CHANGELOG.md')) });
+});
+
+// The changelog as written, for the interface to render. Read per request so an
+// edit shows up without restarting the server.
+app.get('/api/changelog', (req, res) => {
+    const file = path.join(ROOT, 'CHANGELOG.md');
+    if (!fs.existsSync(file)) return res.status(404).json({ error: 'No CHANGELOG.md' });
+    try { res.json({ text: fs.readFileSync(file, 'utf-8') }); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 function passportPath(prefix) {
     return path.join(ROOT, `${prefix}_passport.json`);
