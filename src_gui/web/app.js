@@ -248,12 +248,13 @@ async function renderGlossary(prefix) {
     setCrumbs(`${crumbHome()} / ${esc(prefix)} / ${esc(t('gloss.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
-    let terms, counts, findings;
+    let terms, counts, findings, review;
     try {
         const data = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary`);
         terms = data.terms;
         counts = data.counts;
         findings = data.findings || [];
+        review = data.review || null;
     } catch (e) {
         app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
         return;
@@ -271,9 +272,11 @@ async function renderGlossary(prefix) {
     // (96 against 20 on one book). Mixed into one filter they bury everything
     // that needs fixing.
     const isPolicy = f => f.kind === 'untranslated';
-    const countDefects = () => findings.filter(f => f && f.some(x => !isPolicy(x))).length;
+    const isModel = f => f.kind === 'model';
+    const countDefects = () => findings.filter(f => f && f.some(x => !isPolicy(x) && !isModel(x))).length;
     const countPolicy = () => findings.filter(f => f && f.length && f.every(isPolicy)).length;
-    let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated'
+    const countModel = () => findings.filter(f => f && f.some(isModel)).length;
+    let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated' | 'model'
 
     const knownTypes = [...new Set(['name', 'term', ...terms.map(t => t.type).filter(Boolean)])];
 
@@ -289,6 +292,7 @@ async function renderGlossary(prefix) {
             <span id="g-dirty" class="dirty" hidden>${esc(t('gloss.unsaved'))}</span>
             <button id="g-save" class="primary">${esc(t('common.save'))}</button>
         </div>
+        <div id="g-review"></div>
         <table class="glossary">
             <thead><tr>
                 <th style="width:22%">${esc(t('gloss.colOriginal'))}</th>
@@ -315,10 +319,11 @@ async function renderGlossary(prefix) {
     function renderFilter() {
         const box = document.getElementById('g-issues');
         if (!box) return;
-        const defects = countDefects(), policy = countPolicy();
-        box.hidden = !(defects || policy);
+        const defects = countDefects(), policy = countPolicy(), model = countModel();
+        box.hidden = !(defects || policy || model);
         const keep = box.value || rowFilter;
         box.innerHTML = `<option value="all">${esc(t('gloss.filterAll'))}</option>`
+            + (model ? `<option value="model">${esc(t('gloss.filterModel', { n: model }))}</option>` : '')
             + (defects ? `<option value="defects">${esc(t('gloss.filterDefects', { n: defects }))}</option>` : '')
             + (policy ? `<option value="untranslated">${esc(t('gloss.filterUntranslated', { n: policy }))}</option>` : '');
         // A filter whose category just emptied falls back to showing everything.
@@ -332,7 +337,9 @@ async function renderGlossary(prefix) {
             .filter(({ idx }) => {
                 if (rowFilter === 'all') return true;
                 const f = findings[idx] || [];
-                return rowFilter === 'defects' ? f.some(x => !isPolicy(x)) : f.some(isPolicy);
+                if (rowFilter === 'model') return f.some(isModel);
+                if (rowFilter === 'defects') return f.some(x => !isPolicy(x) && !isModel(x));
+                return f.some(isPolicy);
             })
             .filter(({ t }) => !q
                 || (t.original || '').toLowerCase().includes(q)
@@ -347,6 +354,7 @@ async function renderGlossary(prefix) {
             const defects = issues.filter(i => !isPolicy(i));
             const worst = defects.some(i => i.kind === 'genderConflict' || i.kind === 'absent' || i.kind === 'inconsistent')
                 ? 'bad' : defects.length ? 'warn' : issues.length ? 'note' : '';
+            const modelIssues = issues.filter(isModel);
             const issueTitle = issues.map(i => '• ' + i.detail).join('\n');
             const typeOpts = knownTypes.map(k =>
                 `<option value="${esc(k)}" ${term.type === k ? 'selected' : ''}>${esc(k)}</option>`).join('');
@@ -364,9 +372,77 @@ async function renderGlossary(prefix) {
                 <td><input data-f="notes" value="${esc(term.notes)}"></td>
                 <td class="cnt ${cnt === 0 ? 'zero' : ''}">${cnt ?? ''}</td>
                 <td class="del"><button class="danger" data-del="${idx}" title="${esc(t('gloss.delTitle'))}">✕</button></td>
-            </tr>`;
+            </tr>` + modelIssues.map((m, mi) => reviewRow(m, idx, mi)).join('');
         }).join('');
     }
+
+    // A model finding gets its own row under the entry rather than a tooltip:
+    // it carries a quote from the book, and the quote is the whole reason to
+    // believe it. Hiding the evidence behind a hover would defeat the contract
+    // that produced it.
+    function reviewRow(m, idx, mi) {
+        const fix = m.fix
+            ? Object.entries(m.fix).map(([f, v]) => `<span class="rv-field">${esc(f)}</span> ${esc(String(v))}`).join('<br>')
+            : '';
+        const buttons = [];
+        if (m.action === 'edit' && m.fix) buttons.push(`<button data-apply="${idx}:${mi}">${esc(t('gloss.rvApply'))}</button>`);
+        if (m.action === 'remove') buttons.push(`<button class="danger" data-del="${idx}">${esc(t('gloss.rvRemove'))}</button>`);
+        if (m.action === 'merge') buttons.push(`<button data-find="${esc(m.mergeInto || '')}">${esc(t('gloss.rvFind'))}</button>`);
+        buttons.push(`<button data-dismiss="${idx}:${mi}" title="${esc(t('gloss.rvDismissTitle'))}">${esc(t('gloss.rvDismiss'))}</button>`);
+
+        return `<tr class="rv-row"><td colspan="7">
+            <div class="rv-head"><span class="rv-action rv-${esc(m.action)}">${esc(t('gloss.rv_' + m.action))}</span>
+                ${esc(m.detail)}${m.mergeInto ? ` → <b>${esc(m.mergeInto)}</b>` : ''}</div>
+            <div class="rv-quote">${esc(m.quote)}</div>
+            ${fix ? `<div class="rv-fix">${fix}</div>` : ''}
+            <div class="rv-acts">${buttons.join(' ')}</div>
+        </td></tr>`;
+    }
+
+    // The review banner: when it was made and by which model, plus the
+    // proposals that belong to no existing row — terms the book uses that the
+    // glossary never got. Those have nowhere to be marked, so they live here.
+    function renderReview() {
+        const box = document.getElementById('g-review');
+        if (!box) return;
+        if (!review) { box.innerHTML = ''; return; }
+
+        if (review.stale) {
+            // Findings address rows by index. Once the glossary has been edited
+            // those indices mean something else, and showing them anyway would
+            // put the model's remark about one entry onto another.
+            box.innerHTML = `<div class="rv-bar rv-stale">${esc(t('gloss.rvStale'))}</div>`;
+            return;
+        }
+
+        const when = review.generatedAt ? new Date(review.generatedAt).toLocaleString() : '';
+        const head = `<div class="rv-bar">${esc(t('gloss.rvBar', { n: review.total, model: review.model || '—', when }))}</div>`;
+        const adds = (review.additions || []).map((a, i) => `
+            <div class="rv-add">
+                <div class="rv-head"><span class="rv-action rv-add-tag">${esc(t('gloss.rv_add'))}</span>
+                    <b>${esc(a.fix?.original || '')}</b> → ${esc(a.fix?.translation || '')} — ${esc(a.problem)}</div>
+                <div class="rv-quote">${esc(a.quote)}</div>
+                <div class="rv-acts"><button data-add="${i}">${esc(t('gloss.rvAdd'))}</button></div>
+            </div>`).join('');
+        box.innerHTML = head + (adds ? `<div class="rv-adds">${adds}</div>` : '');
+    }
+
+    document.getElementById('g-review').addEventListener('click', (e) => {
+        const i = e.target.dataset.add;
+        if (i === undefined) return;
+        const a = review.additions[+i];
+        if (!a?.fix?.original) return;
+        terms.unshift({
+            original: a.fix.original, translation: a.fix.translation || '',
+            type: a.fix.type || 'name', gender: a.fix.gender || null, notes: a.fix.notes || '',
+        });
+        counts.unshift(null);
+        findings.unshift([]);
+        review.additions.splice(+i, 1);
+        markDirty();
+        renderReview();
+        renderRows();
+    });
 
     const issuesBox = document.getElementById('g-issues');
     if (issuesBox) issuesBox.addEventListener('change', () => { rowFilter = issuesBox.value; renderRows(); });
@@ -381,12 +457,54 @@ async function renderGlossary(prefix) {
     });
 
     tbody.addEventListener('click', (e) => {
-        const del = e.target.dataset.del;
-        if (del === undefined) return;
-        terms.splice(+del, 1);
-        counts.splice(+del, 1);
-        markDirty();
-        renderRows();
+        const { del, apply, dismiss, find } = e.target.dataset;
+
+        if (del !== undefined) {
+            terms.splice(+del, 1);
+            counts.splice(+del, 1);
+            // Findings are indexed like the glossary, so they have to move with
+            // it — otherwise every marker below a deleted row points one entry
+            // too far down.
+            findings.splice(+del, 1);
+            markDirty();
+            renderFilter();
+            renderRows();
+            return;
+        }
+
+        if (apply !== undefined) {
+            const [idx, mi] = apply.split(':').map(Number);
+            const m = (findings[idx] || []).filter(isModel)[mi];
+            if (!m || !m.fix) return;
+            Object.assign(terms[idx], m.fix);
+            // The proposal has been taken; leaving it on screen would invite
+            // clicking it again on a row that already says exactly that.
+            findings[idx] = findings[idx].filter(x => x !== m);
+            markDirty();
+            renderFilter();
+            renderRows();
+            return;
+        }
+
+        if (dismiss !== undefined) {
+            const [idx, mi] = dismiss.split(':').map(Number);
+            const m = (findings[idx] || []).filter(isModel)[mi];
+            if (!m) return;
+            findings[idx] = findings[idx].filter(x => x !== m);
+            renderFilter();
+            renderRows();
+            return;
+        }
+
+        if (find !== undefined) {
+            const box = document.getElementById('g-search');
+            box.value = find;
+            filter = find;
+            rowFilter = 'all';
+            const sel = document.getElementById('g-issues');
+            if (sel) sel.value = 'all';
+            renderRows();
+        }
     });
 
     document.getElementById('g-search').addEventListener('input', (e) => {
@@ -417,7 +535,12 @@ async function renderGlossary(prefix) {
                 terms.length = 0; terms.push(...fresh.terms);
                 counts.length = 0; counts.push(...(fresh.counts || []));
                 findings.length = 0; findings.push(...(fresh.findings || []));
+                // A saved glossary no longer matches the fingerprint the review
+                // was made against, so the server marks it stale and the banner
+                // says so — the findings that were acted on are already applied.
+                review = fresh.review || null;
                 renderFilter();
+                renderReview();
                 renderRows();
             } catch { /* the save itself succeeded; stale markers are not worth an error */ }
         } catch (e) {
@@ -426,6 +549,7 @@ async function renderGlossary(prefix) {
     });
 
     renderFilter();
+    renderReview();
     renderRows();
 
     cleanup = () => {
@@ -600,6 +724,13 @@ async function renderMonitor(prefix) {
         const steps = [
             { stage: '1', name: t('mon.stepExtract'), sub: total ? `${s.extracted}/${total}` : '—', done: total > 0 && s.extracted >= total },
             { stage: null, name: t('mon.stepGlossary'), sub: s?.glossaryCount ? t('mon.stepTermsCount', { n: s.glossaryCount }) : '—', done: !!s?.glossaryCount },
+            // The review is optional but sits before translation on purpose: its
+            // whole value is fixing the cheat sheet before it has been used on
+            // 150 chunks.
+            { stage: 'glossary', name: t('mon.stepReview'),
+              sub: s?.glossaryReview ? (s.glossaryReview.broken ? t('mon.reviewBroken')
+                    : t('mon.reviewSub', { n: s.glossaryReview.findings })) : '—',
+              done: !!(s?.glossaryReview && !s.glossaryReview.broken) },
             { stage: 'passport', name: t('mon.stepPassport'),
               sub: s?.passport ? (s.passport.broken ? t('mon.passportBroken')
                     : t('mon.passportSub', { n: s.passport.characters, person: t('mon.person.' + (s.passport.person || 'unknown')) }))

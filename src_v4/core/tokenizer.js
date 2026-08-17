@@ -14,7 +14,7 @@ function initTokenizer() {
     return tokenizer;
 }
 
-function countTokens(text) {
+export function countTokens(text) {
     try {
         const t = initTokenizer();
         let encoded = t.encode(text);

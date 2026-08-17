@@ -15,6 +15,10 @@ export class ProjectState {
         // both are human-edited artefacts, and neither should be lost when
         // Stage 2 is reset.
         this.passportFile = path.join(this.workDir, `${prefix}passport.json`);
+        // The model's glossary findings. Kept apart from the glossary itself
+        // because nothing here is applied automatically: the file is a report
+        // about the glossary, not a version of it.
+        this.glossaryReviewFile = path.join(this.workDir, `${prefix}glossary_review.json`);
 
         this.data = {
             metadata: {
@@ -70,6 +74,10 @@ export class ProjectState {
 
     getPassportPath() {
         return this.passportFile;
+    }
+
+    getGlossaryReviewPath() {
+        return this.glossaryReviewFile;
     }
 
     getChunks() {

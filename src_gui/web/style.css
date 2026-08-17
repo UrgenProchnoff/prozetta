@@ -692,6 +692,68 @@ table.glossary .del { text-align: center; }
 .glossary tr.issue-warn .issue-flag { color: var(--yellow); border-color: var(--yellow); }
 .issues-select { font-size: 13px; padding: 4px 8px; }
 
+/* --- Glossary review: findings from the whole-book model call ---
+   Each finding is a row of its own under the entry it concerns, because it
+   carries a verbatim quote from the book and the quote is the entire reason to
+   trust it. A tooltip would hide the evidence that the contract exists to
+   produce. */
+.rv-bar {
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel2);
+    color: var(--muted);
+    font-size: 12px;
+}
+.rv-bar.rv-stale { border-color: var(--yellow); color: var(--text); }
+.rv-adds { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+.rv-add {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--blue);
+    border-radius: 6px;
+    background: var(--panel2);
+}
+.glossary tr.rv-row > td {
+    padding: 8px 12px 10px;
+    background: var(--panel2);
+    border-bottom: 1px solid var(--border);
+    box-shadow: inset 3px 0 0 var(--blue);
+}
+.rv-head { font-size: 13px; margin-bottom: 5px; }
+.rv-action {
+    display: inline-block;
+    margin-right: 8px;
+    padding: 1px 7px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-size: 11px;
+    color: var(--muted);
+}
+.rv-action.rv-remove { color: var(--red); border-color: var(--red); }
+.rv-action.rv-merge { color: var(--yellow); border-color: var(--yellow); }
+.rv-action.rv-add-tag { color: var(--blue); border-color: var(--blue); }
+/* The quote is set apart and left unwrapped-looking on purpose: a person should
+   be able to tell at a glance that these are the book's words, not the model's. */
+.rv-quote {
+    margin: 4px 0 6px;
+    padding-left: 10px;
+    border-left: 2px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    font-style: italic;
+    white-space: pre-wrap;
+}
+.rv-fix { font-size: 12px; margin-bottom: 6px; }
+.rv-field {
+    display: inline-block;
+    min-width: 78px;
+    color: var(--muted);
+}
+.rv-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.rv-acts button { font-size: 12px; padding: 3px 10px; }
+
 /* Passport: the point-of-view map as a strip. The question a person asks of it
    is "does the alternation look right and where are the gaps", which a bar
    answers at a glance and a table of indices does not. */

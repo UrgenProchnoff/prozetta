@@ -4,6 +4,7 @@ src_v4/config.overrides.json
 *_project_state.json
 *_progress.json
 *_glossary.json
+*_glossary_review.json
 *_passport.json
 txt/
 temp/

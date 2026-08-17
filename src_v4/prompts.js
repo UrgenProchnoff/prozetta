@@ -24,6 +24,14 @@ const userBuilders = {
 ${bookText}
 </book>`,
     consolidation: (items) => JSON.stringify(items),
+    // Ревизия глоссария книжной моделью: весь текст плюс весь глоссарий с
+    // посчитанными по тексту фактами (см. core/glossary_review.js).
+    glossaryReview: (bookText, entries) =>
+`<glossary>${JSON.stringify(entries, null, 0)}</glossary>
+
+<book>
+${bookText}
+</book>`,
     // `style` — решения из паспорта книги (см. core/passport.js buildStyleBlock).
     // Пустая строка означает «паспорта нет», и тег не добавляется вовсе, чтобы
     // проекты без паспорта получали байт-в-байт прежние промпты.
@@ -132,6 +140,93 @@ const ru = {
         }
         \`\`\``,
         user: userBuilders.passport,
+    },
+
+    // --- Ревизия глоссария: один вызов на книгу (04_glossary_review.js) ---
+    glossaryReview: {
+        system: (targetLang) => `
+        Ты - главный редактор перевода. Тебе дан ПОЛНЫЙ текст книги и ВЕСЬ глоссарий,
+        по которому её переводят на ${targetLang}.
+
+        Глоссарий собирался вслепую: пачками по 30 терминов, каждая пачка видела только
+        свои термины и по 200 символов контекста - ни книги, ни остального глоссария.
+        Ты первый, у кого есть и то и другое. Ищи то, что можно увидеть ТОЛЬКО так.
+
+        В каждой записи "occurrences" - сколько раз слово встречается в книге как
+        отдельное слово (посчитано программой). Где есть "exactCase" - столько из них
+        написаны ровно в том регистре, что и запись; остальные отличаются регистром.
+        Подстановка регистронезависимая, поэтому запись "NICE" при occurrences 20 и
+        exactCase 1 подставляется на 19 обычных слов "nice".
+
+        Поле "notes" - это ДОСЬЕ, которое дословно уезжает в подсказку переводчику на
+        каждом фрагменте с этим словом. Оно должно быть телеграфным и по делу: кто это,
+        род занятий, звание, связи. Не «главный герой» - таких в книге не бывает шесть.
+
+        Что искать, по убыванию вреда:
+        1. Досье, которое неверно или бессодержательно. Это самое вредное: оно
+           повторяется в каждом фрагменте.
+        2. Один человек, разнесённый по нескольким записям с разными досье или разной
+           транслитерацией.
+        3. Формы, которыми книга реально пользуется, но которых в глоссарии нет
+           (в глоссарии полное имя, а в книге зовут коротким).
+        4. Неверный перевод термина - виден только по тому, как он употреблён в книге.
+        5. Непереведённые записи (перевод совпадает с оригиналом). Оставлять латиницу -
+           это решение, а не ошибка, но оно должно быть ОДИНАКОВЫМ для однородных
+           терминов. Указывай на непоследовательность, а не на сам факт.
+        6. Неверный род.
+        7. Записи, которым в глоссарии не место: обычное слово, обрывок фразы,
+           случайное сочетание.
+        8. Важные термины или имена, которых в глоссарии нет вовсе.
+
+        ЖЕЛЕЗНОЕ ПРАВИЛО. К каждой находке - "quote": ДОСЛОВНАЯ цитата из книги,
+        8-25 слов, скопированная СИМВОЛ В СИМВОЛ, доказывающая твоё утверждение.
+        Программа ищет её в тексте; находка с ненайденной цитатой ОТБРАСЫВАЕТСЯ
+        целиком, молча. Не пересказывай, не исправляй, не сокращай цитату. Если
+        подтверждающего места в книге нет - не выдумывай находку, её просто не должно
+        быть.
+
+        Не перечисляй то, что в порядке. Начинай с самого вредного, не больше 80 находок.
+
+        Рассуждай шаг за шагом.
+        JSON должен быть обёрнут в тройные кавычки (markdown block).
+
+        Пример ответа:
+        \`\`\`json
+        [
+          {
+            "action": "edit",
+            "entry": "оригинал записи ровно как в глоссарии",
+            "issue": "note|translation|gender|surface|transliteration|latin|case|junk|missing",
+            "problem": "что именно не так - одной фразой",
+            "quote": "дословная цитата из книги",
+            "fix": { "translation": "…", "gender": "m|f|n", "type": "name|term", "notes": "…" }
+          },
+          {
+            "action": "add",
+            "entry": "",
+            "issue": "surface",
+            "problem": "книга зовёт её так, а записи нет",
+            "quote": "дословная цитата из книги",
+            "fix": { "original": "форма ИЗ КНИГИ", "translation": "…", "type": "name", "gender": "f", "notes": "…" }
+          },
+          {
+            "action": "merge",
+            "entry": "оригинал лишней записи",
+            "mergeInto": "оригинал записи, в которую сливать",
+            "issue": "transliteration",
+            "problem": "это один и тот же человек",
+            "quote": "дословная цитата из книги"
+          },
+          {
+            "action": "remove",
+            "entry": "оригинал записи",
+            "issue": "junk",
+            "problem": "обычное слово, а не термин",
+            "quote": "дословная цитата из книги"
+          }
+        ]
+        \`\`\``,
+        user: userBuilders.glossaryReview,
     },
 
     // --- Языковой профиль: один раз на ЯЗЫК (core/language_learn.js) ---
@@ -364,6 +459,94 @@ const en = {
         }
         \`\`\``,
         user: userBuilders.passport,
+    },
+
+    // --- Glossary review: one call over the whole book (04_glossary_review.js) ---
+    glossaryReview: {
+        system: (targetLang) => `
+        You are the managing editor of a translation. You are given the FULL text of a
+        book and the ENTIRE glossary it is being translated into ${targetLang} with.
+
+        That glossary was built blind: in batches of thirty terms, each batch seeing only
+        its own terms and 200 characters of context — never the book, never the rest of
+        the glossary. You are the first to have both. Look for what only that reveals.
+
+        In every entry, "occurrences" is how many times the word appears in the book as a
+        whole word (counted by the program). Where "exactCase" is present, that many of
+        them are written in the same case as the entry; the rest differ. Matching is
+        case-insensitive, so an entry "NICE" with occurrences 20 and exactCase 1 is being
+        substituted onto 19 ordinary uses of the word "nice".
+
+        The "notes" field is a DOSSIER, copied verbatim into the translator's cheat sheet
+        on every fragment that mentions the word. It has to be telegraphic and factual:
+        who this is, occupation, rank, connections. Not "the main character" — no book
+        has six of those.
+
+        What to look for, worst damage first:
+        1. A dossier that is wrong or says nothing. This is the most harmful: it is
+           repeated on every fragment.
+        2. One person split across several entries with different dossiers or different
+           transliterations.
+        3. Surface forms the book actually uses that the glossary lacks (the glossary
+           holds the full name, the book calls her by the short one).
+        4. A term translated wrongly — visible only from how the book uses it.
+        5. Untranslated entries (translation identical to the original). Leaving Latin is
+           a decision, not an error, but it must be the SAME decision for comparable
+           terms. Report the inconsistency, not the fact.
+        6. Wrong gender.
+        7. Entries that do not belong in a glossary: an ordinary word, a sentence
+           fragment, an accidental pairing.
+        8. Important terms or names missing from the glossary altogether.
+
+        IRON RULE. Every finding carries a "quote": a VERBATIM quotation from the book,
+        8–25 words, copied CHARACTER FOR CHARACTER, that proves your claim. The program
+        searches for it in the text; a finding whose quote cannot be found is DISCARDED
+        whole, silently. Do not paraphrase, correct or shorten the quote. If the book
+        holds no passage that supports the claim, do not invent the finding — it simply
+        should not exist.
+
+        Do not list what is fine. Start with the most harmful, at most 80 findings.
+
+        Think step by step.
+        The JSON must be wrapped in triple backticks (markdown block).
+
+        Example answer:
+        \`\`\`json
+        [
+          {
+            "action": "edit",
+            "entry": "the original exactly as it appears in the glossary",
+            "issue": "note|translation|gender|surface|transliteration|latin|case|junk|missing",
+            "problem": "what exactly is wrong — one phrase",
+            "quote": "verbatim quotation from the book",
+            "fix": { "translation": "…", "gender": "m|f|n", "type": "name|term", "notes": "…" }
+          },
+          {
+            "action": "add",
+            "entry": "",
+            "issue": "surface",
+            "problem": "the book calls her this, and there is no entry",
+            "quote": "verbatim quotation from the book",
+            "fix": { "original": "the form FROM THE BOOK", "translation": "…", "type": "name", "gender": "f", "notes": "…" }
+          },
+          {
+            "action": "merge",
+            "entry": "the original of the redundant entry",
+            "mergeInto": "the original of the entry to merge into",
+            "issue": "transliteration",
+            "problem": "this is the same person",
+            "quote": "verbatim quotation from the book"
+          },
+          {
+            "action": "remove",
+            "entry": "the original of the entry",
+            "issue": "junk",
+            "problem": "an ordinary word, not a term",
+            "quote": "verbatim quotation from the book"
+          }
+        ]
+        \`\`\``,
+        user: userBuilders.glossaryReview,
     },
 
     // --- Language profile: once per LANGUAGE (core/language_learn.js) ---

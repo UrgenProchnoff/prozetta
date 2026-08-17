@@ -93,6 +93,13 @@ const defaults = {
         consolidationBatchSize: 30, // Terms per LLM batch
         consolidationMaxRetries: 3,
 
+        // Whole-book calls (passport, glossary review): how many tokens one
+        // prompt may carry. The binding constraint is the provider's tokens per
+        // minute, not the model's context window — Gemini's free tier allows
+        // 250k/min and refuses the call outright rather than truncating it.
+        // Raise this on a paid tier.
+        bookCallTokenBudget: 250000,
+
         // Stage 2: Translation loop
         translationMaxRetries: 10,
         approvalScoreThreshold: 9.1,    // Score >= this + like=1 → approved

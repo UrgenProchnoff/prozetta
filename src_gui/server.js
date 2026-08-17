@@ -6,6 +6,7 @@ import { jobManager } from './jobs.js';
 import { createRawClient, PROVIDER_CONFIG_KEY } from '../src_v4/core/llm_client.js';
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
+import { reviewFindingsByRow } from '../src_v4/core/glossary_review.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -46,6 +47,10 @@ function glossaryPath(prefix) {
 }
 
 // The book passport lives beside the glossary: both are human-edited artifacts.
+function reviewPath(prefix) {
+    return path.join(ROOT, `${prefix}_glossary_review.json`);
+}
+
 function passportPath(prefix) {
     return path.join(ROOT, `${prefix}_passport.json`);
 }
@@ -191,6 +196,14 @@ function projectSummary(prefix) {
         try { glossaryCount = readJson(glossaryPath(prefix)).length; } catch { glossaryCount = 0; }
     }
 
+    let glossaryReview = null;
+    if (fs.existsSync(reviewPath(prefix))) {
+        try {
+            const r = readJson(reviewPath(prefix));
+            glossaryReview = { findings: (r.findings || []).length, generatedAt: r.generatedAt || null };
+        } catch { glossaryReview = { broken: true }; }
+    }
+
     return {
         prefix,
         metadata: state.metadata || {},
@@ -198,6 +211,7 @@ function projectSummary(prefix) {
         statuses,
         extracted,
         glossaryCount,
+        glossaryReview,
         passport,
         running: jobManager.isRunning(prefix),
         chunks: chunkList
@@ -418,6 +432,14 @@ app.get('/api/projects/:prefix/glossary', (req, res) => {
 
     const terms = readJson(gp);
 
+    // The model's review, if one has been run. It is a separate file because
+    // nothing in it is applied automatically — the editor shows each finding on
+    // the row it concerns and the human decides.
+    let review = null;
+    if (fs.existsSync(reviewPath(prefix))) {
+        try { review = readJson(reviewPath(prefix)); } catch { review = null; }
+    }
+
     // How many chunks mention each term — helps spotting junk entries
     let counts = [];
     // Hygiene findings per row, from the same code the CLI report uses: entries
@@ -442,7 +464,30 @@ app.get('/api/projects/:prefix/glossary', (req, res) => {
         }
     }
 
-    res.json({ terms, counts, findings });
+    // Model findings ride in the same per-row array the editor already renders,
+    // so one marker and one filter cover both sources. They point at rows by
+    // index, so an edited glossary makes them stale — the fingerprint says when.
+    let reviewMeta = null;
+    if (review) {
+        const fingerprint = terms.map(t => String(t.original || '')).join(' ').length + ':' + terms.length;
+        const stale = fingerprint !== review.glossaryFingerprint;
+        if (!stale && findings.length === terms.length) {
+            const byRow = reviewFindingsByRow(review, terms.length);
+            byRow.forEach((list, i) => findings[i].push(...list));
+        }
+        reviewMeta = {
+            generatedAt: review.generatedAt,
+            model: review.model,
+            stale,
+            total: (review.findings || []).length,
+            // Proposals that belong to no row: terms the book uses and the
+            // glossary lacks. They have nowhere to be marked, so they travel
+            // separately and the editor lists them on their own.
+            additions: stale ? [] : (review.findings || []).filter(f => f.action === 'add'),
+        };
+    }
+
+    res.json({ terms, counts, findings, review: reviewMeta });
 });
 
 app.put('/api/projects/:prefix/glossary', (req, res) => {
@@ -462,8 +507,8 @@ app.put('/api/projects/:prefix/glossary', (req, res) => {
 app.post('/api/run', (req, res) => {
     const { file, prefix: bodyPrefix, stage, model, lang, suffix } = req.body || {};
 
-    if (!['1', 'passport', '2', 'export'].includes(String(stage))) {
-        return res.status(400).json({ error: 'stage must be 1, passport, 2 or export' });
+    if (!['1', 'passport', 'glossary', '2', 'export'].includes(String(stage))) {
+        return res.status(400).json({ error: 'stage must be 1, passport, glossary, 2 or export' });
     }
 
     let prefix, sourceFile;
@@ -624,7 +669,7 @@ app.post('/api/projects/:prefix/delete', (req, res) => {
 
     const removed = [];
     const targets = [
-        sp, glossaryPath(prefix),
+        sp, glossaryPath(prefix), reviewPath(prefix), passportPath(prefix),
         runLogPath(prefix),
         path.join(TXT_DIR, outputFileName(prefix)),
         path.join(TXT_DIR, outputFileName(prefix, null, 'fb2')),
