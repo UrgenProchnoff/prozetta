@@ -93,6 +93,9 @@ consistent about who is speaking, who they are, and what they are called.
 
 ### Interface
 
+- The running version and commit sit in the footer of every page, linked to
+  this file — which now exists in English and Russian, following the interface
+  language.
 - Notes wrap to their full height instead of hiding two thirds of a dossier.
 - Passport page, dispute badges, glossary issue filters, and a review that can
   be started and read without leaving the editor.

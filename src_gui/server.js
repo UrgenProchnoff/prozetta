@@ -92,11 +92,25 @@ app.get('/api/version', (req, res) => {
 
 // The changelog as written, for the interface to render. Read per request so an
 // edit shows up without restarting the server.
+//
+// Translations follow the convention the README already uses: CHANGELOG.md is
+// English, CHANGELOG.<lang>.md is everything else. A language with no file of
+// its own falls back to English and says so, rather than showing nothing.
 app.get('/api/changelog', (req, res) => {
-    const file = path.join(ROOT, 'CHANGELOG.md');
+    // The value decides a filename, so it is matched rather than interpolated.
+    const lang = /^[a-z]{2}$/.test(String(req.query.lang || '')) ? String(req.query.lang) : 'en';
+    const translated = path.join(ROOT, `CHANGELOG.${lang}.md`);
+    const english = path.join(ROOT, 'CHANGELOG.md');
+
+    const file = lang !== 'en' && fs.existsSync(translated) ? translated : english;
     if (!fs.existsSync(file)) return res.status(404).json({ error: 'No CHANGELOG.md' });
-    try { res.json({ text: fs.readFileSync(file, 'utf-8') }); }
-    catch (e) { res.status(500).json({ error: e.message }); }
+    try {
+        res.json({
+            text: fs.readFileSync(file, 'utf-8'),
+            lang: file === english ? 'en' : lang,
+            requested: lang,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 function passportPath(prefix) {

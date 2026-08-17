@@ -28,6 +28,7 @@
             'ver.changelog': 'Что изменилось',
             'ver.title': 'prozetta {version}\nКоммит: {commit} ({branch}), {date}{dirty}\nНажмите, чтобы посмотреть список изменений',
             'ver.dirty': '\nВ рабочем каталоге есть правки, не зафиксированные в git — этот запуск не соответствует коммиту точно',
+            'ver.noTranslation': 'Для этого языка перевода истории изменений нет — показана английская версия.',
 
             'status.success': 'принято',
             'status.best_effort': 'лучшая попытка',
@@ -346,6 +347,7 @@
             'ver.changelog': 'What changed',
             'ver.title': 'prozetta {version}\nCommit: {commit} ({branch}), {date}{dirty}\nClick to see the list of changes',
             'ver.dirty': '\nThe working tree has changes not committed to git — this run matches no commit exactly',
+            'ver.noTranslation': 'There is no changelog translated into this language — showing the English one.',
 
             'status.success': 'approved',
             'status.best_effort': 'best effort',

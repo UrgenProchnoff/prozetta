@@ -204,8 +204,13 @@ async function renderChangelog() {
     setCrumbs(`${crumbHome()} / ${esc(t('ver.changelog'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
     try {
-        const { text } = await api('/api/changelog');
-        app.innerHTML = `<div class="changelog">${renderMarkdown(text)}</div>`;
+        // Switching the interface language re-runs the router, so the page
+        // follows it without needing to know that it did.
+        const { text, lang, requested } = await api(`/api/changelog?lang=${encodeURIComponent(i18n.getLang())}`);
+        const note = lang !== requested
+            ? `<div class="rv-bar">${esc(t('ver.noTranslation'))}</div>`
+            : '';
+        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text)}</div>`;
     } catch (e) {
         app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
     }
