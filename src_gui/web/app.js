@@ -246,11 +246,12 @@ async function renderGlossary(prefix) {
     setCrumbs(`${crumbHome()} / ${esc(prefix)} / ${esc(t('gloss.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
-    let terms, counts;
+    let terms, counts, findings;
     try {
         const data = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary`);
         terms = data.terms;
         counts = data.counts;
+        findings = data.findings || [];
     } catch (e) {
         app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
         return;
@@ -258,6 +259,12 @@ async function renderGlossary(prefix) {
 
     let dirty = false;
     let filter = '';
+    let onlyIssues = false;
+    // Findings are computed against the source text, so they are stale the
+    // moment a row is edited. Rather than recompute on every keystroke, the
+    // marker stays until the next load and the count in the toolbar says how
+    // many rows the last analysis flagged.
+    const issueCount = findings.filter(f => f && f.length).length;
 
     const knownTypes = [...new Set(['name', 'term', ...terms.map(t => t.type).filter(Boolean)])];
 
@@ -268,6 +275,7 @@ async function renderGlossary(prefix) {
             <button id="g-add">${esc(t('gloss.addTerm'))}</button>
             <span id="g-count" class="badge"></span>
             <span class="badge" title="${esc(t('gloss.junkHintTitle'))}">${esc(t('gloss.junkHint'))}</span>
+            ${issueCount ? `<label class="issues-toggle" title="${esc(t('gloss.issuesTitle'))}"><input type="checkbox" id="g-issues"> ${esc(t('gloss.issuesFilter', { n: issueCount }))}</label>` : ''}
             <span class="spacer"></span>
             <span id="g-dirty" class="dirty" hidden>${esc(t('gloss.unsaved'))}</span>
             <button id="g-save" class="primary">${esc(t('common.save'))}</button>
@@ -295,6 +303,7 @@ async function renderGlossary(prefix) {
     function renderRows() {
         const q = filter.toLowerCase();
         const rows = terms.map((t, idx) => ({ t, idx }))
+            .filter(({ idx }) => !onlyIssues || (findings[idx] && findings[idx].length))
             .filter(({ t }) => !q
                 || (t.original || '').toLowerCase().includes(q)
                 || (t.translation || '').toLowerCase().includes(q)
@@ -304,10 +313,14 @@ async function renderGlossary(prefix) {
 
         tbody.innerHTML = rows.map(({ t: term, idx }) => {
             const cnt = counts[idx];
+            const issues = findings[idx] || [];
+            const worst = issues.some(i => i.kind === 'genderConflict' || i.kind === 'absent') ? 'bad' : issues.length ? 'warn' : '';
+            const issueTitle = issues.map(i => '• ' + i.detail).join('\n');
             const typeOpts = knownTypes.map(k =>
                 `<option value="${esc(k)}" ${term.type === k ? 'selected' : ''}>${esc(k)}</option>`).join('');
-            return `<tr data-idx="${idx}">
-                <td><input data-f="original" value="${esc(term.original)}"></td>
+            return `<tr data-idx="${idx}" class="${worst ? 'has-issue issue-' + worst : ''}">
+                <td><input data-f="original" value="${esc(term.original)}">${issues.length
+                    ? `<span class="issue-flag" title="${esc(issueTitle)}">${issues.length > 1 ? issues.length : '!'}</span>` : ''}</td>
                 <td><input data-f="translation" value="${esc(term.translation)}"></td>
                 <td><select data-f="type">${typeOpts}</select></td>
                 <td><select data-f="gender">
@@ -322,6 +335,9 @@ async function renderGlossary(prefix) {
             </tr>`;
         }).join('');
     }
+
+    const issuesBox = document.getElementById('g-issues');
+    if (issuesBox) issuesBox.addEventListener('change', () => { onlyIssues = issuesBox.checked; renderRows(); });
 
     tbody.addEventListener('input', (e) => {
         const tr = e.target.closest('tr');

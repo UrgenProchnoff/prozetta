@@ -172,6 +172,8 @@
 
             'chunk.crumb': 'Чанк {n}',
             'chunk.heading': 'Чанк {i} / {total}',
+            'gloss.issuesFilter': 'только спорные ({n})',
+            'gloss.issuesTitle': 'Записи, к которым есть замечания по сверке с текстом: отсутствуют в книге, дубли по регистру, вложенные имена, противоречия по полу. Наведите на значок в строке, чтобы увидеть разбор.',
             'chunk.tokens': '{n} токенов',
             'chunk.disputedBadge': '⚑ спорный',
             'chunk.disputeExplain': 'Переводчик и проверщик не сошлись, цикл остановлен — решите вручную. Претензия проверщика: {reason}',
@@ -414,6 +416,8 @@
 
             'chunk.crumb': 'Chunk {n}',
             'chunk.heading': 'Chunk {i} / {total}',
+            'gloss.issuesFilter': 'flagged only ({n})',
+            'gloss.issuesTitle': 'Entries the source-text check has something to say about: absent from the book, case duplicates, names nested in other names, contradictory genders. Hover the marker in a row for the details.',
             'chunk.tokens': '{n} tokens',
             'chunk.disputedBadge': '⚑ disputed',
             'chunk.disputeExplain': 'The translator and the reviewer could not agree; the loop stopped — settle it manually. Reviewer\'s complaint: {reason}',

@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { jobManager } from './jobs.js';
 import { createRawClient, PROVIDER_CONFIG_KEY } from '../src_v4/core/llm_client.js';
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
+import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -364,6 +365,11 @@ app.get('/api/projects/:prefix/glossary', (req, res) => {
 
     // How many chunks mention each term — helps spotting junk entries
     let counts = [];
+    // Hygiene findings per row, from the same code the CLI report uses: entries
+    // absent from the text, case duplicates, names nested inside other names,
+    // contradictory genders. Editing these is a human's job — the point of
+    // showing them here is that the console report cannot be edited from.
+    let findings = [];
     if (fs.existsSync(statePath(prefix))) {
         const chunks = readJson(statePath(prefix)).chunks || [];
         const lower = chunks.map(c => (c.original || '').toLowerCase());
@@ -372,9 +378,16 @@ app.get('/api/projects/:prefix/glossary', (req, res) => {
             if (!needle) return 0;
             return lower.reduce((n, text) => n + (text.includes(needle) ? 1 : 0), 0);
         });
+        try {
+            const source = chunks.map(c => c.original || '').join('\n');
+            findings = glossaryFindings(terms, source);
+        } catch (e) {
+            // A glossary must stay editable even if the analysis chokes on it.
+            console.warn(`[GUI] Glossary analysis failed for ${prefix}: ${e.message}`);
+        }
     }
 
-    res.json({ terms, counts });
+    res.json({ terms, counts, findings });
 });
 
 app.put('/api/projects/:prefix/glossary', (req, res) => {

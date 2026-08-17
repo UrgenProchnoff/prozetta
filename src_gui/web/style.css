@@ -664,3 +664,29 @@ table.glossary .del { text-align: center; }
 .book-fields { flex: 1 1 280px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .book-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .book-fields input { width: 100%; }
+
+/* Glossary hygiene: rows the source-text check flagged. A marker rather than a
+   colour wash, because the table is for editing — the row must stay readable. */
+.glossary tr.has-issue td:first-child { position: relative; }
+.glossary tr.issue-warn td:first-child { box-shadow: inset 3px 0 0 var(--yellow); }
+.glossary tr.issue-bad td:first-child { box-shadow: inset 3px 0 0 var(--red); }
+.issue-flag {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 14px;
+    text-align: center;
+    cursor: help;
+}
+.glossary tr.issue-bad .issue-flag { color: var(--red); border-color: var(--red); }
+.glossary tr.issue-warn .issue-flag { color: var(--yellow); border-color: var(--yellow); }
+.issues-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); cursor: pointer; }

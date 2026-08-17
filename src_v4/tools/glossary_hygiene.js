@@ -22,6 +22,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { ProjectState } from '../core/state_manager.js';
 import { countOccurrences, genderFromPronouns } from '../core/text_stats.js';
 
@@ -73,13 +74,22 @@ export function analyzeGlossary(glossary, sourceText) {
         if (!e.original || !/\s/.test(e.original)) continue;
         for (const part of e.original.split(/\s+/)) {
             const inner = singles.get(part.toLowerCase());
-            if (inner && part.length > 2) nested.push({ outer: e, inner });
+            if (inner && part.length > 2) {
+                nested.push({ outer: e, inner, bothNames: e.term.type === 'name' && inner.term.type === 'name' });
+            }
         }
     }
 
-    // --- one person, contradictory genders (grouped by shared name part) ---
+    // --- one person, contradictory genders ---
+    // Names only. For a term, `gender` is the grammatical gender of its
+    // translation, and a compound legitimately differs from its head: measured
+    // on a real glossary, 23 of 25 "conflicts" were pairs like "GoMotion"
+    // (neuter) against "GoMotion ant virus" (masculine, because "вирус" is) —
+    // noise that buried the two real ones, "Ben Brie"=m against "Brie"=f.
+    const isName = e => e.term.type === 'name';
     const genderConflicts = [];
     for (const { outer, inner } of nested) {
+        if (!isName(outer) || !isName(inner)) continue;
         if (outer.gender && inner.gender && outer.gender !== inner.gender) {
             genderConflicts.push({ outer, inner });
         }
@@ -117,6 +127,52 @@ export function analyzeGlossary(glossary, sourceText) {
     };
 }
 
+/**
+ * The same findings, flattened to one entry per glossary row so a table can
+ * mark them. The GUI and the CLI report must agree, so both read this rather
+ * than each deciding for itself what counts as a problem.
+ *
+ * @returns {Array<Array<{kind: string, detail: string}>>} indexed like the glossary
+ */
+export function glossaryFindings(glossary, sourceText) {
+    const a = analyzeGlossary(glossary, sourceText);
+    const findings = glossary.map(() => []);
+    const push = (index, kind, detail) => {
+        if (index >= 0 && findings[index]) findings[index].push({ kind, detail });
+    };
+
+    for (const e of a.zeroOccurrence) push(e.index, 'absent', 'не встречается в тексте');
+    for (const e of a.untranslated) push(e.index, 'untranslated', 'перевод совпадает с оригиналом');
+    for (const e of a.tooShort) push(e.index, 'short', 'короче 4 символов — ловит лишнее');
+
+    for (const group of a.caseDuplicates) {
+        const forms = group.map(e => `"${e.original}"`).join(' = ');
+        for (const e of group) push(e.index, 'caseDuplicate', `различается только регистром: ${forms}`);
+    }
+    // Only name-in-name nesting is marked in the table. A term inside a compound
+    // term is ordinary vocabulary ("GoMotion" inside "GoMotion ant virus", 14
+    // times over) and flagging it drowns the rows that matter: on one glossary
+    // that was 111 of 154 pairs. Person names are different — "Smith" and
+    // "Sue Smith" as separate entries is how one character ends up with two
+    // translations and two genders.
+    for (const { outer, inner, bothNames } of a.nested) {
+        if (!bothNames) continue;
+        push(outer.index, 'nested', `включает имя "${inner.original}" (${inner.count}×)`);
+        push(inner.index, 'nested', `входит в "${outer.original}" (${outer.count}×)`);
+    }
+    for (const { outer, inner } of a.genderConflicts) {
+        push(outer.index, 'genderConflict', `пол ${outer.gender} против ${inner.gender} у "${inner.original}"`);
+        push(inner.index, 'genderConflict', `пол ${inner.gender} против ${outer.gender} у "${outer.original}"`);
+    }
+    for (const { entry, gender, masculine, feminine } of a.missingGender) {
+        push(entry.index, 'genderHint', `пол не указан, текст подсказывает ${gender} (муж ${masculine} / жен ${feminine})`);
+    }
+    for (const { entry, gender, masculine, feminine } of a.wrongGender) {
+        push(entry.index, 'genderMismatch', `указан ${entry.gender}, по тексту ${gender} (муж ${masculine} / жен ${feminine})`);
+    }
+    return findings;
+}
+
 function report(a, glossary) {
     const line = (label, value) => console.log(`  ${String(label).padEnd(46)} ${value}`);
     console.log(`\n=== Гигиена глоссария: ${glossary.length} записей ===\n`);
@@ -133,8 +189,11 @@ function report(a, glossary) {
         console.log(`      · ${g.map(e => `"${e.original}" (${e.count}×)`).join('  =  ')}`);
     }
 
-    line('составные, включающие другую запись', a.nested.length);
-    for (const { outer, inner } of a.nested.slice(0, 8)) {
+    const nestedNames = a.nested.filter(n => n.bothNames);
+    line('составные, включающие другую запись', `${a.nested.length}, из них имя в имени: ${nestedNames.length}`);
+    console.log('      (имя в имени — реальный риск: один персонаж двумя записями с разным переводом;');
+    console.log('       термин в составном термине обычно нормален и в интерфейсе не помечается)');
+    for (const { outer, inner } of nestedNames.slice(0, 8)) {
         console.log(`      · "${outer.original}" (${outer.count}×) ⊃ "${inner.original}" (${inner.count}×)`);
     }
 
@@ -250,4 +309,7 @@ function main() {
     console.log(`Резервная копия: ${path.basename(backupPath)}\n`);
 }
 
-main();
+// Run only when invoked directly: the GUI imports glossaryFindings from here.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    main();
+}
