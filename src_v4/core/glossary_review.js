@@ -205,24 +205,87 @@ export function verifyFindings(raw, glossary, bookText) {
 }
 
 /**
- * Findings flattened per glossary row, in the shape the editor already renders
- * for the deterministic hygiene checks.
+ * A stable name for a finding, so a person's decision about it survives.
  *
- * @returns {Array<Array<object>>} indexed like the glossary
+ * Deliberately made of what the finding is *about* rather than where it sat:
+ * "Hell should be deleted because it is junk" keeps the same name when the
+ * review is run again, so an entry judged fine once does not have to be
+ * defended every time. Two findings that agree on all three parts are near
+ * duplicates and are happy to share a fate.
  */
-export function reviewFindingsByRow(review, glossaryLength) {
-    const rows = Array.from({ length: glossaryLength }, () => []);
+export function findingKey(f) {
+    return [f.action, String(f.entry || f.fix?.original || ''), f.issue].join('|').toLowerCase();
+}
+
+/**
+ * The findings still worth showing, resolved against the glossary as it is now.
+ *
+ * Findings are matched to rows by the text of `original`, never by position.
+ * Position was tried first and is wrong in both directions: deleting one row
+ * shifted every finding below it onto the wrong entry, so the whole review had
+ * to be discarded on any deletion — which meant accepting one proposal threw
+ * away every proposal not yet looked at. And it still missed the case it existed
+ * to catch, since renaming an entry to a string of the same length left the
+ * indices intact and the findings pointing at something else.
+ *
+ * Matching by text needs no such guard, and it lets each finding answer for
+ * itself: one that has been acted on disappears because the glossary now says
+ * what it asked for, and one that has not stays until it is dealt with.
+ *
+ * @returns {{byRow: Array<Array<object>>, additions: Array, hidden: number}}
+ */
+export function outstandingFindings(review, glossary) {
+    const byRow = glossary.map(() => []);
+    const additions = [];
+    const dismissed = new Set((review?.dismissed || []).map(k => String(k).toLowerCase()));
+    let hidden = 0;
+
+    const byOriginal = new Map();
+    glossary.forEach((term, index) => {
+        const key = String(term.original || '').trim().toLowerCase();
+        if (key && !byOriginal.has(key)) byOriginal.set(key, { term, index });
+    });
+    const has = value => byOriginal.has(String(value || '').trim().toLowerCase());
+
     for (const f of review?.findings || []) {
-        if (f.index === null || f.index === undefined || !rows[f.index]) continue;
-        rows[f.index].push({
+        const key = findingKey(f);
+        if (dismissed.has(key)) { hidden++; continue; }
+
+        // A proposed entry that is now in the glossary was accepted.
+        if (f.action === 'add') {
+            const original = String(f.fix?.original || '').trim();
+            if (original && !has(original)) additions.push({ ...f, key });
+            continue;
+        }
+
+        // Gone from the glossary means dealt with — deleted outright, or renamed
+        // by someone who had the finding in front of them.
+        const target = byOriginal.get(String(f.entry || '').trim().toLowerCase());
+        if (!target) continue;
+
+        // A merge needs both halves; once one is gone there is nothing to merge.
+        if (f.action === 'merge' && !has(f.mergeInto)) continue;
+
+        let fix = f.fix;
+        if (f.action === 'edit') {
+            // Only the fields that still differ. Applying half a proposal and
+            // saving should leave the other half outstanding, not repeat the
+            // part already done.
+            fix = Object.fromEntries(Object.entries(f.fix || {}).filter(([field, value]) =>
+                String(target.term[field] || '').trim() !== String(value).trim()));
+            if (!Object.keys(fix).length) continue;
+        }
+
+        byRow[target.index].push({
             kind: 'model',
             detail: f.problem,
             action: f.action,
             issue: f.issue,
             quote: f.quote,
-            fix: f.fix,
+            fix,
             mergeInto: f.mergeInto,
+            key,
         });
     }
-    return rows;
+    return { byRow, additions, hidden };
 }

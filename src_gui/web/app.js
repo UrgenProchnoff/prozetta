@@ -388,7 +388,7 @@ async function renderGlossary(prefix) {
         if (m.action === 'edit' && m.fix) buttons.push(`<button data-apply="${idx}:${mi}">${esc(t('gloss.rvApply'))}</button>`);
         if (m.action === 'remove') buttons.push(`<button class="danger" data-del="${idx}">${esc(t('gloss.rvRemove'))}</button>`);
         if (m.action === 'merge') buttons.push(`<button data-find="${esc(m.mergeInto || '')}">${esc(t('gloss.rvFind'))}</button>`);
-        buttons.push(`<button data-dismiss="${idx}:${mi}" title="${esc(t('gloss.rvDismissTitle'))}">${esc(t('gloss.rvDismiss'))}</button>`);
+        buttons.push(`<button data-dismiss="${idx}:${mi}" data-key="${esc(m.key || '')}" title="${esc(t('gloss.rvDismissTitle'))}">${esc(t('gloss.rvDismiss'))}</button>`);
 
         return `<tr class="rv-row"><td colspan="7">
             <div class="rv-head"><span class="rv-action rv-${esc(m.action)}">${esc(t('gloss.rv_' + m.action))}</span>
@@ -407,27 +407,39 @@ async function renderGlossary(prefix) {
         if (!box) return;
         if (!review) { box.innerHTML = ''; return; }
 
-        if (review.stale) {
-            // Findings address rows by index. Once the glossary has been edited
-            // those indices mean something else, and showing them anyway would
-            // put the model's remark about one entry onto another.
-            box.innerHTML = `<div class="rv-bar rv-stale">${esc(t('gloss.rvStale'))}</div>`;
-            return;
-        }
-
         const when = review.generatedAt ? new Date(review.generatedAt).toLocaleString() : '';
-        const head = `<div class="rv-bar">${esc(t('gloss.rvBar', { n: review.total, model: review.model || '—', when }))}</div>`;
+        const hidden = review.hidden
+            ? ` ${esc(t('gloss.rvHidden', { n: review.hidden }))} <a href="#" id="rv-restore">${esc(t('gloss.rvRestore'))}</a>`
+            : '';
+        const head = `<div class="rv-bar">${esc(t('gloss.rvBar', {
+            n: review.outstanding, total: review.total, model: review.model || '—', when }))}${hidden}</div>`;
         const adds = (review.additions || []).map((a, i) => `
             <div class="rv-add">
                 <div class="rv-head"><span class="rv-action rv-add-tag">${esc(t('gloss.rv_add'))}</span>
                     <b>${esc(a.fix?.original || '')}</b> → ${esc(a.fix?.translation || '')} — ${esc(a.problem)}</div>
                 <div class="rv-quote">${esc(a.quote)}</div>
-                <div class="rv-acts"><button data-add="${i}">${esc(t('gloss.rvAdd'))}</button></div>
+                <div class="rv-acts"><button data-add="${i}">${esc(t('gloss.rvAdd'))}</button>
+                    <button data-dismiss-add="${i}" data-key="${esc(a.key || '')}" title="${esc(t('gloss.rvDismissTitle'))}">${esc(t('gloss.rvDismiss'))}</button></div>
             </div>`).join('');
         box.innerHTML = head + (adds ? `<div class="rv-adds">${adds}</div>` : '');
     }
 
-    document.getElementById('g-review').addEventListener('click', (e) => {
+    document.getElementById('g-review').addEventListener('click', async (e) => {
+        if (e.target.id === 'rv-restore') {
+            e.preventDefault();
+            await dismissFinding(null, true);
+            await reloadReview();
+            return;
+        }
+        const skip = e.target.dataset.dismissAdd;
+        if (skip !== undefined) {
+            dismissFinding(e.target.dataset.key || review.additions[+skip]?.key);
+            review.additions.splice(+skip, 1);
+            review.hidden = (review.hidden || 0) + 1;
+            renderReview();
+            return;
+        }
+
         const i = e.target.dataset.add;
         if (i === undefined) return;
         const a = review.additions[+i];
@@ -443,6 +455,31 @@ async function renderGlossary(prefix) {
         renderReview();
         renderRows();
     });
+
+    // Dismissal is a decision about the finding, not about the glossary, so it
+    // is written straight away rather than waiting for Save — there is nothing
+    // in the glossary for Save to write.
+    async function dismissFinding(key, restoreAll = false) {
+        try {
+            await api(`/api/projects/${encodeURIComponent(prefix)}/glossary-review/dismiss`,
+                { method: 'POST', body: restoreAll ? { restoreAll: true } : { key } });
+        } catch (err) {
+            toast(t('gloss.rvDismissError', { msg: err.message }), 'error');
+        }
+    }
+
+    // Re-read what the server now considers outstanding. Used after restoring
+    // dismissals, where the answer cannot be worked out locally.
+    async function reloadReview() {
+        try {
+            const fresh = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary`);
+            findings.length = 0; findings.push(...(fresh.findings || []));
+            review = fresh.review || null;
+            renderFilter();
+            renderReview();
+            renderRows();
+        } catch { /* leave the screen as it is rather than blanking it */ }
+    }
 
     const issuesBox = document.getElementById('g-issues');
     if (issuesBox) issuesBox.addEventListener('change', () => { rowFilter = issuesBox.value; renderRows(); });
@@ -491,7 +528,10 @@ async function renderGlossary(prefix) {
             const m = (findings[idx] || []).filter(isModel)[mi];
             if (!m) return;
             findings[idx] = findings[idx].filter(x => x !== m);
+            if (review) review.hidden = (review.hidden || 0) + 1;
+            dismissFinding(e.target.dataset.key || m.key);
             renderFilter();
+            renderReview();
             renderRows();
             return;
         }

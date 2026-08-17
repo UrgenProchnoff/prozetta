@@ -6,7 +6,7 @@ import { jobManager } from './jobs.js';
 import { createRawClient, PROVIDER_CONFIG_KEY } from '../src_v4/core/llm_client.js';
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
-import { reviewFindingsByRow } from '../src_v4/core/glossary_review.js';
+import { outstandingFindings } from '../src_v4/core/glossary_review.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -469,28 +469,59 @@ app.get('/api/projects/:prefix/glossary', (req, res) => {
     // index, so an edited glossary makes them stale — the fingerprint says when.
     let reviewMeta = null;
     if (review) {
-        const fingerprint = terms.map(t => String(t.original || '')).join(' ').length + ':' + terms.length;
-        const stale = fingerprint !== review.glossaryFingerprint;
-        if (!stale && findings.length === terms.length) {
-            const byRow = reviewFindingsByRow(review, terms.length);
-            byRow.forEach((list, i) => findings[i].push(...list));
-        }
+        // Resolved against the glossary as it stands, not as it stood: a finding
+        // that has been acted on drops out by itself, so editing one entry never
+        // costs the review of the others.
+        const { byRow, additions, hidden } = outstandingFindings(review, terms);
+        if (findings.length === terms.length) byRow.forEach((list, i) => findings[i].push(...list));
+        const outstanding = byRow.reduce((n, list) => n + list.length, 0) + additions.length;
+
         // Built field by field on purpose. The review file also holds the
         // findings that failed verification, and spreading the object would put
         // them one careless render away from looking like the rest.
         reviewMeta = {
             generatedAt: review.generatedAt,
             model: review.model,
-            stale,
             total: (review.findings || []).length,
+            outstanding,
+            hidden,
             // Proposals that belong to no row: terms the book uses and the
             // glossary lacks. They have nowhere to be marked, so they travel
             // separately and the editor lists them on their own.
-            additions: stale ? [] : (review.findings || []).filter(f => f.action === 'add'),
+            additions,
         };
     }
 
     res.json({ terms, counts, findings, review: reviewMeta });
+});
+
+// Dismiss a model finding, or bring the dismissed ones back.
+//
+// A finding now outlives a save, which is the point — but it means one a person
+// has judged wrong would return on every load forever. The decision is recorded
+// against what the finding says (see findingKey), not where it sat, so it also
+// survives the review being run again.
+app.post('/api/projects/:prefix/glossary-review/dismiss', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    const rp = reviewPath(prefix);
+    if (!fs.existsSync(rp)) return res.status(404).json({ error: 'No glossary review for this project' });
+
+    const { key, restoreAll } = req.body || {};
+    let review;
+    try { review = readJson(rp); }
+    catch (e) { return res.status(500).json({ error: `Could not read the review: ${e.message}` }); }
+
+    const dismissed = new Set((review.dismissed || []).map(k => String(k).toLowerCase()));
+    if (restoreAll) {
+        dismissed.clear();
+    } else {
+        if (typeof key !== 'string' || !key.trim()) return res.status(400).json({ error: 'key is required' });
+        dismissed.add(key.trim().toLowerCase());
+    }
+    review.dismissed = [...dismissed];
+    writeJsonAtomic(rp, review);
+    res.json({ ok: true, dismissed: review.dismissed.length });
 });
 
 app.put('/api/projects/:prefix/glossary', (req, res) => {

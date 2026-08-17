@@ -706,7 +706,7 @@ table.glossary .del { text-align: center; }
     color: var(--muted);
     font-size: 12px;
 }
-.rv-bar.rv-stale { border-color: var(--yellow); color: var(--text); }
+.rv-bar a { color: var(--blue); }
 .rv-adds { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
 .rv-add {
     padding: 8px 12px;
