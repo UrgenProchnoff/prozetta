@@ -111,9 +111,15 @@ header {
 
 main { padding: 20px; max-width: 1400px; margin: 0 auto; width: 100%; flex: 1; }
 
+/* A flex row rather than centred text: the links hold different things — an SVG
+   and 12.5px text in one, 12px monospace in the other — and as inline boxes they
+   sat on their own baselines, which put them at visibly different heights. */
 footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
     padding: 14px 20px;
-    text-align: center;
     border-top: 1px solid var(--border);
     background: var(--panel);
 }
@@ -124,13 +130,13 @@ footer a {
     color: var(--muted);
     text-decoration: none;
     font-size: 12.5px;
+    line-height: 1;
 }
 footer a:hover { color: var(--accent); }
 /* Version next to the GitHub link, so "which build is this" is answerable from
    any page without hunting for an About box. Monospace because the eye compares
    it to a commit hash somewhere else. */
 .version-link {
-    margin-left: 18px;
     font-family: ui-monospace, monospace;
     font-size: 12px !important;
 }

@@ -1426,7 +1426,7 @@ async function renderPassport(prefix) {
                     <option value="m" ${c.gender === 'm' ? 'selected' : ''}>${esc(t('gloss.genderM'))}</option>
                     <option value="f" ${c.gender === 'f' ? 'selected' : ''}>${esc(t('gloss.genderF'))}</option>
                 </select></td>
-                <td><textarea data-cf="dossier" rows="2">${esc(c.dossier || '')}</textarea></td>
+                <td><div class="grow" data-val="${esc(c.dossier || '')}"><textarea data-cf="dossier" rows="1">${esc(c.dossier || '')}</textarea></div></td>
             </tr>`).join('')}</tbody>
         </table>
 
@@ -1453,6 +1453,8 @@ async function renderPassport(prefix) {
         const tr = e.target.closest('tr[data-ci]');
         if (tr && e.target.dataset.cf) {
             const c = p.characters[+tr.dataset.ci];
+            // Hand the text to the hidden copy that gives the row its height.
+            if (e.target.dataset.cf === 'dossier') e.target.parentElement.dataset.val = e.target.value;
             c[e.target.dataset.cf] = e.target.dataset.cf === 'gender' && e.target.value === '' ? null : e.target.value;
             markDirty();
         }
