@@ -137,7 +137,6 @@ export function analyzeGlossary(glossary, sourceText) {
         entries,
         zeroOccurrence: entries.filter(e => e.count === 0),
         untranslated: entries.filter(e => e.original && String(e.term.translation || '').trim() === e.original),
-        tooShort: entries.filter(e => e.original.length > 0 && e.original.length <= 3),
         caseDuplicates,
         nested,
         inconsistentNested,
@@ -163,7 +162,13 @@ export function glossaryFindings(glossary, sourceText) {
 
     for (const e of a.zeroOccurrence) push(e.index, 'absent', 'не встречается в тексте');
     for (const e of a.untranslated) push(e.index, 'untranslated', 'перевод совпадает с оригиналом');
-    for (const e of a.tooShort) push(e.index, 'short', 'короче 4 символов — ловит лишнее');
+    // Length is NOT marked. It was, back when the cheat sheet matched by
+    // substring and a short entry really did catch everything ("AR" fired on
+    // 3543 fragments, "M" on 10577). Matching by word boundary settled that:
+    // measured across five glossaries, 104 entries of three characters or less
+    // now hit only their own word, and the list is mostly the cast — Bob 44×,
+    // Ida 66×, Tom 115×, Ben 71×, Zee 89×. Flagging the main characters of the
+    // book as suspicious buries the findings that mean something.
 
     for (const group of a.caseDuplicates) {
         const forms = group.map(e => `"${e.original}"`).join(' = ');
@@ -201,7 +206,6 @@ function report(a, glossary) {
     line('перевод совпадает с оригиналом', a.untranslated.length);
     for (const e of a.untranslated.slice(0, 8)) console.log(`      · ${e.original}`);
 
-    line('короче 4 символов (шум при поиске)', a.tooShort.length);
     line('различаются только регистром', a.caseDuplicates.length);
     for (const g of a.caseDuplicates.slice(0, 8)) {
         console.log(`      · ${g.map(e => `"${e.original}" (${e.count}×)`).join('  =  ')}`);
