@@ -72,13 +72,20 @@ export function glossaryEvidence(glossary, bookText) {
  *
  * A finding survives only if it names an entry that exists, carries a quote that
  * is actually in the book, and proposes something that differs from what is
- * already there. Anything else is dropped and counted — a partly invented answer
- * degrades to fewer findings rather than to wrong ones.
+ * already there. Anything else is dropped — a partly invented answer degrades to
+ * fewer findings rather than to wrong ones.
+ *
+ * Dropped findings are kept, with the check they failed, rather than merely
+ * counted. Whether a model that misquotes is wrong about everything else, or
+ * merely sloppy about attribution, is a question only accumulated runs can
+ * answer, and the counts alone cannot be re-read later. They are returned
+ * separately from the verified ones and travel in their own field, so nothing
+ * unverified can reach the editor by accident.
  *
  * @param {Array} raw            the model's findings, as parsed
  * @param {Array} glossary       the glossary they refer to
  * @param {string} bookText      the joined source text
- * @returns {{findings: Array, rejected: object}}
+ * @returns {{findings: Array, rejected: object, rejectedFindings: Array}}
  */
 export function verifyFindings(raw, glossary, bookText) {
     const rejected = {
@@ -89,7 +96,24 @@ export function verifyFindings(raw, glossary, bookText) {
         unknownTarget: 0,    // merge into an entry that does not exist
         emptyFix: 0,         // nothing actually changes
     };
-    if (!Array.isArray(raw)) return { findings: [], rejected };
+    const rejectedFindings = [];
+    // Kept verbatim except for length: what the model actually wrote is the
+    // evidence, so trimming it to a normalized shape would defeat the purpose.
+    const drop = (reason, item) => {
+        rejected[reason]++;
+        rejectedFindings.push({
+            reason,
+            action: String(item?.action || '').slice(0, 20),
+            entry: String(item?.entry || '').slice(0, 120),
+            issue: String(item?.issue || '').slice(0, 40),
+            problem: String(item?.problem || '').slice(0, 300),
+            quote: String(item?.quote || '').slice(0, 600),
+            fix: item?.fix && typeof item.fix === 'object' ? item.fix : undefined,
+            mergeInto: item?.mergeInto ? String(item.mergeInto).slice(0, 120) : undefined,
+        });
+    };
+
+    if (!Array.isArray(raw)) return { findings: [], rejected, rejectedFindings };
 
     const byOriginal = new Map();
     glossary.forEach((term, index) => {
@@ -99,18 +123,18 @@ export function verifyFindings(raw, glossary, bookText) {
 
     const findings = [];
     for (const item of raw) {
-        if (!item || typeof item !== 'object') { rejected.malformed++; continue; }
+        if (!item || typeof item !== 'object') { drop('malformed', item); continue; }
 
         const action = String(item.action || 'edit').trim().toLowerCase();
-        if (!ACTIONS.has(action)) { rejected.malformed++; continue; }
+        if (!ACTIONS.has(action)) { drop('malformed', item); continue; }
 
         const entryKey = String(item.entry || '').trim().toLowerCase();
         const target = entryKey ? byOriginal.get(entryKey) : null;
-        if (action !== 'add' && !target) { rejected.unknownEntry++; continue; }
+        if (action !== 'add' && !target) { drop('unknownEntry', item); continue; }
 
         // The quote is the whole point of the contract, so it is checked before
         // anything else is considered.
-        if (locateQuote(bookText, item.quote).occurrences === 0) { rejected.badQuote++; continue; }
+        if (locateQuote(bookText, item.quote).occurrences === 0) { drop('badQuote', item); continue; }
 
         const finding = {
             action,
@@ -124,7 +148,7 @@ export function verifyFindings(raw, glossary, bookText) {
         if (action === 'merge') {
             const intoKey = String(item.mergeInto || '').trim().toLowerCase();
             const into = byOriginal.get(intoKey);
-            if (!into || into.index === target.index) { rejected.unknownTarget++; continue; }
+            if (!into || into.index === target.index) { drop('unknownTarget', item); continue; }
             finding.mergeInto = into.term.original;
             findings.push(finding);
             continue;
@@ -144,15 +168,15 @@ export function verifyFindings(raw, glossary, bookText) {
             // A surface form the book never uses would sit in the glossary
             // firing on nothing — which is the defect the hygiene pass exists to
             // remove, not one to introduce.
-            if (!wholeWordRegex(newOriginal, 'giu').test(bookText)) { rejected.absentOriginal++; continue; }
+            if (!wholeWordRegex(newOriginal, 'giu').test(bookText)) { drop('absentOriginal', item); continue; }
             fix.original = newOriginal;
         } else if (action === 'add') {
-            rejected.malformed++; continue;
+            drop('malformed', item); continue;
         }
 
         const translation = String(proposed.translation || '').trim();
         if (translation) fix.translation = translation;
-        else if (action === 'add') { rejected.malformed++; continue; }
+        else if (action === 'add') { drop('malformed', item); continue; }
 
         const gender = normalizeGender(proposed.gender);
         if (gender) fix.gender = gender;
@@ -167,17 +191,17 @@ export function verifyFindings(raw, glossary, bookText) {
             const current = target.term;
             const changes = Object.entries(fix).filter(([field, value]) =>
                 String(current[field] || '').trim() !== String(value).trim());
-            if (!changes.length) { rejected.emptyFix++; continue; }
+            if (!changes.length) { drop('emptyFix', item); continue; }
             finding.fix = Object.fromEntries(changes);
         } else {
-            if (byOriginal.has(fix.original.toLowerCase())) { rejected.emptyFix++; continue; }
+            if (byOriginal.has(fix.original.toLowerCase())) { drop('emptyFix', item); continue; }
             finding.fix = fix;
         }
 
         findings.push(finding);
     }
 
-    return { findings, rejected };
+    return { findings, rejected, rejectedFindings };
 }
 
 /**

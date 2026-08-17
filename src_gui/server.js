@@ -475,6 +475,9 @@ app.get('/api/projects/:prefix/glossary', (req, res) => {
             const byRow = reviewFindingsByRow(review, terms.length);
             byRow.forEach((list, i) => findings[i].push(...list));
         }
+        // Built field by field on purpose. The review file also holds the
+        // findings that failed verification, and spreading the object would put
+        // them one careless render away from looking like the rest.
         reviewMeta = {
             generatedAt: review.generatedAt,
             model: review.model,
