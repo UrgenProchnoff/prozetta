@@ -52,6 +52,19 @@ export function detectScript(text) {
     return { script, counts, share: best / total };
 }
 
+// Word-boundary matching that works outside ASCII. JavaScript's \b is defined
+// over [A-Za-z0-9_], so /\bя\b/ never matches Cyrillic and /\bлюбой\b/ never
+// fires — the Russian tables below silently counted zero pronouns until this
+// replaced them. Pronoun sets are therefore written as word lists and compiled
+// here, so the boundary bug cannot be reintroduced one regex at a time.
+const WORD_EDGE = '[\\p{L}\\p{N}]';
+function words(list) {
+    const alternatives = list.split(/\s+/).filter(Boolean)
+        .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .sort((a, b) => b.length - a.length);       // longest first: «они» before «он»
+    return new RegExp(`(?<!${WORD_EDGE})(?:${alternatives.join('|')})(?!${WORD_EDGE})`, 'giu');
+}
+
 // Latin- and Cyrillic-script prose: spaced, cased, pronoun-heavy.
 const EUROPEAN = {
     spaced: true,
@@ -71,22 +84,22 @@ const PROFILES = {
         ...EUROPEAN,
         id: 'latin',
         person: {
-            first: /\b(i|me|my|mine|myself)\b/g,
-            second: /\b(you|your|yours|yourself)\b/g,
-            third: /\b(he|she|him|her|his|hers|himself|herself)\b/g,
+            first: words('i me my mine myself'),
+            second: words('you your yours yourself'),
+            third: words('he she him her his hers himself herself'),
         },
-        gender: { masculine: /\b(he|him|his)\b/gi, feminine: /\b(she|her|hers)\b/gi },
+        gender: { masculine: words('he him his'), feminine: words('she her hers') },
     },
 
     cyrillic: {
         ...EUROPEAN,
         id: 'cyrillic',
         person: {
-            first: /\b(я|меня|мне|мной|мой|моя|моё|мои)\b/giu,
-            second: /\b(ты|тебя|тебе|тобой|твой|твоя|твоё|вы|вас|вам|вами|ваш|ваша)\b/giu,
-            third: /\b(он|она|его|её|ему|ей|им|им|нём|ней)\b/giu,
+            first: words('я меня мне мной мой моя моё мои'),
+            second: words('ты тебя тебе тобой твой твоя твоё вы вас вам вами ваш ваша'),
+            third: words('он она его её ему ей им им нём ней'),
         },
-        gender: { masculine: /\b(он|его|ему|им|нём)\b/giu, feminine: /\b(она|её|ей|ею|ней)\b/giu },
+        gender: { masculine: words('он его ему им нём'), feminine: words('она её ей ею ней') },
     },
 
     // Chinese. Written Chinese has distinguished 他/她 since the 1920s, so gender
@@ -165,14 +178,192 @@ const UNSUPPORTED = {
     supports: { narrativePerson: false, gender: false, vocative: false },
 };
 
+/**
+ * Function words, ~14 per language, for identifying which language a text is in.
+ *
+ * Script is not enough. Polish, German and English are all Latin, so keying the
+ * tables by script hands Polish the English pronouns — and the English
+ * first-person pattern \b(i|me|my|...)\b then matches the Polish conjunction
+ * "i" ("and"). Measured on a Polish novel: 136 "first person" hits, 123 of them
+ * the word "and", and the pipeline reported "first person, 100%" for a text
+ * written in the third. That is the failure this exists to prevent: a confident
+ * wrong number is worse than an admitted blank.
+ *
+ * Measured on the corpus at hand (English, Polish and Russian books): 5 of 5
+ * identified, the runner-up trailing by 12–20 percentage points.
+ */
+
+const FUNCTION_WORDS = {
+    en: 'the of and to in that is was it for he his with as on but',
+    ru: 'и в не на что он с как это по её его она они был',
+    pl: 'i w nie na że się do jest z o jak tego ale był',
+    uk: 'і в не на що він з як це по але його вона було',
+    de: 'der die und den das ist nicht mit von zu sich auf dem ein',
+    fr: 'les des est que dans pour qui une pas sur avec par il',
+    es: 'que los del las por con una para más como pero sus',
+    it: 'che non per una con del sono come nel alla dei suo',
+    pt: 'que não uma dos com para como mais pelo seu era',
+    tr: 'bir bu ile için daha çok olarak ama gibi kadar sonra',
+};
+
+const FUNCTION_WORD_SETS = Object.fromEntries(
+    Object.entries(FUNCTION_WORDS).map(([lang, words]) => [lang, new Set(words.split(/\s+/))])
+);
+
+/**
+ * Which language a text is written in, by function-word frequency.
+ *
+ * @returns {{lang: string|null, share: number, margin: number}}
+ *   `margin` is how far the winner leads the runner-up, as a share of all words.
+ *   A thin margin means the guess is not to be trusted — the caller drops to the
+ *   script profile, or to no profile at all.
+ */
+export function detectLanguage(text) {
+    const words = String(text || '').toLowerCase().match(/[\p{L}]+/gu);
+    if (!words || words.length < 50) return { lang: null, share: 0, margin: 0 };
+
+    const sample = words.slice(0, 20000);
+    const scores = Object.fromEntries(Object.keys(FUNCTION_WORD_SETS).map(l => [l, 0]));
+    for (const word of sample) {
+        for (const [lang, set] of Object.entries(FUNCTION_WORD_SETS)) {
+            if (set.has(word)) scores[lang]++;
+        }
+    }
+
+    const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    const share = ranked[0][1] / sample.length;
+    const margin = (ranked[0][1] - ranked[1][1]) / sample.length;
+
+    // The absolute share is what separates a real match from a near miss, not
+    // the margin. Measured: texts in a language this table knows spend 14–21% of
+    // their words on its function words, while Dutch — which has none of its own
+    // here — matched English on 6.8% and led by that same 6.8% simply because
+    // nothing else matched at all. A high margin over an empty field means
+    // nothing; the floor is what rejects a language we do not actually know.
+    if (share < 0.10 || margin < 0.03) return { lang: null, share, margin };
+    return { lang: ranked[0][0], share, margin };
+}
+
+// Languages that share a script but not their grammar. Only what actually
+// differs from the script profile is listed; the rest is inherited.
+const LANGUAGE_PROFILES = {
+    en: {},   // the Latin profile was written for English
+    ru: {},   // likewise the Cyrillic one
+    pl: {
+        person: {
+            first: words('ja mnie mi mną mój moja moje moim my nas nam nami'),
+            second: words('ty ciebie cię ci tobą twój twoja twoje wy was wam wami'),
+            third: words('on ona ono jego jej go mu jemu nim nią oni one ich im nimi'),
+        },
+        gender: {
+            masculine: words('on jego go mu jemu nim'),
+            feminine: words('ona jej ją nią niej'),
+        },
+        // Polish marks address with the vocative case (Everett → Everetcie),
+        // not with the comma-plus-capital shape the Latin profile looks for.
+        vocative: null,
+        supports: { narrativePerson: true, gender: true, vocative: false },
+    },
+    uk: {
+        person: {
+            first: words('я мене мені мною мій моя моє ми нас нам нами'),
+            second: words('ти тебе тобі тобою твій твоя ви вас вам вами'),
+            third: words('він вона воно його її йому їй ним нею вони їх їм'),
+        },
+        gender: { masculine: words('він його йому ним'), feminine: words('вона її їй нею') },
+        vocative: null,
+        supports: { narrativePerson: true, gender: true, vocative: false },
+    },
+    de: {
+        person: {
+            first: words('ich mich mir mein meine meinen wir uns unser'),
+            second: words('du dich dir dein deine ihr euch euer sie ihnen'),
+            third: words('er ihn ihm sein seine sie ihr ihre es'),
+        },
+        gender: { masculine: words('er ihn ihm sein seine seinen'), feminine: words('sie ihr ihre ihren') },
+        quotePairs: [['„', '“'], ['»', '«'], ['“', '”'], ['"', '"']],
+    },
+    fr: {
+        person: {
+            first: words("je j' me moi mon ma mes nous notre nos"),
+            second: words('tu te toi ton ta tes vous votre vos'),
+            third: words('il elle lui le la son sa ses ils elles leur'),
+        },
+        gender: { masculine: words('il lui son'), feminine: words('elle sa') },
+        quotePairs: [['«', '»'], ['“', '”'], ['"', '"']],
+    },
+    es: {
+        person: {
+            first: words('yo me mí mi mis nosotros nos nuestro nuestra'),
+            second: words('tú te ti tu tus usted ustedes vosotros os vuestro'),
+            third: words('él ella le lo la su sus ellos ellas les'),
+        },
+        gender: { masculine: words('él lo suyo'), feminine: words('ella la suya') },
+        quotePairs: [['«', '»'], ['“', '”'], ['"', '"']],
+    },
+    it: {
+        person: {
+            first: words('io me mi mio mia miei noi ci nostro nostra'),
+            second: words('tu te ti tuo tua tuoi voi vi vostro vostra'),
+            third: words('lui lei lo la gli le suo sua loro essi'),
+        },
+        gender: { masculine: words('lui suo egli'), feminine: words('lei sua ella') },
+        quotePairs: [['«', '»'], ['“', '”'], ['"', '"']],
+    },
+    pt: {
+        person: {
+            first: words('eu me mim meu minha meus nós nos nosso nossa'),
+            second: words('tu te ti teu tua você vocês vos vosso'),
+            third: words('ele ela lhe o a seu sua eles elas lhes'),
+        },
+        gender: { masculine: words('ele dele seu'), feminine: words('ela dela sua') },
+        quotePairs: [['«', '»'], ['“', '”'], ['"', '"']],
+    },
+    // Turkish marks person with suffixes rather than free pronouns, so counting
+    // pronouns understates it badly. Left unsupported rather than guessed at.
+    tr: { person: null, gender: null, supports: { narrativePerson: false, gender: false, vocative: false } },
+};
+
 export function profileForScript(script) {
     return PROFILES[script] || UNSUPPORTED;
 }
 
-/** Profile inferred from the text itself. */
+/**
+ * Profile inferred from the text: language first, script as the fallback.
+ *
+ * A language profile only overrides what it declares, so a Latin-script language
+ * with no entry of its own still gets Latin quote marks and sentence ends — but
+ * an unidentified language gets no pronoun tables at all rather than English
+ * ones.
+ */
 export function profileForText(text) {
     const { script, share } = detectScript(text);
-    return { ...profileForScript(script), script, scriptShare: share };
+    const { lang, margin } = detectLanguage(text);
+    const base = profileForScript(script);
+
+    if (!lang) {
+        // Unknown language on a spaced, cased script: the script tables are
+        // English or Russian guesses, so refuse rather than mislead. Unspaced
+        // scripts (Han, kana, Hangul) map to one language closely enough that
+        // the script profile stands.
+        const risky = base.id === 'latin' || base.id === 'cyrillic';
+        const profile = risky
+            ? { ...base, person: null, gender: null, supports: { ...base.supports, narrativePerson: false, gender: false } }
+            : base;
+        return { ...profile, script, scriptShare: share, lang: null, langMargin: margin };
+    }
+
+    const override = LANGUAGE_PROFILES[lang] || {};
+    return {
+        ...base,
+        ...override,
+        supports: { ...base.supports, ...(override.supports || {}) },
+        id: lang,
+        script,
+        scriptShare: share,
+        lang,
+        langMargin: margin,
+    };
 }
 
 /** Regex matching quoted speech for a profile, across all its quote styles. */
