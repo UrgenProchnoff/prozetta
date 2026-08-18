@@ -14,9 +14,11 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-18**
 
-- `683c5b3` — The changelog became a list of commits in the order of the work, and
-  `npm run changelog` checks that every commit has a line, every link resolves,
-  and the order holds.
+- `ce3253f` — One direction for the whole file: newest first, in the sections and in
+  the entries inside them.
+- `683c5b3` — The changelog became a list of commits, one line each, and `npm run
+  changelog` checks that every commit has a line, every link resolves, and the
+  order holds.
 - `7ca87e0` — Every changelog entry is tied to its commit, and the fingerprint
   became a link.
 - `16ec5f1` — Both roles — main and large model — are asked the same way: a card
