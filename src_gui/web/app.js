@@ -1635,6 +1635,18 @@ async function renderSettings() {
     const groups = data.groups;
     const fieldId = (g, k) => `cfg__${g}__${k}`;
 
+    // Wording for a field, most specific first: a group may override the shared
+    // text where the same key means something different in its context.
+    // Returns '' when nothing is written, so callers can leave the row bare
+    // rather than print a raw key at the reader.
+    const tr = (prefix, groupId, key) => {
+        for (const candidate of [`${prefix}${groupId}.${key}`, `${prefix}${key}`]) {
+            const value = t(candidate);
+            if (value !== candidate) return value;
+        }
+        return '';
+    };
+
     function fieldHtml(groupId, f) {
         const id = fieldId(groupId, f.key);
         const hintKey = 'cfg.hint.' + f.key;
@@ -1671,9 +1683,19 @@ async function renderSettings() {
         // the field itself rather than leaving an empty box to be guessed at.
         const inherit = groupId === 'book_model' && (f.key === 'baseUrl' || f.key === 'apiKey')
             ? '<span class="cfg-hint cfg-inherit-note"></span>' : '';
+        // A field is named in the reader's language and explained in a sentence.
+        // The config key stays visible, small: it is what support requests are
+        // written in ("set consolidationBatchSize to 20"), and it is the only
+        // name the file on disk knows.
+        const name = tr('cfg.label.', groupId, f.key) || f.key;
+        const desc = tr('cfg.desc.', groupId, f.key);
         return `<div class="cfg-field">
-            <label for="${id}">${esc(f.key)}${ovr}</label>
+            <label for="${id}">
+                <span class="cfg-name">${esc(name)}</span>
+                <span class="cfg-key">${esc(f.key)}</span>${ovr}
+            </label>
             <div class="cfg-input">${input}${inherit}</div>
+            ${desc ? `<div class="cfg-desc">${esc(desc)}</div>` : ''}
         </div>`;
     }
 
@@ -1725,8 +1747,10 @@ async function renderSettings() {
         const classes = ['card', 'cfg-group'];
         if (provider && provider === activeProvider) classes.push('cfg-active');
         if (provider && provider === bookProvider) classes.push('cfg-uses-book');
+        const groupDesc = t('cfg.groupdesc.' + g.id);
         return `<div class="${classes.join(' ')}" ${provider ? `data-provider="${esc(provider)}"` : ''} data-group="${esc(g.id)}">
             <div class="title">${esc(t('cfg.group.' + g.id))} <span class="cfg-gid">${esc(g.id)}</span>${badges}${testArea}</div>
+            ${groupDesc.startsWith('cfg.') ? '' : `<div class="cfg-groupdesc">${esc(groupDesc)}</div>`}
             ${g.fields.map(f => fieldHtml(g.id, f)).join('')}
             ${modelsPickerHtml(g)}
         </div>`;

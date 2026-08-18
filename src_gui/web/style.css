@@ -69,7 +69,7 @@ header {
 .cfg-test-result.err { color: var(--red); }
 .cfg-field {
     display: grid;
-    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-columns: 230px minmax(0, 1fr);
     gap: 10px;
     align-items: center;
     padding: 5px 0;
@@ -78,11 +78,39 @@ header {
 .cfg-field label {
     color: var(--text);
     font-size: 12.5px;
-    font-family: ui-monospace, monospace;
     display: flex;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
     overflow-wrap: anywhere;
+}
+.cfg-field { align-items: start; }
+.cfg-name { font-size: 13px; line-height: 1.3; }
+/* The config key stays on screen, quietly. It is the name the file on disk and
+   every support answer use, so hiding it would cost more than it saves — but it
+   is no longer what the reader has to decipher first. */
+.cfg-key {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    opacity: 0.75;
+}
+/* Under the input rather than under the label: the eye lands on the control,
+   and the sentence explaining it should be the next thing it meets. */
+.cfg-desc {
+    grid-column: 2;
+    margin: 2px 0 2px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+    max-width: 70ch;
+}
+.cfg-groupdesc {
+    margin: -4px 0 10px;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.45;
+    max-width: 78ch;
 }
 .cfg-input { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .cfg-input input[type="text"],
