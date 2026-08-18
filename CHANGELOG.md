@@ -1,10 +1,13 @@
 # Changelog
 
-Notable changes to prozetta. Newest release on top; inside a release, in the
-order the work happened.
+Notable changes to prozetta.
 
-Every line begins with the fingerprint of the commit that made it. In the
-interface it is a link; in a terminal, `git show 5bba425`.
+Release sections run newest to oldest. Inside a section the changes stand in the
+order the work happened, so the newest is at the bottom of its section.
+
+Entries written from this wave onward open with the fingerprint of their commit:
+a link in the interface, an argument to `git show 5bba425` in a terminal. The
+1.0.0 section predates the practice and carries none.
 
 ## Unreleased — quality wave
 
