@@ -121,7 +121,9 @@ consistent about who is speaking, who they are, and what they are called.
   highlighting.
 - `7ca87e0` — Every changelog entry is tied to its commit, and the fingerprint
   became a link.
-
+- `683c5b3` — The changelog became a list of commits in the order of the work, and
+  `npm run changelog` checks that every commit has a line, every link resolves,
+  and the order holds.
 
 ## 1.0.0 — 2026-07-24
 
