@@ -1756,7 +1756,7 @@ async function renderSettings() {
         // book profile can override the model and the address.
         const testArea = (provider || isBook) ? `
             <span class="cfg-test-area">
-                <button class="btn cfg-test" data-group="${esc(g.id)}" ${provider ? `data-provider="${esc(provider)}"` : ''}>${esc(t('settings.test'))}</button>
+                <button class="btn cfg-test" data-testid="${esc(g.id)}" data-group="${esc(g.id)}" ${provider ? `data-provider="${esc(provider)}"` : ''}>${esc(t('settings.test'))}</button>
                 <span class="cfg-test-result" data-for="${esc(g.id)}"></span>
             </span>` : '';
         // Both badges live in every provider card; CSS shows each only on the
@@ -1769,16 +1769,8 @@ async function renderSettings() {
         if (provider && provider === activeProvider) classes.push('cfg-active');
         if (provider && provider === bookProvider) classes.push('cfg-uses-book');
         const groupDesc = t('cfg.groupdesc.' + g.id);
-        // In the simple view the choice lives on the card being chosen. A select
-        // above three cards asks the reader to hold a name in their head and
-        // match it to a heading; a radio button does not.
-        const pick = (simple && provider)
-            ? `<label class="cfg-pick"><input type="radio" name="cfg-pick" value="${esc(provider)}" ${provider === activeProvider ? 'checked' : ''}>
-                 <span>${esc(t('settings.useThis'))}</span></label>`
-            : '';
-        const title = simple
-            ? `${pick}<span class="cfg-title-name">${esc(t('cfg.group.' + g.id))}</span>${badges}${testArea}`
-            : `${esc(t('cfg.group.' + g.id))} <span class="cfg-gid">${esc(g.id)}</span>${badges}${testArea}`;
+        const title = `<span class="cfg-title-name">${esc(t('cfg.group.' + g.id))}</span>`
+            + (simple ? '' : ` <span class="cfg-gid">${esc(g.id)}</span>`) + badges + testArea;
         return `<div class="${classes.join(' ')}" ${provider ? `data-provider="${esc(provider)}"` : ''} data-group="${esc(g.id)}">
             <div class="title">${title}</div>
             ${groupDesc.startsWith('cfg.') ? '' : `<div class="cfg-groupdesc">${esc(groupDesc)}</div>`}
@@ -1875,6 +1867,32 @@ async function renderSettings() {
         return `<div class="rd-title">${esc(t('settings.rdTitle'))}</div>${rows}${verdict}`;
     }
 
+    // The two roles are asked the same question in the same shape: which provider
+    // does this job. Everything about *how* to reach a provider stays on that
+    // provider's own card, named once and pointed at twice.
+    function roleCardHtml() {
+        const gid = Object.keys(groupProvider).find(k => groupProvider[k] === activeProvider);
+        const model = groups.find(g => g.id === gid)?.fields.find(f => f.key === 'modelName')?.value || '—';
+        return `<div class="card cfg-group cfg-role" data-role="main">
+            <div class="title"><span class="cfg-title-name">${esc(t('settings.roleMain'))}</span>
+                <span class="cfg-test-area">
+                    <button class="btn cfg-test" data-testid="role-main" data-group="${esc(gid)}" data-provider="${esc(activeProvider)}">${esc(t('settings.test'))}</button>
+                    <span class="cfg-test-result" data-for="role-main"></span>
+                </span>
+            </div>
+            <div class="cfg-groupdesc">${esc(t('settings.roleMainDesc'))}</div>
+            <div class="cfg-field">
+                <label for="cfg-active-provider"><span class="cfg-name">${esc(t('settings.whichProvider'))}</span></label>
+                <div class="cfg-input">
+                    <select id="cfg-active-provider">
+                        ${providers.map(p => `<option value="${esc(p)}" ${p === activeProvider ? 'selected' : ''}>${esc(providerLabel(p))}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="cfg-desc" id="cfg-main-echo">${esc(t('settings.roleModelFrom', { model, where: providerLabel(activeProvider) }))}</div>
+            </div>
+        </div>`;
+    }
+
     const modeSwitch = `
         <span class="cfg-mode">
             <button class="btn cfg-mode-btn ${simple ? 'sel' : ''}" data-mode="simple">${esc(t('settings.modeSimple'))}</button
@@ -1891,23 +1909,15 @@ async function renderSettings() {
         </div>
         <div class="hint">${esc(t('settings.note'))}</div>
         ${simple ? `<div class="card readiness">${readyHtml()}</div>` : ''}
-        <h3>${esc(t(simple ? 'settings.sectionTranslator' : 'settings.sectionRegular'))}</h3>
-        <div class="hint">${esc(t('settings.sectionRegularHint'))}</div>
-        ${simple ? '' : `<div class="card cfg-group cfg-provider">
-            <div class="cfg-field">
-                <label for="cfg-active-provider"><span class="cfg-name">${esc(t('settings.activeProvider'))}</span></label>
-                <div class="cfg-input">
-                    <select id="cfg-active-provider">
-                        ${providers.map(p => `<option value="${esc(p)}" ${p === activeProvider ? 'selected' : ''}>${esc(providerLabel(p))}</option>`).join('')}
-                    </select>
-                    <span class="cfg-hint">${esc(t('settings.activeProviderHint'))}</span>
-                </div>
-            </div>
-        </div>`}
+        <h3>${esc(t('settings.sectionRoles'))}</h3>
+        <div class="hint">${esc(t('settings.sectionRolesHint'))}</div>
+        <div class="cards cards-col">
+            ${roleCardHtml()}
+            ${bookGroups.map(g => groupHtml(simple ? simpleOnly(g) : g)).join('')}
+        </div>
+        <h3>${esc(t('settings.sectionProviders'))}</h3>
+        <div class="hint">${esc(t('settings.sectionProvidersHint'))}</div>
         <div class="cards cards-col">${regularGroups.map(g => groupHtml(simple ? simpleOnly(g) : g)).join('')}</div>
-        <h3>${esc(t('settings.sectionBook'))}</h3>
-        <div class="hint">${esc(t('settings.sectionBookHint'))}</div>
-        <div class="cards cards-col">${bookGroups.map(g => groupHtml(simple ? simpleOnly(g) : g)).join('')}</div>
         <h3>${esc(t('settings.sectionTranslation'))}</h3>
         <div class="cards cards-col">${transGroups.map(g => groupHtml(simple ? simpleOnly(g) : g)).join('')}</div>
         ${simple ? `<div class="hint cfg-more">${esc(t('settings.moreInAdvanced'))}</div>`
@@ -1924,14 +1934,27 @@ async function renderSettings() {
     // so it's obvious which card the choice points at.
     const highlightActive = (value) => document.querySelectorAll('.cfg-group[data-provider]')
         .forEach(card => card.classList.toggle('cfg-active', card.dataset.provider === value));
-    document.getElementById('cfg-active-provider')?.addEventListener('change', (e) => highlightActive(e.target.value));
-    app.querySelectorAll('input[name="cfg-pick"]').forEach(radio => radio.addEventListener('change', () => {
-        highlightActive(radio.value);
-        pickedProvider = radio.value;
-        // The strip is about the choice on screen, not the one on disk.
+    document.getElementById('cfg-active-provider')?.addEventListener('change', (e) => {
+        const value = e.target.value;
+        highlightActive(value);
+        pickedProvider = value;
+        // Everything that named the old choice has to follow it, before saving:
+        // the readiness panel, the line saying which model will be used, and the
+        // Test button, which must reach the newly chosen provider rather than
+        // the previous one.
         const strip = app.querySelector('.readiness');
-        if (strip) strip.innerHTML = readyHtml(radio.value);
-    }));
+        if (strip) strip.innerHTML = readyHtml(value);
+        const gid = Object.keys(groupProvider).find(k => groupProvider[k] === value);
+        const echo = document.getElementById('cfg-main-echo');
+        if (echo) {
+            const model = groups.find(g => g.id === gid)?.fields.find(f => f.key === 'modelName')?.value || '—';
+            echo.textContent = t('settings.roleModelFrom', { model, where: providerLabel(value) });
+        }
+        const btn = app.querySelector('.cfg-test[data-testid="role-main"]');
+        if (btn) { btn.dataset.group = gid; btn.dataset.provider = value; }
+        const result = app.querySelector('.cfg-test-result[data-for="role-main"]');
+        if (result) { result.className = 'cfg-test-result'; result.textContent = ''; }
+    });
 
     // The same, for the provider the large model borrows its connection from.
     // Worth showing: with provider "google" the large model's key and address
@@ -2022,7 +2045,7 @@ async function renderSettings() {
     app.querySelectorAll('.cfg-test').forEach(btn => {
         btn.addEventListener('click', async () => {
             const groupId = btn.dataset.group;
-            const resultEl = app.querySelector(`.cfg-test-result[data-for="${groupId}"]`);
+            const resultEl = app.querySelector(`.cfg-test-result[data-for="${btn.dataset.testid}"]`);
             btn.disabled = true;
             resultEl.className = 'cfg-test-result';
             resultEl.textContent = t('settings.testing');

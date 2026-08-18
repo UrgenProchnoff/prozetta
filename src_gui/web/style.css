@@ -204,9 +204,6 @@ h3 { margin: 24px 0 10px; font-size: 15px; color: var(--muted); }
 /* Settings: single wide column instead of a tile grid */
 .cards-col { grid-template-columns: minmax(0, 720px); }
 
-/* Active-model selector card sits above the model cards */
-.cfg-provider { max-width: 720px; margin-bottom: 14px; }
-
 /* Highlight the card of the provider currently selected as active */
 .cfg-group.cfg-active {
     border-color: var(--green);
@@ -916,11 +913,6 @@ table.glossary .del { text-align: center; }
 .rd-verdict.ok { color: var(--green); }
 .rd-verdict.bad { color: var(--yellow); }
 
-/* The choice sits on the card being chosen, so the name never has to be
-   carried from a dropdown to a heading. */
-.cfg-pick { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--muted); }
-.cfg-pick input { margin: 0; }
-.cfg-group.cfg-active .cfg-pick { color: var(--green); }
 .cfg-title-name { font-weight: 600; }
 .cfg-more { max-width: 720px; margin-top: 18px; }
 
@@ -936,3 +928,8 @@ table.glossary .del { text-align: center; }
 }
 .cfg-effect-newBooks { color: var(--muted); }
 .cfg-effect-nextRun { color: var(--yellow); opacity: 0.85; }
+
+/* A role card asks one question — which provider does this job — and points at
+   a card below for the answer's details. Set apart from the provider cards so
+   the two kinds are not read as a list of five equals. */
+.cfg-role { border-left: 3px solid var(--accent); }
