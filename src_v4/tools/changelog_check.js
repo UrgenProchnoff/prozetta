@@ -10,7 +10,7 @@
  * Reports, and exits non-zero on anything wrong:
  *   - commits with no entry (the change nobody wrote down);
  *   - entries naming a commit that does not exist (a typo, or a rebase);
- *   - entries out of order (the file claims to follow the order of the work);
+ *   - entries out of order (the file reads newest first, at both levels);
  *   - a commit described in one language but not the other.
  *
  * Usage:
@@ -92,11 +92,13 @@ function main() {
         }
 
         // Order, checked only over the commits in range: those are the ones the
-        // file claims to list in the order the work happened.
+        // file claims to list. Newest first, at both levels — the whole point of
+        // the arrangement is that there is one direction to remember.
         const inRange = refs.filter(h => position.has(h));
         for (let i = 1; i < inRange.length; i++) {
-            if (position.get(inRange[i]) < position.get(inRange[i - 1])) {
-                console.error(`[Changelog] ${file}: out of order — ${inRange[i]} comes before ${inRange[i - 1]} in git`);
+            if (position.get(inRange[i]) > position.get(inRange[i - 1])) {
+                console.error(`[Changelog] ${file}: out of order — ${inRange[i]} is newer than ${inRange[i - 1]}, `
+                    + `which is above it; the file reads newest first`);
                 problems++;
             }
         }
