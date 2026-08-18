@@ -14,6 +14,10 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-18**
 
+- `0b8f31a` — Project working files moved out of the root into `projects/<book>/`,
+  one folder per book. Paths are resolved in one place, deleting a project is
+  removing a directory, and .gitignore is one line instead of six patterns.
+  `npm run migrate` moves an existing installation.
 - `ce3253f` — One direction for the whole file: newest first, in the sections and in
   the entries inside them.
 - `683c5b3` — The changelog became a list of commits, one line each, and `npm run
