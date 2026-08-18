@@ -1634,6 +1634,9 @@ async function renderSettings() {
 
     const groups = data.groups;
     const fieldId = (g, k) => `cfg__${g}__${k}`;
+    // Remembered, because which of the two a person needs is a property of the
+    // person, not of the visit.
+    const simple = (localStorage.getItem('prozetta.settings.mode') || 'simple') !== 'advanced';
 
     // Wording for a field, most specific first: a group may override the shared
     // text where the same key means something different in its context.
@@ -1748,13 +1751,38 @@ async function renderSettings() {
         if (provider && provider === activeProvider) classes.push('cfg-active');
         if (provider && provider === bookProvider) classes.push('cfg-uses-book');
         const groupDesc = t('cfg.groupdesc.' + g.id);
+        // In the simple view the choice lives on the card being chosen. A select
+        // above three cards asks the reader to hold a name in their head and
+        // match it to a heading; a radio button does not.
+        const pick = (simple && provider)
+            ? `<label class="cfg-pick"><input type="radio" name="cfg-pick" value="${esc(provider)}" ${provider === activeProvider ? 'checked' : ''}>
+                 <span>${esc(t('settings.useThis'))}</span></label>`
+            : '';
+        const title = simple
+            ? `${pick}<span class="cfg-title-name">${esc(t('cfg.group.' + g.id))}</span>${badges}${testArea}`
+            : `${esc(t('cfg.group.' + g.id))} <span class="cfg-gid">${esc(g.id)}</span>${badges}${testArea}`;
         return `<div class="${classes.join(' ')}" ${provider ? `data-provider="${esc(provider)}"` : ''} data-group="${esc(g.id)}">
-            <div class="title">${esc(t('cfg.group.' + g.id))} <span class="cfg-gid">${esc(g.id)}</span>${badges}${testArea}</div>
+            <div class="title">${title}</div>
             ${groupDesc.startsWith('cfg.') ? '' : `<div class="cfg-groupdesc">${esc(groupDesc)}</div>`}
             ${g.fields.map(f => fieldHtml(g.id, f)).join('')}
             ${modelsPickerHtml(g)}
         </div>`;
     }
+
+    // What a person must decide to translate a book, and nothing else. Everything
+    // omitted here has a working default that only matters once something has
+    // gone wrong — and a page that shows bookCallTokenBudget to someone who just
+    // wants a translation teaches them that settings are not for them.
+    const SIMPLE_FIELDS = {
+        logic_model: ['baseUrl', 'modelName'],
+        google_model: ['apiKey', 'modelName'],
+        groq_model: ['baseUrl', 'apiKey', 'modelName'],
+        book_model: ['enabled', 'provider', 'baseUrl', 'apiKey', 'modelName'],
+        translation: ['targetLanguage', 'langSuffix'],
+    };
+    const simpleOnly = (g) => SIMPLE_FIELDS[g.id]
+        ? { ...g, fields: g.fields.filter(f => SIMPLE_FIELDS[g.id].includes(f.key)) }
+        : g;
 
     const regularGroups = groups.filter(g => g.kind === 'model' && g.id !== 'book_model');
     const bookGroups = groups.filter(g => g.id === 'book_model');
@@ -1764,24 +1792,73 @@ async function renderSettings() {
     const transGroups = groups.filter(g => g.kind === 'translation');
     const providers = ['local', 'google', 'groq'];
     const activeProvider = data.activeProvider || 'local';
+    let pickedProvider = activeProvider;
     // Show the same friendly label as each provider's card (e.g. "Custom (OpenAI-compatible)").
     const providerLabel = (p) => {
         const gid = Object.keys(groupProvider).find(k => groupProvider[k] === p);
         return gid ? t('cfg.group.' + gid) : p;
     };
 
+    // What is still missing before a book can be translated. Checked from what
+    // is filled in rather than by calling anything: three test calls on every
+    // visit to this page would cost real quota to tell someone what they can
+    // already see.
+    function readiness(provider) {
+        const gaps = [];
+        const field = (gid, key) => groups.find(g => g.id === gid)?.fields.find(f => f.key === key);
+        const filled = (gid, key) => {
+            const f = field(gid, key);
+            return f ? (f.type === 'secret' ? !!f.set : String(f.value || '').trim() !== '') : false;
+        };
+        const needs = { local: ['baseUrl'], google: ['apiKey'], groq: ['baseUrl', 'apiKey'] };
+        const gid = Object.keys(groupProvider).find(k => groupProvider[k] === provider);
+        for (const key of needs[provider] || []) {
+            if (!filled(gid, key)) gaps.push(t('cfg.label.' + key));
+        }
+        if (!filled(gid, 'modelName')) gaps.push(t('cfg.label.modelName'));
+        return { gaps, gid };
+    }
+
+    function readyHtml(provider = activeProvider) {
+        const { gaps, gid } = readiness(provider);
+        const model = groups.find(g => g.id === gid)?.fields.find(f => f.key === 'modelName')?.value || '—';
+        const bookOn = bookField('enabled')?.value !== false;
+        const bookName = bookField('modelName')?.value || '—';
+        const rows = [
+            `<div class="rd-row"><span class="rd-mark ${gaps.length ? 'bad' : 'ok'}">${gaps.length ? '✗' : '✓'}</span>
+                ${esc(t('settings.rdTranslator', { where: providerLabel(provider), model }))}</div>`,
+            `<div class="rd-row"><span class="rd-mark ${bookOn ? 'ok' : 'off'}">${bookOn ? '✓' : '—'}</span>
+                ${esc(bookOn ? t('settings.rdBookOn', { model: bookName }) : t('settings.rdBookOff'))}</div>`,
+            `<div class="rd-row"><span class="rd-mark ok">✓</span>
+                ${esc(t('settings.rdLanguage', { lang: groups.find(g => g.id === 'translation')?.fields.find(f => f.key === 'targetLanguage')?.value || '—' }))}</div>`,
+        ].join('');
+        const verdict = gaps.length
+            ? `<div class="rd-verdict bad">${esc(t('settings.rdMissing', { what: gaps.join(', ') }))}</div>`
+            : `<div class="rd-verdict ok">${esc(t('settings.rdReady'))}</div>`;
+        return `<div class="rd-title">${esc(t('settings.rdTitle'))}</div>${rows}${verdict}`;
+    }
+
+    const modeSwitch = `
+        <span class="cfg-mode">
+            <button class="btn cfg-mode-btn ${simple ? 'sel' : ''}" data-mode="simple">${esc(t('settings.modeSimple'))}</button
+            ><button class="btn cfg-mode-btn ${simple ? '' : 'sel'}" data-mode="advanced">${esc(t('settings.modeAdvanced'))}</button>
+        </span>`;
+
     app.innerHTML = `
         <h2>${esc(t('settings.title'))}</h2>
         <div class="toolbar">
             <button id="cfg-save" class="primary">${esc(t('common.save'))}</button>
             <button id="cfg-reset" class="danger">${esc(t('settings.reset'))}</button>
+            <span class="spacer"></span>
+            ${modeSwitch}
         </div>
         <div class="hint">${esc(t('settings.note'))}</div>
-        <h3>${esc(t('settings.sectionRegular'))}</h3>
+        ${simple ? `<div class="card readiness">${readyHtml()}</div>` : ''}
+        <h3>${esc(t(simple ? 'settings.sectionTranslator' : 'settings.sectionRegular'))}</h3>
         <div class="hint">${esc(t('settings.sectionRegularHint'))}</div>
-        <div class="card cfg-group cfg-provider">
+        ${simple ? '' : `<div class="card cfg-group cfg-provider">
             <div class="cfg-field">
-                <label for="cfg-active-provider">${esc(t('settings.activeProvider'))}</label>
+                <label for="cfg-active-provider"><span class="cfg-name">${esc(t('settings.activeProvider'))}</span></label>
                 <div class="cfg-input">
                     <select id="cfg-active-provider">
                         ${providers.map(p => `<option value="${esc(p)}" ${p === activeProvider ? 'selected' : ''}>${esc(providerLabel(p))}</option>`).join('')}
@@ -1789,23 +1866,35 @@ async function renderSettings() {
                     <span class="cfg-hint">${esc(t('settings.activeProviderHint'))}</span>
                 </div>
             </div>
-        </div>
-        <div class="cards cards-col">${regularGroups.map(groupHtml).join('')}</div>
+        </div>`}
+        <div class="cards cards-col">${regularGroups.map(g => groupHtml(simple ? simpleOnly(g) : g)).join('')}</div>
         <h3>${esc(t('settings.sectionBook'))}</h3>
         <div class="hint">${esc(t('settings.sectionBookHint'))}</div>
-        <div class="cards cards-col">${bookGroups.map(groupHtml).join('')}</div>
-        <h3>${esc(t('settings.sectionPipeline'))}</h3>
-        <div class="cards cards-col">${pipeGroups.map(groupHtml).join('')}</div>
+        <div class="cards cards-col">${bookGroups.map(g => groupHtml(simple ? simpleOnly(g) : g)).join('')}</div>
         <h3>${esc(t('settings.sectionTranslation'))}</h3>
-        <div class="cards cards-col">${transGroups.map(groupHtml).join('')}</div>
+        <div class="cards cards-col">${transGroups.map(g => groupHtml(simple ? simpleOnly(g) : g)).join('')}</div>
+        ${simple ? `<div class="hint cfg-more">${esc(t('settings.moreInAdvanced'))}</div>`
+                 : `<h3>${esc(t('settings.sectionPipeline'))}</h3>
+        <div class="cards cards-col">${pipeGroups.map(groupHtml).join('')}</div>`}
     `;
+
+    app.querySelectorAll('.cfg-mode-btn').forEach(btn => btn.addEventListener('click', () => {
+        localStorage.setItem('prozetta.settings.mode', btn.dataset.mode);
+        renderSettings();
+    }));
 
     // Move the highlight as soon as the user picks a provider, before saving,
     // so it's obvious which card the choice points at.
-    document.getElementById('cfg-active-provider').addEventListener('change', (e) => {
-        document.querySelectorAll('.cfg-group[data-provider]').forEach(card =>
-            card.classList.toggle('cfg-active', card.dataset.provider === e.target.value));
-    });
+    const highlightActive = (value) => document.querySelectorAll('.cfg-group[data-provider]')
+        .forEach(card => card.classList.toggle('cfg-active', card.dataset.provider === value));
+    document.getElementById('cfg-active-provider')?.addEventListener('change', (e) => highlightActive(e.target.value));
+    app.querySelectorAll('input[name="cfg-pick"]').forEach(radio => radio.addEventListener('change', () => {
+        highlightActive(radio.value);
+        pickedProvider = radio.value;
+        // The strip is about the choice on screen, not the one on disk.
+        const strip = app.querySelector('.readiness');
+        if (strip) strip.innerHTML = readyHtml(radio.value);
+    }));
 
     // The same, for the provider the large model borrows its connection from.
     // Worth showing: with provider "google" the large model's key and address
@@ -1854,8 +1943,8 @@ async function renderSettings() {
                 if (el.value !== el.dataset.orig) (payload[g.id] ||= {})[f.key] = el.value;
             }
         }
-        const provEl = document.getElementById('cfg-active-provider');
-        if (provEl && provEl.value !== activeProvider) payload.activeProvider = provEl.value;
+        const chosen = document.getElementById('cfg-active-provider')?.value ?? pickedProvider;
+        if (chosen && chosen !== activeProvider) payload.activeProvider = chosen;
         return payload;
     }
 

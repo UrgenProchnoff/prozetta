@@ -892,3 +892,34 @@ table.glossary .del { text-align: center; }
 }
 .pov-span:last-child { border-right: none; }
 .empty-note { color: var(--muted); padding: 24px; text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+
+
+/* --- Settings: simple and advanced --- */
+
+.cfg-mode { display: inline-flex; }
+.cfg-mode-btn { font-size: 12.5px; padding: 4px 14px; border-radius: 0; }
+.cfg-mode-btn:first-child { border-radius: 6px 0 0 6px; }
+.cfg-mode-btn:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.cfg-mode-btn.sel { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Answers "can I translate a book yet" before any field is read. Filled in
+   from what is on the page, never by calling a provider: three test calls on
+   every visit would spend real quota to report what is already visible. */
+.readiness { max-width: 720px; margin-bottom: 18px; border-left: 3px solid var(--accent); }
+.rd-title { font-weight: 600; margin-bottom: 8px; }
+.rd-row { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; font-size: 13px; }
+.rd-mark { width: 14px; text-align: center; }
+.rd-mark.ok { color: var(--green); }
+.rd-mark.bad { color: var(--red); }
+.rd-mark.off { color: var(--muted); }
+.rd-verdict { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 13px; }
+.rd-verdict.ok { color: var(--green); }
+.rd-verdict.bad { color: var(--yellow); }
+
+/* The choice sits on the card being chosen, so the name never has to be
+   carried from a dropdown to a heading. */
+.cfg-pick { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--muted); }
+.cfg-pick input { margin: 0; }
+.cfg-group.cfg-active .cfg-pick { color: var(--green); }
+.cfg-title-name { font-weight: 600; }
+.cfg-more { max-width: 720px; margin-top: 18px; }
