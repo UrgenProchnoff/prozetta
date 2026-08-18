@@ -95,6 +95,11 @@ app.get('/api/version', (req, res) => {
     res.json({ ...VERSION, changelog: fs.existsSync(path.join(ROOT, 'CHANGELOG.md')) });
 });
 
+// A commit fingerprint, written either as `abc1234` at the head of an entry or
+// as (abc1234, def5678) inside one. Both forms are recognised so the file can be
+// reorganised without the links going quiet.
+const COMMIT_REF_RE = /`([0-9a-f]{7,40})`|\(([0-9a-f]{7,40}(?:,\s*[0-9a-f]{7,40})*)\)/g;
+
 /**
  * Look up every commit the changelog refers to, in one pass over the log rather
  * than one call per hash: the file names forty of them, and forty git processes
@@ -102,8 +107,8 @@ app.get('/api/version', (req, res) => {
  */
 function describeCommits(text) {
     const wanted = new Set();
-    for (const m of text.matchAll(/\(([0-9a-f]{7,40}(?:,\s*[0-9a-f]{7,40})*)\)/g)) {
-        for (const h of m[1].split(/,\s*/)) wanted.add(h);
+    for (const m of text.matchAll(COMMIT_REF_RE)) {
+        for (const h of (m[1] || m[2] || '').split(/,\s*/)) if (h) wanted.add(h);
     }
     if (!wanted.size) return {};
     const found = {};

@@ -156,8 +156,8 @@ function renderMarkdown(src, commits = {}, repository = null) {
     // A bare (abc1234) becomes a link to the commit it names. The subject is put
     // in the tooltip, and a hash git does not know is left visibly dead rather
     // than linked into nothing — which is what a typo or a rebase produces.
-    const refs = (text) => text.replace(/\(([0-9a-f]{7,40}(?:,\s*[0-9a-f]{7,40})*)\)/g, (whole, list) => {
-        const parts = list.split(/,\s*/).map(hash => {
+    const refs = (text) => text.replace(/`([0-9a-f]{7,40})`|\(([0-9a-f]{7,40}(?:,\s*[0-9a-f]{7,40})*)\)/g, (whole, single, list) => {
+        const parts = (single || list).split(/,\s*/).map(hash => {
             const known = commits[hash];
             const title = known ? `${known.subject}${known.date ? ' · ' + fmtDate(known.date) : ''}` : t('ver.unknownCommit');
             if (!known) return `<span class="cm-ref dead" title="${esc(title)}">${esc(hash)}</span>`;
@@ -167,10 +167,10 @@ function renderMarkdown(src, commits = {}, repository = null) {
         return `<span class="cm-refs">${parts.join(' ')}</span>`;
     });
 
-    const inline = s => refs(esc(s)
+    const inline = s => refs(esc(s))
         .replace(/`([^`]+)`/g, '<code>$1</code>')
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>'));
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
 
     // Paragraphs and bullets are buffered rather than emitted line by line: the
     // file is hard-wrapped at 80 columns, so a line break inside one is where
