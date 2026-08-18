@@ -13,7 +13,7 @@
 
 import fs from 'fs';
 import { HumanMessage } from '@langchain/core/messages';
-import { llmManager } from '../core/llm_client.js';
+import { llmManager, bookModelEnabled, explainCallFailure } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
 import { countTokens } from '../core/tokenizer.js';
@@ -30,6 +30,13 @@ const TOKEN_BUDGET = config.pipeline.bookCallTokenBudget || 250000;
 export async function runGlossaryReviewStage(state) {
     console.log('--- SYSTEM: Reviewing the glossary against the book ---');
     usageTracker.setStage('glossary_review');
+
+    if (!bookModelEnabled()) {
+        console.error('[Review] The large model is switched off (book_model.enabled), and this pass is nothing but ' +
+            'one call to it. Turn it on in Settings → Large model.');
+        process.exitCode = 1;
+        return;
+    }
 
     const chunks = state.getChunks();
     if (!chunks.length) {
@@ -102,8 +109,15 @@ export async function runGlossaryReviewStage(state) {
         return;
     }
 
-    const client = llmManager.getClient('book');
-    const { conf } = llmManager.getBookSettings();
+    let client, conf, provider;
+    try {
+        ({ conf, provider } = llmManager.getBookSettings());
+        client = llmManager.getClient('book');
+    } catch (e) {
+        console.error(`[Review] The large model is not configured: ${e.message}`);
+        process.exitCode = 1;
+        return;
+    }
     console.log(`[Review] Asking ${conf.modelName} to review the glossary against the whole book...`);
 
     let raw;
@@ -114,7 +128,7 @@ export async function runGlossaryReviewStage(state) {
         ]);
         raw = extractJson(response.content || '');
     } catch (e) {
-        console.error(`[Review] The whole-book call failed: ${e.message}`);
+        console.error(`[Review] The whole-book call failed — ${explainCallFailure(e, provider, conf)}`);
         if (e.contentBlocked) {
             console.error('[Review] The provider refused the text. Retrying will not help — switch the book_model provider.');
         }

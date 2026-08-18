@@ -221,6 +221,44 @@ export const PROVIDER_CONFIG_KEY = {
 };
 
 /**
+ * A provider that exists only inside book_model: an OpenAI-compatible endpoint
+ * with its own address and key. It is deliberately absent from
+ * PROVIDER_CONFIG_KEY — it has no global block to be the active provider from,
+ * and chunk-by-chunk work must not be able to select it by accident.
+ */
+export const BOOK_OWN_PROVIDER = 'openai';
+
+/** Is the whole-book profile turned on at all? */
+export function bookModelEnabled() {
+    return config.book_model?.enabled !== false;
+}
+
+/**
+ * A failed call in terms someone can act on.
+ *
+ * The raw messages are not usable as they are. A non-ASCII API key surfaces from
+ * the Google SDK as "Cannot convert argument to a ByteString because the
+ * character at index 0 has a value of 1053" — which names neither the key nor
+ * the request — and an unreachable server as a bare "Connection error." with no
+ * hint of the address it failed to reach.
+ */
+export function explainCallFailure(error, provider, conf) {
+    const raw = String(error?.message || error);
+    const where = `${provider}/${conf?.modelName || '?'}` + (conf?.baseUrl ? ` (${conf.baseUrl})` : '');
+
+    if (/ByteString|API key not valid|api[_ -]?key|UNAUTHENTICATED|PERMISSION_DENIED|\b40[13]\b/i.test(raw)) {
+        return `${where}: the API key is missing or wrong. Check it in Settings. [${raw}]`;
+    }
+    if (/Connection error|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|fetch failed|socket hang up|timeout/i.test(raw)) {
+        return `${where}: nothing answered. Is the server running and the address right? [${raw}]`;
+    }
+    if (/unexpected model name|model.*not found|\b404\b/i.test(raw)) {
+        return `${where}: the provider does not recognise this model name. [${raw}]`;
+    }
+    return `${where}: ${raw}`;
+}
+
+/**
  * Build a raw LangChain chat client for a provider from a plain config block.
  * No rate limiter, no shared state — used both by the runtime (LLMClient) and
  * the GUI "test" endpoint, so client construction lives in one place.
@@ -237,13 +275,23 @@ export function createRawClient(provider, conf) {
             safetySettings: GEMINI_SAFETY_SETTINGS,
         });
     }
-    if (provider === 'groq') {
+    if (provider === 'groq' || provider === BOOK_OWN_PROVIDER) {
         // Groq exposes an OpenAI-compatible endpoint. We route it through
         // ChatOpenAI (same reliable client as local) instead of @langchain/groq,
         // whose groq-sdk path hangs/retries on "Premature close" with reasoning models.
+        // The book profile's own endpoint is the same shape, minus the default
+        // address: pointing it somewhere is the entire reason it exists.
         const timeoutMs = conf.timeout || 300000;
+        if (provider === BOOK_OWN_PROVIDER && !conf.baseUrl) {
+            throw new Error('book_model uses the "openai" provider but no baseUrl is set — ' +
+                'give it the address of an OpenAI-compatible endpoint, or pick another provider.');
+        }
         return new ChatOpenAI({
-            apiKey: conf.apiKey,
+            // A self-hosted endpoint usually wants no key, but the client
+            // refuses to start without one and blames "Missing credentials",
+            // which reads as an authentication problem rather than a placeholder
+            // problem. The local slot carries the same stand-in by default.
+            apiKey: conf.apiKey || 'sk-no-key-required',
             modelName: conf.modelName,
             temperature: conf.temperature,
             streamUsage: true, // ask for token usage in the (streamed) response
@@ -298,10 +346,13 @@ class LLMClient {
     getBookSettings() {
         const book = config.book_model || {};
         const provider = book.provider || this.provider;
-        if (!PROVIDER_CONFIG_KEY[provider]) {
-            throw new Error(`Invalid provider in book_model: ${provider}`);
+        if (!PROVIDER_CONFIG_KEY[provider] && provider !== BOOK_OWN_PROVIDER) {
+            throw new Error(`Invalid provider in book_model: "${provider}". ` +
+                `Expected one of: ${[...Object.keys(PROVIDER_CONFIG_KEY), BOOK_OWN_PROVIDER].join(', ')}.`);
         }
-        const base = config[PROVIDER_CONFIG_KEY[provider]] || {};
+        // The book profile's own endpoint inherits nothing: its whole point is to
+        // be a different machine from the one doing the chunk-by-chunk work.
+        const base = provider === BOOK_OWN_PROVIDER ? {} : (config[PROVIDER_CONFIG_KEY[provider]] || {});
         const conf = { ...base };
         for (const [key, value] of Object.entries(book)) {
             if (key === 'provider') continue;

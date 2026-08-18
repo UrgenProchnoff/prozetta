@@ -192,6 +192,24 @@ h3 { margin: 24px 0 10px; font-size: 15px; color: var(--muted); }
     background: rgba(46, 169, 111, 0.12);
 }
 
+/* A provider card can be borrowed by the large model as well as being the
+   active one, so the two marks are different and can appear together: the green
+   ring says "chunk work runs here", the blue badge says "the large model takes
+   its address and key from here". */
+.cfg-group .cfg-book-badge { display: none; }
+.cfg-group.cfg-uses-book .cfg-book-badge {
+    display: inline-block;
+    color: var(--blue);
+    border: 1px solid var(--blue);
+    background: rgba(64, 132, 214, 0.12);
+}
+.cfg-group.cfg-uses-book { border-left: 3px solid var(--blue); }
+
+/* A field the large model inherits rather than owns: shown, but visibly not
+   in play, so an empty box does not read as "unset". */
+.cfg-field.cfg-inherited input { opacity: 0.45; }
+.cfg-inherit-note:empty { display: none; }
+
 .card {
     background: var(--panel);
     border: 1px solid var(--border);

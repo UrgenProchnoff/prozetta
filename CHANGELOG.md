@@ -93,6 +93,15 @@ consistent about who is speaking, who they are, and what they are called.
 
 ### Interface
 
+- Settings are split into a regular model and a large model, with an explicit
+  switch for whether whole-book passes are used at all. Turning it off removes
+  the passport and glossary-review steps rather than leaving them looking
+  unfinished. The large model gains its own OpenAI-compatible slot — address and
+  key of its own, so a rented large-context endpoint can be pointed at without
+  disturbing the model doing chunk work — plus a Test button that checks it the
+  way it will actually be called, and a badge on whichever provider card it
+  borrows its connection from.
+
 - The running version and commit sit in the footer of every page, linked to
   this file — which now exists in English and Russian, following the interface
   language.

@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { jobManager } from './jobs.js';
-import { createRawClient, PROVIDER_CONFIG_KEY } from '../src_v4/core/llm_client.js';
+import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER } from '../src_v4/core/llm_client.js';
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { outstandingFindings } from '../src_v4/core/glossary_review.js';
@@ -397,6 +397,9 @@ app.get('/api/projects/:prefix/summary', async (req, res) => {
         const p = (await loadEffectiveConfig()).pipeline || {};
         s.scoreThresholds = { approval: p.approvalScoreThreshold, redraft: p.redraftScoreThreshold };
     } catch { /* config unreadable — the grid falls back to default bands */ }
+    // The roadmap drops its whole-book steps when the large model is off, so it
+    // has to be told here rather than guessing from whether artefacts exist.
+    s.bookModel = await bookModelInfo();
     res.json(s);
 });
 
@@ -486,7 +489,7 @@ app.put('/api/projects/:prefix/passport', (req, res) => {
 
 // --- API: glossary ---
 
-app.get('/api/projects/:prefix/glossary', (req, res) => {
+app.get('/api/projects/:prefix/glossary', async (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
     const gp = glossaryPath(prefix);
@@ -575,6 +578,7 @@ app.get('/api/projects/:prefix/glossary', (req, res) => {
         // fit one call.
         running: jobManager.isRunning(prefix),
         estimate: { bookTokens, glossaryTokens, budget: config.pipeline.bookCallTokenBudget || 250000 },
+        bookModel: await bookModelInfo(),
     });
 });
 
@@ -989,6 +993,45 @@ app.get('/api/projects/:prefix/output', async (req, res) => {
 const MODEL_GROUPS = ['logic_model', 'google_model', 'groq_model', 'book_model'];
 const PROVIDERS = ['local', 'google', 'groq'];
 
+/**
+ * The large model's settings as the pipeline will resolve them: its own block
+ * over the provider it names, with unsaved edits from the settings form on top.
+ * Mirrors LLMClient.getBookSettings — the two must agree, or a green test would
+ * mean nothing.
+ *
+ * @returns {{effective: object|null, provider: string}} effective is null when
+ *   the provider is not one this build knows.
+ */
+function bookEffective(cfg, pending = {}) {
+    const book = { ...(cfg.book_model || {}), ...pending };
+    const provider = String(book.provider || cfg.activeProvider || 'local');
+    if (!PROVIDER_CONFIG_KEY[provider] && provider !== BOOK_OWN_PROVIDER) {
+        return { effective: null, provider };
+    }
+    const base = provider === BOOK_OWN_PROVIDER ? {} : (cfg[PROVIDER_CONFIG_KEY[provider]] || {});
+    const effective = { ...base };
+    for (const [key, value] of Object.entries(book)) {
+        if (key === 'provider' || key === 'enabled') continue;
+        if (value !== undefined && value !== null && value !== '') effective[key] = value;
+    }
+    return { effective, provider };
+}
+
+/** What the interface needs to decide whether to offer whole-book passes. */
+async function bookModelInfo() {
+    try {
+        const cfg = await loadEffectiveConfig();
+        const { effective, provider } = bookEffective(cfg);
+        return {
+            enabled: cfg.book_model?.enabled !== false,
+            provider,
+            modelName: effective?.modelName || null,
+        };
+    } catch {
+        return { enabled: false, provider: null, modelName: null };
+    }
+}
+
 function readOverrides() {
     if (!fs.existsSync(OVERRIDES_PATH)) return {};
     try { return JSON.parse(fs.readFileSync(OVERRIDES_PATH, 'utf-8')); }
@@ -1138,15 +1181,27 @@ app.post('/api/config/reset', async (req, res) => {
 // Send a tiny prompt to a provider to verify it responds. Tests the values
 // from the form (merged over saved config); an empty apiKey keeps the saved one.
 app.post('/api/config/test', async (req, res) => {
-    const { provider, values } = req.body || {};
-    if (!PROVIDERS.includes(provider)) {
+    const { provider, values, group } = req.body || {};
+    const isBook = group === 'book_model';
+    if (!isBook && !PROVIDERS.includes(provider)) {
         return res.status(400).json({ error: `Invalid provider: ${provider}` });
     }
 
     let cfg;
     try { cfg = await loadEffectiveConfig(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-    const base = cfg[PROVIDER_CONFIG_KEY[provider]] || {};
+    // The large model is tested the way it will actually be called: its own
+    // block laid over whichever provider it names, so a test that passes means
+    // a book pass will connect — testing the provider card alone would not,
+    // since book_model may override the model or the address.
+    const { effective, provider: bookProvider } = isBook
+        ? bookEffective(cfg, values || {})
+        : { effective: null, provider: null };
+    if (isBook && !effective) {
+        return res.status(400).json({ error: `Invalid provider in book_model: ${bookProvider}` });
+    }
+
+    const base = isBook ? effective : (cfg[PROVIDER_CONFIG_KEY[provider]] || {});
     const conf = { ...base };
     const incoming = values || {};
     for (const key of Object.keys(incoming)) {
@@ -1163,7 +1218,7 @@ app.post('/api/config/test', async (req, res) => {
     const TEST_TIMEOUT_MS = 20000;
     const started = Date.now();
     try {
-        const client = createRawClient(provider, conf);
+        const client = createRawClient(isBook ? bookProvider : provider, conf);
         const result = await Promise.race([
             client.invoke('Reply with just: OK'),
             new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), TEST_TIMEOUT_MS)),

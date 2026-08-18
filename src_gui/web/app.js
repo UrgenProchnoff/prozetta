@@ -347,7 +347,7 @@ async function renderGlossary(prefix) {
     setCrumbs(`${crumbHome()} / ${esc(prefix)} / ${esc(t('gloss.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
-    let terms, counts, findings, review, estimate, running;
+    let terms, counts, findings, review, estimate, running, bookModel;
     try {
         const data = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary`);
         terms = data.terms;
@@ -356,6 +356,7 @@ async function renderGlossary(prefix) {
         review = data.review || null;
         estimate = data.estimate || {};
         running = !!data.running;
+        bookModel = data.bookModel || { enabled: true };
     } catch (e) {
         app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
         return;
@@ -392,8 +393,8 @@ async function renderGlossary(prefix) {
         <div class="toolbar">
             <input id="g-search" type="search" placeholder="${esc(t('gloss.search'))}" style="width:220px">
             <button id="g-add">${esc(t('gloss.addTerm'))}</button>
-            <button id="g-ask">${esc(t('gloss.ask'))}</button>
-            <span id="g-ask-note" class="ask-note"></span>
+            ${bookModel.enabled === false ? '' : `<button id="g-ask">${esc(t('gloss.ask'))}</button>
+            <span id="g-ask-note" class="ask-note"></span>`}
             <span id="g-count" class="badge"></span>
             <span class="badge" title="${esc(t('gloss.junkHintTitle'))}">${esc(t('gloss.junkHint'))}</span>
             <select id="g-issues" class="issues-select" title="${esc(t('gloss.issuesTitle'))}"></select>
@@ -721,7 +722,7 @@ async function renderGlossary(prefix) {
         renderRows();
     });
 
-    document.getElementById('g-ask').addEventListener('click', async () => {
+    document.getElementById('g-ask')?.addEventListener('click', async () => {
         if (!askState().ok) return;
         const total = (estimate.bookTokens || 0) + (estimate.glossaryTokens || 0);
         if (!confirm(t('gloss.askConfirm', { n: fmtNum(total) }))) return;
@@ -986,6 +987,10 @@ async function renderMonitor(prefix) {
         const total = s?.total || 0;
         const done = s ? s.statuses.success + s.statuses.best_effort : 0;
         const rec = recommend(s).stage;
+        // Whole-book steps exist only if there is a large model to run them.
+        // Showing them switched off would be worse than not showing them: they
+        // would look like stages the project has failed to complete.
+        const withBook = s?.bookModel ? s.bookModel.enabled !== false : true;
         const steps = [
             { stage: '1', name: t('mon.stepExtract'), sub: total ? `${s.extracted}/${total}` : '—', done: total > 0 && s.extracted >= total },
             { stage: null, name: t('mon.stepGlossary'), sub: s?.glossaryCount ? t('mon.stepTermsCount', { n: s.glossaryCount }) : '—', done: !!s?.glossaryCount },
@@ -1003,7 +1008,7 @@ async function renderMonitor(prefix) {
               done: !!(s?.passport && !s.passport.broken) },
             { stage: '2', name: t('mon.stepTranslate'), sub: total ? `${done}/${total}` : '—', done: total > 0 && done >= total },
             { stage: 'export', name: t('mon.stepExport'), sub: '', done: false },
-        ];
+        ].filter(st => withBook || (st.stage !== 'passport' && st.stage !== 'glossary'));
         stepsEl.innerHTML = steps.map((st, i) => {
             const cls = ['pipe-step',
                 st.done ? 'done' : '',
@@ -1645,6 +1650,13 @@ async function renderSettings() {
                      <span class="cfg-hint">${esc(status)}</span>`;
         } else if (f.type === 'bool') {
             input = `<input type="checkbox" id="${id}" data-type="bool" data-orig="${f.value ? '1' : ''}" ${f.value ? 'checked' : ''}>`;
+        } else if (groupId === 'book_model' && f.key === 'provider') {
+            // A free-text provider name is a typo waiting to happen, and the
+            // failure it produces ("Invalid provider in book_model: gugle")
+            // arrives only when a book pass is run, long after the mistake.
+            const opts = BOOK_PROVIDERS.map(v =>
+                `<option value="${esc(v)}" ${f.value === v ? 'selected' : ''}>${esc(providerName(v))}</option>`).join('');
+            input = `<select id="${id}" data-type="string" data-orig="${esc(f.value)}">${opts}</select>${hint}`;
         } else if (f.key === 'promptLang') {
             const opts = ['ru', 'en'].map(v =>
                 `<option value="${v}" ${f.value === v ? 'selected' : ''}>${esc(t('cfg.promptLang.' + v))}</option>`).join('');
@@ -1655,13 +1667,24 @@ async function renderSettings() {
         } else {
             input = `<input type="text" id="${id}" data-type="string" data-orig="${esc(f.value)}" value="${esc(f.value)}">${hint}`;
         }
+        // Where the large model borrows a field instead of owning it, say so in
+        // the field itself rather than leaving an empty box to be guessed at.
+        const inherit = groupId === 'book_model' && (f.key === 'baseUrl' || f.key === 'apiKey')
+            ? '<span class="cfg-hint cfg-inherit-note"></span>' : '';
         return `<div class="cfg-field">
             <label for="${id}">${esc(f.key)}${ovr}</label>
-            <div class="cfg-input">${input}</div>
+            <div class="cfg-input">${input}${inherit}</div>
         </div>`;
     }
 
     const groupProvider = { logic_model: 'local', google_model: 'google', groq_model: 'groq' };
+    // 'openai' exists only here: the large model's own OpenAI-compatible
+    // endpoint, with no card of its own to inherit an address from.
+    const BOOK_PROVIDERS = ['google', 'local', 'groq', 'openai'];
+    const providerName = (p) => {
+        const gid = Object.keys(groupProvider).find(k => groupProvider[k] === p);
+        return gid ? t('cfg.group.' + gid) : t('cfg.provider.' + p);
+    };
 
     // Google-only: a "load available models" picker that fills the modelName
     // field from the live ListModels API. Token limits come live from the API;
@@ -1683,22 +1706,36 @@ async function renderSettings() {
 
     function groupHtml(g) {
         const provider = groupProvider[g.id];
-        const testArea = provider ? `
+        const isBook = g.id === 'book_model';
+        // The large model is tested as it will actually run — its own block over
+        // whichever provider it names — so the server is asked by group, not by
+        // provider. Testing the provider card alone would prove nothing: the
+        // book profile can override the model and the address.
+        const testArea = (provider || isBook) ? `
             <span class="cfg-test-area">
-                <button class="btn cfg-test" data-group="${esc(g.id)}" data-provider="${esc(provider)}">${esc(t('settings.test'))}</button>
+                <button class="btn cfg-test" data-group="${esc(g.id)}" ${provider ? `data-provider="${esc(provider)}"` : ''}>${esc(t('settings.test'))}</button>
                 <span class="cfg-test-result" data-for="${esc(g.id)}"></span>
             </span>` : '';
-        // The badge is in every provider card; CSS shows it only on .cfg-active,
-        // so switching the select just moves the class around.
-        const activeBadge = provider ? `<span class="badge cfg-active-badge">${esc(t('settings.activeBadge'))}</span>` : '';
-        return `<div class="card cfg-group ${provider === activeProvider ? 'cfg-active' : ''}" ${provider ? `data-provider="${esc(provider)}"` : ''}>
-            <div class="title">${esc(t('cfg.group.' + g.id))} <span class="cfg-gid">${esc(g.id)}</span>${activeBadge}${testArea}</div>
+        // Both badges live in every provider card; CSS shows each only on the
+        // matching class, so changing a select just moves the classes around.
+        const badges = provider
+            ? `<span class="badge cfg-active-badge">${esc(t('settings.activeBadge'))}</span>` +
+              `<span class="badge cfg-book-badge">${esc(t('settings.bookBadge'))}</span>`
+            : '';
+        const classes = ['card', 'cfg-group'];
+        if (provider && provider === activeProvider) classes.push('cfg-active');
+        if (provider && provider === bookProvider) classes.push('cfg-uses-book');
+        return `<div class="${classes.join(' ')}" ${provider ? `data-provider="${esc(provider)}"` : ''} data-group="${esc(g.id)}">
+            <div class="title">${esc(t('cfg.group.' + g.id))} <span class="cfg-gid">${esc(g.id)}</span>${badges}${testArea}</div>
             ${g.fields.map(f => fieldHtml(g.id, f)).join('')}
             ${modelsPickerHtml(g)}
         </div>`;
     }
 
-    const modelGroups = groups.filter(g => g.kind === 'model');
+    const regularGroups = groups.filter(g => g.kind === 'model' && g.id !== 'book_model');
+    const bookGroups = groups.filter(g => g.id === 'book_model');
+    const bookField = (key) => bookGroups[0]?.fields.find(f => f.key === key);
+    let bookProvider = bookField('provider')?.value || 'google';
     const pipeGroups = groups.filter(g => g.kind === 'pipeline');
     const transGroups = groups.filter(g => g.kind === 'translation');
     const providers = ['local', 'google', 'groq'];
@@ -1716,7 +1753,8 @@ async function renderSettings() {
             <button id="cfg-reset" class="danger">${esc(t('settings.reset'))}</button>
         </div>
         <div class="hint">${esc(t('settings.note'))}</div>
-        <h3>${esc(t('settings.sectionModels'))}</h3>
+        <h3>${esc(t('settings.sectionRegular'))}</h3>
+        <div class="hint">${esc(t('settings.sectionRegularHint'))}</div>
         <div class="card cfg-group cfg-provider">
             <div class="cfg-field">
                 <label for="cfg-active-provider">${esc(t('settings.activeProvider'))}</label>
@@ -1728,7 +1766,10 @@ async function renderSettings() {
                 </div>
             </div>
         </div>
-        <div class="cards cards-col">${modelGroups.map(groupHtml).join('')}</div>
+        <div class="cards cards-col">${regularGroups.map(groupHtml).join('')}</div>
+        <h3>${esc(t('settings.sectionBook'))}</h3>
+        <div class="hint">${esc(t('settings.sectionBookHint'))}</div>
+        <div class="cards cards-col">${bookGroups.map(groupHtml).join('')}</div>
         <h3>${esc(t('settings.sectionPipeline'))}</h3>
         <div class="cards cards-col">${pipeGroups.map(groupHtml).join('')}</div>
         <h3>${esc(t('settings.sectionTranslation'))}</h3>
@@ -1741,6 +1782,34 @@ async function renderSettings() {
         document.querySelectorAll('.cfg-group[data-provider]').forEach(card =>
             card.classList.toggle('cfg-active', card.dataset.provider === e.target.value));
     });
+
+    // The same, for the provider the large model borrows its connection from.
+    // Worth showing: with provider "google" the large model's key and address
+    // come from the Google card, and which card that is should not have to be
+    // worked out from memory.
+    const bookProviderEl = document.getElementById(fieldId('book_model', 'provider'));
+    bookProviderEl?.addEventListener('change', (e) => {
+        bookProvider = e.target.value;
+        document.querySelectorAll('.cfg-group[data-provider]').forEach(card =>
+            card.classList.toggle('cfg-uses-book', card.dataset.provider === bookProvider));
+        updateBookOwnFields();
+    });
+
+    // baseUrl and apiKey belong to the large model only when it has its own
+    // endpoint; on the other providers they are inherited, and an empty box that
+    // silently means "inherited" invites filling it in.
+    function updateBookOwnFields() {
+        const own = bookProvider === 'openai';
+        for (const key of ['baseUrl', 'apiKey']) {
+            const el = document.getElementById(fieldId('book_model', key));
+            const field = el?.closest('.cfg-field');
+            if (!field) continue;
+            field.classList.toggle('cfg-inherited', !own);
+            const note = field.querySelector('.cfg-inherit-note');
+            if (note) note.textContent = own ? '' : t('settings.inherited', { from: providerName(bookProvider) });
+        }
+    }
+    updateBookOwnFields();
 
     // Collect only changed fields, so config.overrides.json stays minimal.
     function collectChanges() {
@@ -1807,7 +1876,7 @@ async function renderSettings() {
             try {
                 const r = await api('/api/config/test', {
                     method: 'POST',
-                    body: { provider: btn.dataset.provider, values: collectGroupValues(groupId) },
+                    body: { group: groupId, provider: btn.dataset.provider, values: collectGroupValues(groupId) },
                 });
                 if (r.ok) {
                     resultEl.classList.add('ok');

@@ -59,10 +59,22 @@ const defaults = {
     // model; these want a large context window, so this profile carries its own
     // provider instead of following activeProvider.
     book_model: {
-        // 'local' | 'google' | 'groq'. Connection fields left empty here
-        // (apiKey, baseUrl) are inherited from that provider's own block above,
-        // so a key entered once does not have to be entered twice.
+        // Whether whole-book passes are available at all. Off means the passport
+        // and glossary-review stages refuse to run and the interface stops
+        // offering them — a pipeline that only ever translates chunk by chunk
+        // needs no large model, and should not be nagged about one it has not
+        // configured.
+        enabled: true,
+        // 'local' | 'google' | 'groq' | 'openai'. The first three inherit their
+        // connection from that provider's own block above, so a key entered once
+        // does not have to be entered twice. 'openai' is this profile's own
+        // OpenAI-compatible endpoint: it inherits nothing and uses the baseUrl
+        // and apiKey below, so a rented large-context server can be pointed at
+        // without disturbing the model that does the chunk-by-chunk work.
         provider: 'google',
+        // Only for provider 'openai'; empty on the others means "inherit".
+        baseUrl: '',
+        apiKey: '',
         // Pinned on purpose rather than an alias like gemini-flash-latest: a
         // moving target would change what these passes produce without warning.
         modelName: 'gemini-3.7-flash',

@@ -12,7 +12,7 @@
 
 import fs from 'fs';
 import { HumanMessage } from '@langchain/core/messages';
-import { llmManager } from '../core/llm_client.js';
+import { llmManager, bookModelEnabled, explainCallFailure } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
 import { detectNarrativePerson, characterCandidates } from '../core/text_stats.js';
@@ -72,9 +72,17 @@ export async function runPassportStage(state) {
     console.log('--- SYSTEM: Building book passport ---');
     usageTracker.setStage('passport');
 
+    if (!bookModelEnabled()) {
+        console.error('[Passport] The large model is switched off (book_model.enabled), and the passport is built ' +
+            'by one call to it. Turn it on in Settings → Large model.');
+        process.exitCode = 1;
+        return;
+    }
+
     let chunks = state.getChunks();
     if (!chunks.length) {
         console.error('[Passport] Project has no chunks yet — run Stage 1 first.');
+        process.exitCode = 1;
         return;
     }
 
@@ -101,8 +109,15 @@ export async function runPassportStage(state) {
     // admit that, actively wrong: Polish read as first person because "i" means
     // "and"). The profile belongs to the language, not the book, so it is stored
     // in a shared file and this call happens once per language ever.
-    const client = llmManager.getClient('book');
-    const { conf } = llmManager.getBookSettings();
+    let client, conf, provider;
+    try {
+        ({ conf, provider } = llmManager.getBookSettings());
+        client = llmManager.getClient('book');
+    } catch (e) {
+        console.error(`[Passport] The large model is not configured: ${e.message}`);
+        process.exitCode = 1;
+        return;
+    }
     const detected = profileForText(bookText);
     if (!detected.lang) {
         console.log(`[Passport] Language not recognised (script: ${detected.script}) — asking ${conf.modelName} for its profile...`);
@@ -153,10 +168,11 @@ export async function runPassportStage(state) {
         ]);
         answer = extractJson(response.content || '');
     } catch (e) {
-        console.error(`[Passport] The whole-book call failed: ${e.message}`);
+        console.error(`[Passport] The whole-book call failed — ${explainCallFailure(e, provider, conf)}`);
         if (e.contentBlocked) {
             console.error('[Passport] The provider refused the text. Retrying will not help — switch the book_model provider.');
         }
+        process.exitCode = 1;
         return;
     }
 
