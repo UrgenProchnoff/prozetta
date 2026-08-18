@@ -93,6 +93,15 @@ consistent about who is speaking, who they are, and what they are called.
 
 ### Interface
 
+- Settings are readable now. Every one of the 41 fields was labelled with its
+  config key and half carried no explanation at all; each now has a name and a
+  sentence saying what it does and what happens if it moves. A Simple view holds
+  only the fourteen a person must decide, with a readiness panel that answers
+  "can I translate a book yet" and names what is missing. Provider cards are
+  named by role rather than protocol, the choice sits on the card being chosen,
+  and the settings that change a book mid-way are marked apart from those that
+  cannot touch work already done.
+
 - Settings are split into a regular model and a large model, with an explicit
   switch for whether whole-book passes are used at all. Turning it off removes
   the passport and glossary-review steps rather than leaving them looking

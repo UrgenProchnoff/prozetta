@@ -923,3 +923,16 @@ table.glossary .del { text-align: center; }
 .cfg-group.cfg-active .cfg-pick { color: var(--green); }
 .cfg-title-name { font-weight: 600; }
 .cfg-more { max-width: 720px; margin-top: 18px; }
+
+/* When a change starts to matter. Two different facts, so two different
+   colours: grey is reassurance (nothing already made is touched), amber is a
+   caution (a book in progress will come out in two halves). */
+.cfg-effect {
+    grid-column: 2;
+    margin: 0 0 2px;
+    font-size: 11.5px;
+    line-height: 1.4;
+    max-width: 70ch;
+}
+.cfg-effect-newBooks { color: var(--muted); }
+.cfg-effect-nextRun { color: var(--yellow); opacity: 0.85; }

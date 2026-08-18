@@ -1638,6 +1638,18 @@ async function renderSettings() {
     // person, not of the visit.
     const simple = (localStorage.getItem('prozetta.settings.mode') || 'simple') !== 'advanced';
 
+    // When a change starts to matter. 'newBooks' cannot touch anything already
+    // produced; 'nextRun' applies to the very next stage, including one that
+    // continues a half-translated book.
+    const EFFECT = {
+        chunkBaseTokens: 'newBooks', chunkOverflowTokens: 'newBooks',
+        targetLanguage: 'newBooks', langSuffix: 'newBooks',
+        approvalScoreThreshold: 'nextRun', redraftScoreThreshold: 'nextRun',
+        translationMaxRedrafts: 'nextRun', translationMaxRetries: 'nextRun',
+        temperature: 'nextRun', promptLang: 'nextRun',
+        consolidationBatchSize: 'nextRun', dossierMaxTokens: 'nextRun',
+    };
+
     // Wording for a field, most specific first: a group may override the shared
     // text where the same key means something different in its context.
     // Returns '' when nothing is written, so callers can leave the row bare
@@ -1692,6 +1704,11 @@ async function renderSettings() {
         // name the file on disk knows.
         const name = tr('cfg.label.', groupId, f.key) || f.key;
         const desc = tr('cfg.desc.', groupId, f.key);
+        // Half of these settings do nothing to work already done, and the other
+        // half change a book mid-way. Which is which is not guessable from the
+        // name, and getting it wrong means either a needless re-run or a book
+        // whose halves were made under different rules.
+        const when = EFFECT[f.key] ? t('cfg.effect.' + EFFECT[f.key]) : '';
         return `<div class="cfg-field">
             <label for="${id}">
                 <span class="cfg-name">${esc(name)}</span>
@@ -1699,6 +1716,7 @@ async function renderSettings() {
             </label>
             <div class="cfg-input">${input}${inherit}</div>
             ${desc ? `<div class="cfg-desc">${esc(desc)}</div>` : ''}
+            ${when ? `<div class="cfg-effect cfg-effect-${esc(EFFECT[f.key])}">${esc(when)}</div>` : ''}
         </div>`;
     }
 
@@ -1788,7 +1806,26 @@ async function renderSettings() {
     const bookGroups = groups.filter(g => g.id === 'book_model');
     const bookField = (key) => bookGroups[0]?.fields.find(f => f.key === key);
     let bookProvider = bookField('provider')?.value || 'google';
-    const pipeGroups = groups.filter(g => g.kind === 'pipeline');
+    // One card of eleven unrelated numbers answered no question at all. Split by
+    // what a person would actually be looking for; anything not listed here —
+    // a setting added later — falls into the last card rather than vanishing.
+    const PIPE_SECTIONS = [
+        ['pipe.chunking', ['chunkBaseTokens', 'chunkOverflowTokens']],
+        ['pipe.review', ['approvalScoreThreshold', 'redraftScoreThreshold', 'translationMaxRedrafts', 'translationMaxRetries']],
+        ['pipe.glossary', ['consolidationBatchSize', 'consolidationMaxRetries', 'extractionMaxRetries']],
+        ['pipe.book', ['bookCallTokenBudget', 'dossierMaxTokens']],
+    ];
+    const pipeline = groups.find(g => g.kind === 'pipeline');
+    const pipeGroups = (() => {
+        if (!pipeline) return [];
+        const placed = new Set(PIPE_SECTIONS.flatMap(([, keys]) => keys));
+        const cards = PIPE_SECTIONS
+            .map(([id, keys]) => ({ id, kind: 'pipeline', fields: keys.map(k => pipeline.fields.find(f => f.key === k)).filter(Boolean) }))
+            .filter(c => c.fields.length);
+        const rest = pipeline.fields.filter(f => !placed.has(f.key));
+        if (rest.length) cards.push({ id: 'pipe.other', kind: 'pipeline', fields: rest });
+        return cards;
+    })();
     const transGroups = groups.filter(g => g.kind === 'translation');
     const providers = ['local', 'google', 'groq'];
     const activeProvider = data.activeProvider || 'local';
@@ -1924,23 +1961,27 @@ async function renderSettings() {
     }
     updateBookOwnFields();
 
+    // The pipeline is shown as several cards but stored as one block, so a card
+    // id has to be mapped back to where the value actually lives.
+    const storeOf = (groupId) => groupId.startsWith('pipe.') ? 'pipeline' : groupId;
+
     // Collect only changed fields, so config.overrides.json stays minimal.
     function collectChanges() {
         const payload = {};
-        for (const g of groups) {
+        for (const g of [...groups.filter(x => x.kind !== 'pipeline'), ...pipeGroups]) {
             for (const f of g.fields) {
                 const el = document.getElementById(fieldId(g.id, f.key));
                 if (!el) continue;
                 const type = el.dataset.type;
                 if (type === 'secret') {
-                    if (el.value.trim() !== '') (payload[g.id] ||= {})[f.key] = el.value;
+                    if (el.value.trim() !== '') (payload[storeOf(g.id)] ||= {})[f.key] = el.value;
                     continue;
                 }
                 if (type === 'bool') {
-                    if ((el.checked ? '1' : '') !== el.dataset.orig) (payload[g.id] ||= {})[f.key] = el.checked;
+                    if ((el.checked ? '1' : '') !== el.dataset.orig) (payload[storeOf(g.id)] ||= {})[f.key] = el.checked;
                     continue;
                 }
-                if (el.value !== el.dataset.orig) (payload[g.id] ||= {})[f.key] = el.value;
+                if (el.value !== el.dataset.orig) (payload[storeOf(g.id)] ||= {})[f.key] = el.value;
             }
         }
         const chosen = document.getElementById('cfg-active-provider')?.value ?? pickedProvider;
