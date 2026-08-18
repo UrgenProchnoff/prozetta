@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { projectDir } from '../core/paths.js';
 import { ProjectState } from '../core/state_manager.js';
 
 // Simple script to reset project state to "After Stage 1"
@@ -30,7 +31,7 @@ async function resetToStage1() {
     console.log(`Loaded ${chunks.length} chunks for project "${filePrefix}".`);
 
     // Backup first
-    const backupPath = path.join(workDir, `${filePrefix}_project_state_before_reset.json.bak`);
+    const backupPath = path.join(projectDir(workDir, filePrefix), 'state_before_reset.json.bak');
     fs.copyFileSync(state.stateFile, backupPath);
     console.log(`Backup saved to: ${backupPath}`);
 
@@ -64,7 +65,7 @@ async function resetToStage1() {
 
     state.save();
     console.log(`Reset complete. Cleared translation data from ${modifiedCount} chunks.`);
-    console.log(`${filePrefix}_project_state.json is now ready for a fresh Stage 2 run.`);
+    console.log(`projects/${filePrefix}/state.json is now ready for a fresh Stage 2 run.`);
 }
 
 resetToStage1().catch(e => console.error(e));

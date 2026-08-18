@@ -1,24 +1,26 @@
 import fs from 'fs';
-import path from 'path';
 import { usageTracker } from './usage_tracker.js';
+import { projectPaths, ensureProjectDir } from './paths.js';
 
 export class ProjectState {
     constructor(workDir, filePrefix) {
         this.workDir = workDir || process.cwd();
         this.filePrefix = filePrefix || '';
 
-        // Build prefixed filenames: e.g. "Sterling_Junk_DNA_project_state.json"
-        const prefix = this.filePrefix ? `${this.filePrefix}_` : '';
-        this.stateFile = path.join(this.workDir, `${prefix}project_state.json`);
-        this.glossaryFile = path.join(this.workDir, `${prefix}glossary.json`);
+        // Everything about one book lives in projects/<book>/ — see core/paths.js
+        // for why the answer is given in exactly one place.
+        const paths = projectPaths(this.workDir, this.filePrefix);
+        this.projectDir = paths.dir;
+        this.stateFile = paths.state;
+        this.glossaryFile = paths.glossary;
         // The passport lives beside the glossary rather than inside the state:
         // both are human-edited artefacts, and neither should be lost when
         // Stage 2 is reset.
-        this.passportFile = path.join(this.workDir, `${prefix}passport.json`);
+        this.passportFile = paths.passport;
         // The model's glossary findings. Kept apart from the glossary itself
         // because nothing here is applied automatically: the file is a report
         // about the glossary, not a version of it.
-        this.glossaryReviewFile = path.join(this.workDir, `${prefix}glossary_review.json`);
+        this.glossaryReviewFile = paths.review;
 
         this.data = {
             metadata: {
@@ -56,6 +58,9 @@ export class ProjectState {
         if (usageTracker.hasData || usageTracker.hasBaseline) {
             this.data.metadata.usage = usageTracker.snapshot();
         }
+        // The folder may not exist yet: a fresh project writes its state before
+        // anything else has had reason to create it.
+        ensureProjectDir(this.workDir, this.filePrefix);
         const tempFile = this.stateFile + '.tmp';
 
         try {

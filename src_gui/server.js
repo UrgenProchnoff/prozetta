@@ -7,6 +7,7 @@ import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER } from '../src_
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { outstandingFindings } from '../src_v4/core/glossary_review.js';
+import { projectPaths, projectDir, listProjects } from '../src_v4/core/paths.js';
 import config from '../src_v4/config.js';
 
 import { execFileSync } from 'child_process';
@@ -41,18 +42,13 @@ function isValidPrefix(prefix) {
         && prefix !== '..';
 }
 
-function statePath(prefix) {
-    return path.join(ROOT, `${prefix}_project_state.json`);
-}
-
-function glossaryPath(prefix) {
-    return path.join(ROOT, `${prefix}_glossary.json`);
-}
-
-// The book passport lives beside the glossary: both are human-edited artifacts.
-function reviewPath(prefix) {
-    return path.join(ROOT, `${prefix}_glossary_review.json`);
-}
+// Every path a project owns comes from one place, shared with the pipeline —
+// see src_v4/core/paths.js. Two independent answers is what let the delete list
+// go stale twice.
+const paths = (prefix) => projectPaths(ROOT, prefix);
+const statePath = (prefix) => paths(prefix).state;
+const glossaryPath = (prefix) => paths(prefix).glossary;
+const reviewPath = (prefix) => paths(prefix).review;
 
 /**
  * What version is running, resolved once at startup.
@@ -152,13 +148,8 @@ app.get('/api/changelog', (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-function passportPath(prefix) {
-    return path.join(ROOT, `${prefix}_passport.json`);
-}
-
-function runLogPath(prefix) {
-    return path.join(ROOT, `${prefix}_run.log`);
-}
+const passportPath = (prefix) => paths(prefix).passport;
+const runLogPath = (prefix) => paths(prefix).log;
 
 // Tail of the persistent per-project log written by src_v4 (survives GUI
 // restarts, unlike the in-memory job log). Timestamps/levels are stripped so
@@ -192,10 +183,8 @@ function outputFileName(prefix, suffix, ext = 'txt') {
     return `${prefix}_${s}.${ext}`;
 }
 
-// The book cover lives next to the project state as <prefix>_cover.jpg|png.
-function coverPath(prefix, ext) {
-    return path.join(ROOT, `${prefix}_cover.${ext}`);
-}
+// The book cover lives in the project folder as cover.jpg|png.
+const coverPath = (prefix, ext) => paths(prefix).cover(ext);
 
 // Find the existing cover file for a project, or null.
 function findCover(prefix) {
@@ -345,9 +334,7 @@ function resolveSourceFile(prefix) {
 
 app.get('/api/projects', (req, res) => {
     const projects = [];
-    for (const f of fs.readdirSync(ROOT)) {
-        if (!f.endsWith('_project_state.json')) continue;
-        const prefix = f.slice(0, -'_project_state.json'.length);
+    for (const prefix of listProjects(ROOT)) {
         if (!isValidPrefix(prefix)) continue;
         try {
             const s = projectSummary(prefix);
@@ -738,7 +725,7 @@ app.post('/api/projects/:prefix/reset-stage1', (req, res) => {
     try { state = readJson(file); } catch { return res.status(404).json({ error: 'Project not found' }); }
 
     // Backup the current state before mutating.
-    const backupPath = path.join(ROOT, `${prefix}_project_state_before_reset.json.bak`);
+    const backupPath = path.join(projectDir(ROOT, prefix), 'state_before_reset.json.bak');
     fs.copyFileSync(file, backupPath);
 
     let modified = 0;
@@ -824,18 +811,27 @@ app.post('/api/projects/:prefix/delete', (req, res) => {
     const sp = statePath(prefix);
     if (!fs.existsSync(sp)) return res.status(404).json({ error: 'Project not found' });
 
-    // Back up the state before removing it.
-    try { fs.copyFileSync(sp, `${sp}.deleted.bak`); } catch { /* best effort */ }
+    // The state is kept outside the folder about to go, so a delete can still be
+    // undone by hand.
+    const backup = path.join(ROOT, `${prefix}_project_state.deleted.bak`);
+    try { fs.copyFileSync(sp, backup); } catch { /* best effort */ }
 
+    // The whole folder, rather than a list of the files in it. The list was
+    // written by hand and went stale twice — once missing the passport, once the
+    // glossary review — quietly leaving files behind after a delete.
     const removed = [];
-    const targets = [
-        sp, glossaryPath(prefix), reviewPath(prefix), passportPath(prefix),
-        runLogPath(prefix),
-        path.join(TXT_DIR, outputFileName(prefix)),
-        path.join(TXT_DIR, outputFileName(prefix, null, 'fb2')),
-        coverPath(prefix, 'jpg'), coverPath(prefix, 'png'),
-    ];
-    for (const f of targets) {
+    const dir = projectDir(ROOT, prefix);
+    try {
+        for (const f of fs.readdirSync(dir)) removed.push(f);
+        fs.rmSync(dir, { recursive: true, force: true });
+    } catch (e) {
+        return res.status(500).json({ error: `Could not remove ${dir}: ${e.message}` });
+    }
+
+    // The assembled translation lives in txt/, with the source the person put
+    // there — so it is named explicitly rather than swept up with the folder.
+    for (const f of [path.join(TXT_DIR, outputFileName(prefix)),
+                     path.join(TXT_DIR, outputFileName(prefix, null, 'fb2'))]) {
         try { if (fs.existsSync(f)) { fs.unlinkSync(f); removed.push(path.basename(f)); } } catch { /* best effort */ }
     }
 

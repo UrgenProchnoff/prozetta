@@ -1,11 +1,11 @@
 node_modules/
 .env
 src_v4/config.overrides.json
-*_project_state.json
-*_progress.json
-*_glossary.json
-*_glossary_review.json
-*_passport.json
+# Everything the pipeline produces about a book lives in one folder per book.
+# One ignored directory rather than a pattern per artifact type: a new kind of
+# file used to default to *not* ignored, which is how a copyrighted translation
+# and a review file both nearly got committed.
+projects/
 txt/
 temp/
 .DS_Store

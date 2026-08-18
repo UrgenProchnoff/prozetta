@@ -12,7 +12,8 @@
   "scripts": {
     "start": "node src_v4/main.js",
     "gui": "node src_gui/server.js",
-    "changelog": "node src_v4/tools/changelog_check.js"
+    "changelog": "node src_v4/tools/changelog_check.js",
+    "migrate": "node src_v4/tools/migrate_projects.js"
   },
   "main": "src_v4/main.js",
   "dependencies": {

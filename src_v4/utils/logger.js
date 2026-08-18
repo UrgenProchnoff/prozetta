@@ -1,22 +1,23 @@
 import fs from 'fs';
-import path from 'path';
 import util from 'util';
+import { projectPaths, ensureProjectDir } from '../core/paths.js';
 
 // Matches ANSI color/style escape sequences so the file stays plain text.
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
 /**
- * Tee all console output of this process into a per-project log file
- * (`<prefix>_run.log`, next to `<prefix>_project_state.json`).
+ * Tee all console output of this process into the project's own log file
+ * (`projects/<book>/run.log`, beside its state).
  * Appends across runs; each run starts with a separator header.
  * Writes are synchronous so nothing is lost on process.exit() or a crash.
  */
 export function initFileLog(workDir, filePrefix) {
-    const prefix = filePrefix ? `${filePrefix}_` : '';
-    const logFile = path.join(workDir, `${prefix}run.log`);
+    const logFile = projectPaths(workDir, filePrefix).log;
 
     let fd;
     try {
+        // A run can start before the project has written anything of its own.
+        ensureProjectDir(workDir, filePrefix);
         fd = fs.openSync(logFile, 'a');
     } catch (e) {
         console.error(`[Log] Could not open log file ${logFile}: ${e.message}`);
