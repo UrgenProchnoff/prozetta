@@ -4,6 +4,10 @@
   "description": "LLM pipeline for literary translation with a consistency glossary and a self-checking quality loop",
   "author": "Evgenii Polomannyi <urgproch@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/UrgenProchnoff/prozetta"
+  },
   "type": "module",
   "scripts": {
     "start": "node src_v4/main.js",

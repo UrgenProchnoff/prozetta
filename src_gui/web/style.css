@@ -933,3 +933,18 @@ table.glossary .del { text-align: center; }
    a card below for the answer's details. Set apart from the provider cards so
    the two kinds are not read as a list of five equals. */
 .cfg-role { border-left: 3px solid var(--accent); }
+
+/* Commit fingerprints in the changelog: an entry says which commit made it, so
+   `git show` works and, once pushed, so does the link. */
+.cm-refs { white-space: nowrap; }
+.cm-ref {
+    font-family: ui-monospace, monospace;
+    font-size: 11.5px;
+    color: var(--muted);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+}
+a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
+/* A hash git cannot resolve is struck through rather than linked: a dead
+   reference should look dead, not merely fail when clicked. */
+.cm-ref.dead { color: var(--red); text-decoration: line-through; cursor: help; }

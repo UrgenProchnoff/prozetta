@@ -69,26 +69,54 @@ function reviewPath(prefix) {
  */
 const VERSION = (() => {
     let version = '0.0.0';
-    try { version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).version || version; }
-    catch { /* keep the placeholder */ }
+    let repository = null;
+    try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
+        version = pkg.version || version;
+        repository = String(pkg.repository?.url || pkg.repository || '').replace(/\.git$/, '') || null;
+    } catch { /* keep the placeholder */ }
 
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf-8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     try {
         return {
             version,
+            repository,
             commit: git('rev-parse', '--short', 'HEAD'),
             commitDate: git('log', '-1', '--format=%cI'),
             branch: git('rev-parse', '--abbrev-ref', 'HEAD'),
             dirty: git('status', '--porcelain', '--untracked-files=no').length > 0,
         };
     } catch {
-        return { version, commit: null, commitDate: null, branch: null, dirty: false };
+        return { version, repository, commit: null, commitDate: null, branch: null, dirty: false };
     }
 })();
 
 app.get('/api/version', (req, res) => {
     res.json({ ...VERSION, changelog: fs.existsSync(path.join(ROOT, 'CHANGELOG.md')) });
 });
+
+/**
+ * Look up every commit the changelog refers to, in one pass over the log rather
+ * than one call per hash: the file names forty of them, and forty git processes
+ * to render a page is forty too many.
+ */
+function describeCommits(text) {
+    const wanted = new Set();
+    for (const m of text.matchAll(/\(([0-9a-f]{7,40}(?:,\s*[0-9a-f]{7,40})*)\)/g)) {
+        for (const h of m[1].split(/,\s*/)) wanted.add(h);
+    }
+    if (!wanted.size) return {};
+    const found = {};
+    try {
+        const log = execFileSync('git', ['log', '--format=%h%x00%s%x00%cI', '--max-count=2000'],
+            { cwd: ROOT, encoding: 'utf-8', timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] });
+        for (const line of log.split('\n')) {
+            const [hash, subject, date] = line.split('\0');
+            if (hash && wanted.has(hash)) found[hash] = { subject, date };
+        }
+    } catch { /* no checkout: the refs stay plain text, which is still readable */ }
+    return found;
+}
 
 // The changelog as written, for the interface to render. Read per request so an
 // edit shows up without restarting the server.
@@ -105,10 +133,16 @@ app.get('/api/changelog', (req, res) => {
     const file = lang !== 'en' && fs.existsSync(translated) ? translated : english;
     if (!fs.existsSync(file)) return res.status(404).json({ error: 'No CHANGELOG.md' });
     try {
+        const text = fs.readFileSync(file, 'utf-8');
         res.json({
-            text: fs.readFileSync(file, 'utf-8'),
+            text,
             lang: file === english ? 'en' : lang,
             requested: lang,
+            repository: VERSION.repository,
+            // Subject and date for every commit the file names, so an entry can
+            // show what it points at and a hash that no longer resolves — a
+            // typo, or a rebase — is visibly dead rather than a link to nothing.
+            commits: describeCommits(text),
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });

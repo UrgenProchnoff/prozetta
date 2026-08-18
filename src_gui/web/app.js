@@ -152,11 +152,25 @@ async function renderVersion() {
  * escaped before any of it is applied, so the file cannot inject markup into
  * the page whatever it contains.
  */
-function renderMarkdown(src) {
-    const inline = s => esc(s)
+function renderMarkdown(src, commits = {}, repository = null) {
+    // A bare (abc1234) becomes a link to the commit it names. The subject is put
+    // in the tooltip, and a hash git does not know is left visibly dead rather
+    // than linked into nothing — which is what a typo or a rebase produces.
+    const refs = (text) => text.replace(/\(([0-9a-f]{7,40}(?:,\s*[0-9a-f]{7,40})*)\)/g, (whole, list) => {
+        const parts = list.split(/,\s*/).map(hash => {
+            const known = commits[hash];
+            const title = known ? `${known.subject}${known.date ? ' · ' + fmtDate(known.date) : ''}` : t('ver.unknownCommit');
+            if (!known) return `<span class="cm-ref dead" title="${esc(title)}">${esc(hash)}</span>`;
+            if (!repository) return `<span class="cm-ref" title="${esc(title)}">${esc(hash)}</span>`;
+            return `<a class="cm-ref" href="${esc(repository)}/commit/${esc(hash)}" target="_blank" rel="noopener" title="${esc(title)}">${esc(hash)}</a>`;
+        });
+        return `<span class="cm-refs">${parts.join(' ')}</span>`;
+    });
+
+    const inline = s => refs(esc(s)
         .replace(/`([^`]+)`/g, '<code>$1</code>')
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>'));
 
     // Paragraphs and bullets are buffered rather than emitted line by line: the
     // file is hard-wrapped at 80 columns, so a line break inside one is where
@@ -206,11 +220,11 @@ async function renderChangelog() {
     try {
         // Switching the interface language re-runs the router, so the page
         // follows it without needing to know that it did.
-        const { text, lang, requested } = await api(`/api/changelog?lang=${encodeURIComponent(i18n.getLang())}`);
+        const { text, lang, requested, commits, repository } = await api(`/api/changelog?lang=${encodeURIComponent(i18n.getLang())}`);
         const note = lang !== requested
             ? `<div class="rv-bar">${esc(t('ver.noTranslation'))}</div>`
             : '';
-        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text)}</div>`;
+        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text, commits || {}, repository)}</div>`;
     } catch (e) {
         app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
     }

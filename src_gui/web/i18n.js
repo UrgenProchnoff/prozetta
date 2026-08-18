@@ -26,6 +26,7 @@
             'nav.projects': 'Проекты',
 
             'ver.changelog': 'Что изменилось',
+            'ver.unknownCommit': 'Такого коммита в этом репозитории нет — отпечаток устарел или в нём опечатка',
             'ver.title': 'prozetta {version}\nКоммит: {commit} ({branch}), {date}{dirty}\nНажмите, чтобы посмотреть список изменений',
             'ver.dirty': '\nВ рабочем каталоге есть правки, не зафиксированные в git — этот запуск не соответствует коммиту точно',
             'ver.noTranslation': 'Для этого языка перевода истории изменений нет — показана английская версия.',
@@ -430,6 +431,7 @@
             'nav.projects': 'Projects',
 
             'ver.changelog': 'What changed',
+            'ver.unknownCommit': 'No such commit in this repository — the fingerprint is stale or mistyped',
             'ver.title': 'prozetta {version}\nCommit: {commit} ({branch}), {date}{dirty}\nClick to see the list of changes',
             'ver.dirty': '\nThe working tree has changes not committed to git — this run matches no commit exactly',
             'ver.noTranslation': 'There is no changelog translated into this language — showing the English one.',
