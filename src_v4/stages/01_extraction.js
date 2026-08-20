@@ -79,16 +79,17 @@ export async function runExtractionStage(state) {
 
             } catch (error) {
                 console.error(`[Stage 1] Error processing chunk ${i + 1}, attempt ${attempt}: ${error.message}`);
-                if (attempt >= MAX_RETRIES) {
-                    // A content-filter block is permanent for this text: skip the
-                    // chunk (no terms) instead of aborting the whole stage.
-                    // Systemic errors (network, quota, bad key) still abort.
-                    if (error.contentBlocked) {
-                        blocked = true;
-                        break;
-                    }
-                    throw error;
+                // A content-filter block is permanent for this text: skip the
+                // chunk (no terms) instead of aborting the whole stage. Checked
+                // before the retry budget rather than after it — the filter
+                // refuses the same text every time, so the remaining attempts
+                // bought nothing and spent quota on a foregone answer.
+                // Systemic errors (network, quota, bad key) still abort.
+                if (error.contentBlocked) {
+                    blocked = true;
+                    break;
                 }
+                if (attempt >= MAX_RETRIES) throw error;
             }
         }
 

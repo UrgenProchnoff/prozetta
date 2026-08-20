@@ -258,11 +258,13 @@ async function renderDashboard() {
             <div class="progress">
                 <div class="p-success" style="width:${pct('success')}%"></div>
                 <div class="p-best_effort" style="width:${pct('best_effort')}%"></div>
+                <div class="p-blocked" style="width:${pct('blocked')}%"></div>
                 <div class="p-in_progress" style="width:${pct('in_progress')}%"></div>
             </div>
             <div class="badges">
                 <span class="badge b-success">✓ ${p.statuses.success}</span>
                 <span class="badge b-best_effort">~ ${p.statuses.best_effort}</span>
+                ${p.statuses.blocked ? `<span class="badge b-blocked" title="${esc(t('dash.blockedTitle'))}">⛔ ${p.statuses.blocked}</span>` : ''}
                 <span class="badge">⏳ ${p.statuses.pending + p.statuses.in_progress}</span>
                 <span class="badge">${esc(t('dash.extracted', { done: p.extracted, total: p.total }))}</span>
             </div>
@@ -895,6 +897,7 @@ async function renderMonitor(prefix) {
                     <span><span class="dot" style="background:#1e5e41"></span>${esc(t('status.success'))}</span>
                     <span><span class="dot" style="background:#6b5320"></span>${esc(t('status.best_effort'))}</span>
                     <span><span class="dot" style="background:#29456e"></span>${esc(t('status.in_progress'))}</span>
+                    <span><span class="dot" style="background:#5e2020"></span>${esc(t('status.blocked'))}</span>
                     <span><span class="dot" style="background:#1f242e"></span>${esc(t('status.pending'))}</span>
                     <span><span class="dot ext-dot"></span>${esc(t('legend.extracted'))}</span>
                     <span><span class="dot blocked-dot"></span>${esc(t('legend.blocked'))}</span>
@@ -1175,6 +1178,7 @@ async function renderMonitor(prefix) {
             const title = t('mon.chunkTitle', { n: c.i + 1, status: statusLabel(c.status) })
                 + '\n' + t('mon.chunkTerms', { value: termsValue })
                 + (c.blocked ? '\n' + t('mon.chunkBlocked') + (c.blockedBy ? ' ' + t('mon.chunkBlockedBy', { model: c.blockedBy }) : '') : '')
+                + (c.status === 'blocked' ? '\n' + t('mon.chunkTransBlocked') + (c.translationBlockedBy ? ' ' + t('mon.chunkTransBlockedBy', { model: c.translationBlockedBy }) : '') : '')
                 + (c.disputed ? '\n' + t('mon.chunkDisputed') : '')
                 + (c.score != null ? t('mon.chunkScore', { score: c.score }) : '')
                 + (c.attempts ? t('mon.chunkSteps', { n: c.attempts }) : '')
@@ -1541,6 +1545,7 @@ async function renderChunk(prefix, i) {
     const { chunk, total } = data;
     const status = chunk.translation_status === 'success' ? 'success'
         : chunk.translation_status === 'failed_best_effort' ? 'best_effort'
+        : chunk.translation_status === 'blocked' ? 'blocked'
         : (chunk.history?.length ? 'in_progress' : 'pending');
 
     const extracted = chunk.extraction_status === 'success' || Array.isArray(chunk.extracted_terms);
@@ -1592,6 +1597,7 @@ async function renderChunk(prefix, i) {
             <button id="c-reset" class="danger">${esc(t('chunk.reset'))}</button>
         </div>
         ${chunk.dispute ? `<div class="dispute-note">${esc(t('chunk.disputeExplain', { reason: chunk.dispute.reason || '?' }))}</div>` : ''}
+        ${status === 'blocked' ? `<div class="blocked-note">${esc(t('chunk.blockedExplain', { model: chunk.translation_blocked_by || '?' }))}</div>` : ''}
         <div class="panes" id="c-panes">
             <div class="pane" id="c-pane-orig">
                 <h4>${esc(t('chunk.original'))}</h4>

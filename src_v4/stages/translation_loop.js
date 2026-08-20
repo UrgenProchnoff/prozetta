@@ -50,6 +50,16 @@ export async function runTranslationLoopStage(state) {
     const client = llmManager.getClient('logic'); // Only one model for V4
 
     let processedCount = 0;
+    const blockedChunks = []; // 1-based numbers of chunks the content filter refused
+
+    // A content filter refuses a text, not a request: the same model refuses it
+    // again, so retrying is pure waste. Another model may well accept it —
+    // observed on Morphotrophic, where gemini-3.6-flash translated a chunk that
+    // gemini-3.5-flash-lite would not. So a block is recorded against the model
+    // that made it, and only that model skips the chunk on a rerun. Same field
+    // shape as Stage 1, under its own name: extraction and translation can be
+    // blocked by different models, and one field could not say so.
+    const modelSignature = `${llmManager.provider}:${llmManager.getModelName()}`;
 
     for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
@@ -58,10 +68,18 @@ export async function runTranslationLoopStage(state) {
         if (chunk.translation && chunk.translation_status === 'success') {
             continue;
         }
+        if (chunk.translation_status === 'blocked' && chunk.translation_blocked_by === modelSignature) {
+            continue;
+        }
+        if (chunk.translation_status === 'blocked') {
+            console.log(`[Stage 2] Chunk ${i + 1} was blocked by "${chunk.translation_blocked_by || 'unknown model'}" — retrying with "${modelSignature}"...`);
+        }
 
         console.log(`[Stage 2] Processing Chunk ${i + 1}/${chunks.length}...`);
 
         let history = chunk.history || [];
+
+        try {
 
         // 1. DRAFTING
         let currentTranslation = "";
@@ -144,7 +162,10 @@ export async function runTranslationLoopStage(state) {
                 state.updateChunk(i, {
                     translation: currentTranslation,
                     translation_status: 'success',
-                    history: history
+                    history: history,
+                    // This model got through where another was refused; leaving
+                    // the old block behind would keep the chunk skipped forever.
+                    ...(chunk.translation_blocked_by ? { translation_blocked_by: null } : {})
                 });
             } else {
                 // Break if max retries reached to avoid wasted fix/redraft
@@ -232,8 +253,34 @@ export async function runTranslationLoopStage(state) {
                 // translation.
                 translation_status: 'failed_best_effort',
                 ...(dispute ? { dispute } : {}),
+                history: history,
+                ...(chunk.translation_blocked_by ? { translation_blocked_by: null } : {})
+            });
+        }
+
+        } catch (error) {
+            // A content filter refuses the text, not the request, and it refuses
+            // it every time. Until now one refused chunk killed the whole run:
+            // measured on Morphotrophic, six consecutive runs died on chunks 11
+            // and 17, and the book never got past chunk 17 of 169. Skipping costs
+            // one chunk; aborting costs the book.
+            //
+            // Only a content block skips. A bad key, an exhausted quota or a dead
+            // server fails identically on every chunk, and quietly marking all
+            // 169 "blocked" would bury that under a plausible-looking report.
+            if (!error.contentBlocked) throw error;
+
+            console.warn(`   -> BLOCKED by the content filter of ${modelSignature} — skipping this chunk.`);
+            console.warn(`      ${String(error.message).slice(0, 300)}`);
+            state.updateChunk(i, {
+                translation_status: 'blocked',
+                translation_blocked_by: modelSignature,
+                // Whatever was drafted before the refusal is kept. A block during
+                // the review would otherwise throw away a draft already paid for,
+                // and the next model resumes from it instead of buying it again.
                 history: history
             });
+            blockedChunks.push(i + 1);
         }
 
         processedCount++;
@@ -244,6 +291,13 @@ export async function runTranslationLoopStage(state) {
     }
 
     state.save();
+    if (blockedChunks.length) {
+        console.warn(`\n[Stage 2] WARNING: ${blockedChunks.length} chunk(s) were refused by the content filter of ` +
+            `${modelSignature} and are left untranslated: ${blockedChunks.join(', ')}.`);
+        console.warn(`[Stage 2] They are marked on the chunk map, and the exported book will be missing them. ` +
+            `Switch to another provider or model in the settings — a local one has no such filter — and run Stage 2 ` +
+            `again: everything already translated is kept, only the blocked chunks are picked up.`);
+    }
     console.log('--- SYSTEM: Stage 2 (Translation Loop) Completed ---');
 }
 

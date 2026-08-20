@@ -200,6 +200,12 @@ export function explainInvokeError(error, provider, model) {
             `[${model}] Google API returned an empty response (0 candidates). ` +
             `This usually means its content filter blocked the text of this chunk.${gemmaHint}`
         );
+        // The message said "blocked" but the flag was missing, so callers that
+        // decide by the flag — every stage that skips a refused chunk instead of
+        // aborting — treated this path as an unknown error and died. The
+        // diagnostics subclass normally gets there first; this is the fallback
+        // for when it does not, and it has to agree with it.
+        e.contentBlocked = true;
         e.cause = error;
         return e;
     }

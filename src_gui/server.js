@@ -218,6 +218,10 @@ function validPrefix(req, res) {
 function chunkStatus(chunk) {
     if (chunk.translation_status === 'success') return 'success';
     if (chunk.translation_status === 'failed_best_effort') return 'best_effort';
+    // Refused by the content filter of the model that was translating. Its own
+    // colour rather than "in progress": nothing is in progress, and the run has
+    // already moved on. Only another model can pick it up.
+    if (chunk.translation_status === 'blocked') return 'blocked';
     if (chunk.history && chunk.history.length > 0) return 'in_progress';
     return 'pending';
 }
@@ -243,7 +247,7 @@ function lastScore(chunk) {
 function projectSummary(prefix) {
     const state = readJson(statePath(prefix));
     const chunks = state.chunks || [];
-    const statuses = { success: 0, best_effort: 0, in_progress: 0, pending: 0 };
+    const statuses = { success: 0, best_effort: 0, blocked: 0, in_progress: 0, pending: 0 };
     let extracted = 0;
 
     const chunkList = chunks.map((c, i) => {
@@ -258,6 +262,10 @@ function projectSummary(prefix) {
             extracted: ext,
             blocked: c.extraction_status === 'blocked',
             blockedBy: c.extraction_status === 'blocked' ? (c.blocked_by || null) : null,
+            // Which model refused to translate it. Separate from the two above,
+            // which are about Stage 1: the same chunk can be refused by one model
+            // at extraction and by another at translation.
+            translationBlockedBy: c.translation_status === 'blocked' ? (c.translation_blocked_by || null) : null,
             // Translator and reviewer could not agree (repeated rejection of a
             // fresh draft) — the loop stopped instead of burning budget, and a
             // human should settle it.
@@ -463,6 +471,9 @@ app.put('/api/projects/:prefix/chunks/:i', (req, res) => {
         delete chunk.translation;
         delete chunk.translation_status;
         delete chunk.history;
+        // Goes with the status it belongs to: left behind, it would claim a
+        // block that the reset just erased.
+        delete chunk.translation_blocked_by;
     } else {
         if (typeof translation === 'string') chunk.translation = translation;
         if (typeof translation_status === 'string') chunk.translation_status = translation_status;

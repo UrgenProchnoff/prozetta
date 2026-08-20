@@ -255,6 +255,7 @@ h3 { margin: 24px 0 10px; font-size: 15px; color: var(--muted); }
 }
 .progress .p-success { background: var(--green); }
 .progress .p-best_effort { background: var(--yellow); }
+.progress .p-blocked { background: var(--red); }
 .progress .p-in_progress { background: var(--blue); }
 
 .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -550,6 +551,7 @@ table.glossary .del { text-align: center; }
     border-bottom-left-radius: 4px;
 }
 .badge.b-disputed { color: var(--yellow); border-color: var(--yellow); }
+.badge.b-blocked { color: var(--red); border-color: var(--red); }
 .dispute-note {
     margin: 8px 0;
     padding: 8px 12px;
@@ -559,9 +561,19 @@ table.glossary .del { text-align: center; }
     color: var(--text);
     font-size: 13px;
 }
+.blocked-note {
+    margin: 8px 0;
+    padding: 8px 12px;
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    background: rgba(217, 87, 87, 0.12);
+    color: var(--text);
+    font-size: 13px;
+}
 .chunk-cell.s-success { background: #1e5e41; border-color: var(--green); }
 .chunk-cell.s-best_effort { background: #6b5320; border-color: var(--yellow); }
 .chunk-cell.s-in_progress { background: #29456e; border-color: var(--blue); }
+.chunk-cell.s-blocked { background: #5e2020; border-color: var(--red); }
 .chunk-cell.s-pending { color: var(--muted); }
 .chunk-cell.active { animation: pulse 1.2s infinite; border-color: #fff; }
 
