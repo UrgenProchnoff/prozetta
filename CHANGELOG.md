@@ -14,6 +14,11 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-20**
 
+- `3efd3e5` — Re-splitting on point-of-view boundaries carries extracted terms onto
+  the new chunks instead of discarding them. A term is pinned by locating its
+  own text inside the chunk it was recorded against; one that is not found goes
+  to every overlapping chunk rather than being lost. The splitter also stopped
+  appending a newline the book never had — the offsets depend on it.
 - `3d054dc` — The passport stage no longer discards its own token spend: it wrote the
   passport to its own file and never saved the project state, so the call
   reached the run report and vanished from the statistics.
