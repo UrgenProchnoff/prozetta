@@ -977,7 +977,27 @@ async function renderMonitor(prefix) {
             return { stage: 'export', text: t('rec.allDone') };
         if (!s.glossaryCount)
             return { stage: '2', text: t('rec.glossaryEmpty') };
+        // The passport decides what a single chunk cannot: who narrates, whether
+        // the reader is addressed formally, which gendered forms to use. Without
+        // one those are re-decided per chunk, which is a coin flip — measured 35
+        // masculine against 36 feminine for one female narrator.
+        //
+        // Only before translation starts. Arriving halfway, a passport makes the
+        // second half consistent and the first half different from it, and the
+        // seam is worse than the drift. And only with a glossary in hand: the
+        // passport draws its candidate cast from it, and on two of four measured
+        // books the other source alone found nobody at all.
+        if (needsPassport(s) && done === 0)
+            return { stage: 'passport', text: t('rec.noPassport') };
         return { stage: '2', text: t('rec.canTranslate', { glossary: s.glossaryCount }) };
+    }
+
+    // A passport is expected only where one could exist: it is built by a single
+    // call to the large model, and with that switched off the step is not
+    // available to take.
+    function needsPassport(s) {
+        if (!s || s.bookModel?.enabled === false) return false;
+        return !s.passport || !!s.passport.broken;
     }
 
     // Returns a warning string if the chosen stage breaks the recommended order
@@ -990,6 +1010,12 @@ async function renderMonitor(prefix) {
             return t('pre.stage1Incomplete', { done: s.extracted, total: s.total });
         if (!s.glossaryCount)
             return t('pre.glossaryEmpty');
+        // Not on a resumed book: it is already being translated without one, the
+        // choice was made, and a dialog on every restart is nagging rather than
+        // warning.
+        const started = s.statuses.success + s.statuses.best_effort;
+        if (needsPassport(s) && started === 0)
+            return t('pre.noPassport');
         return null;
     }
 
