@@ -14,6 +14,12 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-20**
 
+- `e699ce0` — A chunk the content filter refuses no longer takes the whole book down
+  with it. Stage 2 skips it, records which model refused, and carries on;
+  another model picks it up on the next run, the same one does not waste a call
+  on it. Measured on Morphotrophic, six consecutive runs had died on the same
+  two chunks. Stage 1 also stopped spending its full retry budget on a refusal
+  that cannot change.
 - `6c4635d` — Rebuilding a passport no longer takes back hand corrections silently: an
   edited passport is copied aside first, and the editor asks before spending the
   call.
