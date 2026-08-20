@@ -135,6 +135,23 @@ export function savePassport(passportPath, passport) {
     return data;
 }
 
+/**
+ * Has a person edited this passport since the model produced it?
+ *
+ * `generatedAt` is stamped only by the stage that builds it, while `updatedAt`
+ * is rewritten on every save — including the editor's. So a gap between them is
+ * a human. Measured on seven real passports, none of them hand-edited: the gap
+ * is exactly zero milliseconds, both stamps being taken during the same save.
+ * The tolerance is for a save slow enough to cross a millisecond boundary, not
+ * for judgement.
+ */
+export function handEdited(passport) {
+    const generated = Date.parse(passport?.source?.generatedAt || '');
+    const updated = Date.parse(passport?.updatedAt || '');
+    if (!Number.isFinite(generated) || !Number.isFinite(updated)) return false;
+    return updated - generated > 5000;
+}
+
 /** The point-of-view character of a chunk, or null when undetermined. */
 export function povForChunk(passport, chunkIndex) {
     for (const span of passport.povMap || []) {

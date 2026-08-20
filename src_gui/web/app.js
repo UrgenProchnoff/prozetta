@@ -1003,6 +1003,13 @@ async function renderMonitor(prefix) {
     // Returns a warning string if the chosen stage breaks the recommended order
     // (extraction → review glossary → translation), or null if it's safe.
     function preflight(stage, s) {
+        // Rebuilding a passport replaces narration, the cast, their dossiers and
+        // the map — everything the editor invites you to correct. The stage keeps
+        // a backup, but a call is spent either way, so the question is worth
+        // asking before it is.
+        if (stage === 'passport') {
+            return s?.passport?.edited ? t('pre.passportEdited') : null;
+        }
         if (stage !== '2') return null;
         if (!s || s.total === 0)
             return t('pre.notCreated');

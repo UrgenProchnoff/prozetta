@@ -20,7 +20,7 @@ import { buildPovMap, describePovMap } from '../core/pov_map.js';
 import { spansFromQuotes } from '../core/quoted_spans.js';
 import { splitTextIntoChunks } from '../core/tokenizer.js';
 import { carryExtraction } from '../core/rechunk.js';
-import { loadPassport, savePassport } from '../core/passport.js';
+import { loadPassport, savePassport, handEdited } from '../core/passport.js';
 import { profileForText, reloadLearnedProfiles } from '../core/language.js';
 import { learnLanguageProfile, validateLanguageProfile, saveLearnedProfile } from '../core/language_learn.js';
 import config from '../config.js';
@@ -178,7 +178,28 @@ export async function runPassportStage(state) {
     }
 
     // --- merge: the model's answer, then the map computed from it ---
-    const passport = loadPassport(state.getPassportPath());
+    const passportPath = state.getPassportPath();
+    const passport = loadPassport(passportPath);
+
+    // Everything this stage computes it overwrites: narration, the cast and
+    // their dossiers, the map. The editor invites those to be corrected by hand,
+    // and a second run would take the corrections back without asking. Keep a
+    // copy — a backup nobody needs costs a few kilobytes, a lost dossier costs
+    // the reading of a whole book.
+    if (handEdited(passport)) {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const backup = `${passportPath}.${stamp}.bak`;
+        try {
+            fs.copyFileSync(passportPath, backup);
+            console.warn(`[Passport] This passport was edited by hand after it was generated. ` +
+                `The model's answer replaces narration, the cast and the map; your copy is kept as ` +
+                `${backup.split(/[\\/]/).pop()}.`);
+        } catch (e) {
+            console.error(`[Passport] Could not back up the hand-edited passport (${e.message}) — nothing was overwritten.`);
+            process.exitCode = 1;
+            return;
+        }
+    }
 
     // Non-fiction is the answer that changes behaviour, so it has to be stated;
     // anything unrecognized falls back to fiction, which is what the pipeline
@@ -289,7 +310,7 @@ export async function runPassportStage(state) {
 
     passport.source = { model: conf.modelName, generatedAt: new Date().toISOString(), povMapFrom: mapSource };
 
-    savePassport(state.getPassportPath(), passport);
+    savePassport(passportPath, passport);
 
     // --- report ---
     const { person: p, tense, addressForm } = passport.narration;

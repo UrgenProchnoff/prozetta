@@ -8,6 +8,7 @@ import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { outstandingFindings } from '../src_v4/core/glossary_review.js';
 import { projectPaths, projectDir, listProjects } from '../src_v4/core/paths.js';
+import { handEdited } from '../src_v4/core/passport.js';
 import config from '../src_v4/config.js';
 
 import { execFileSync } from 'child_process';
@@ -277,6 +278,8 @@ function projectSummary(prefix) {
                 person: p.narration?.person || null,
                 characters: (p.characters || []).length,
                 spans: (p.povMap || []).length,
+                // Whether rebuilding it would take back somebody's corrections.
+                edited: handEdited(p),
             };
         } catch { passport = { broken: true }; }
     }
