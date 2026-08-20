@@ -14,6 +14,9 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-20**
 
+- `ad7fcb2` — The roadmap now recommends the passport: it was the fourth of six steps
+  and the recommendation did not know it, taking a new project straight from
+  extraction to translation. Starting Stage 2 without one now asks first.
 - `3efd3e5` — Re-splitting on point-of-view boundaries carries extracted terms onto
   the new chunks instead of discarding them. A term is pinned by locating its
   own text inside the chunk it was recorded against; one that is not found goes
