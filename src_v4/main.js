@@ -116,6 +116,12 @@ async function main() {
                 break;
             case 'passport':
                 await runPassportStage(state);
+                // The passport is its own file, so nothing else here writes the
+                // project state — and without this the stage's token spend was
+                // counted in the run report and then thrown away. It only ever
+                // survived when the stage happened to re-split the text, which
+                // saves for its own reasons.
+                state.save();
                 reportUsage();
                 break;
             case 'glossary':
