@@ -19,6 +19,7 @@ import { detectNarrativePerson, characterCandidates } from '../core/text_stats.j
 import { buildPovMap, describePovMap } from '../core/pov_map.js';
 import { spansFromQuotes } from '../core/quoted_spans.js';
 import { splitTextIntoChunks } from '../core/tokenizer.js';
+import { carryExtraction } from '../core/rechunk.js';
 import { loadPassport, savePassport } from '../core/passport.js';
 import { profileForText, reloadLearnedProfiles } from '../core/language.js';
 import { learnLanguageProfile, validateLanguageProfile, saveLearnedProfile } from '../core/language_learn.js';
@@ -253,11 +254,31 @@ export async function runPassportStage(state) {
             } else {
                 const source = chunks.map(c => c.original).join('');
                 const resplit = splitTextIntoChunks(source, offsets);
-                state.setChunks(resplit);
-                state.save();
-                console.log(`[Passport] Re-split on ${offsets.length} point-of-view boundaries: ` +
-                    `${chunks.length} → ${resplit.length} chunks, none spanning a change of narrator.`);
-                chunks = resplit;
+
+                // The splitter returns bare chunks, so Stage 1's work has to be
+                // moved across by hand — otherwise a re-split silently throws
+                // away every extracted term and they have to be paid for again.
+                const { chunks: carried, stats, refused } = carryExtraction(chunks, resplit);
+                const hadTerms = chunks.some(c => c.extracted_terms?.length);
+
+                if (refused && hadTerms) {
+                    console.warn(`[Passport] NOT re-splitting: ${refused}. ` +
+                        `The map stands, but chunks straddling a change of narrator stay as they are — ` +
+                        `losing ${chunks.reduce((n, c) => n + (c.extracted_terms?.length || 0), 0)} extracted term(s) ` +
+                        `would cost more than the cleaner cut is worth.`);
+                } else {
+                    state.setChunks(carried);
+                    state.save();
+                    console.log(`[Passport] Re-split on ${offsets.length} point-of-view boundaries: ` +
+                        `${chunks.length} → ${carried.length} chunks, none spanning a change of narrator.`);
+                    if (stats.terms) {
+                        console.log(`[Passport] Carried ${stats.terms} extracted term(s) across: ` +
+                            `${stats.located} placed by locating their text` +
+                            `${stats.fallback ? `, ${stats.fallback} by overlap because the recorded form does not occur verbatim` : ''}` +
+                            `; ${stats.extracted}/${carried.length} chunk(s) stay marked as extracted.`);
+                    }
+                    chunks = carried;
+                }
                 // Indices changed with the split, so the map is rebuilt against
                 // the new chunks; the old one stands if that somehow yields less.
                 const rebuilt = spansFromQuotes(chunks, answer?.povSpans, castNames);

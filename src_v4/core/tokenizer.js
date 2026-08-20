@@ -142,7 +142,12 @@ export function splitTextIntoChunks(text, extraBreakOffsets = []) {
 
     // Simple accumulator logic adapted from index10.js but cleaned up
     for (let i = 0; i < lines.length; i++) {
-        let line = lines[i] + '\n';
+        // Splitting on '\n' leaves a final empty element for a text that ends
+        // with one, and appending a newline to that element invented a character
+        // the book never had: the reassembled text came out one byte longer than
+        // the source. Carrying extraction across a re-split maps terms by offset,
+        // and an axis that does not reconstruct is not an axis.
+        let line = lines[i] + (i < lines.length - 1 ? '\n' : '');
 
         // A chapter starts here: close whatever has accumulated so the heading
         // opens a fresh chunk instead of being buried mid-chunk.
