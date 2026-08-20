@@ -12,6 +12,12 @@ a link in the interface, an argument to `git show 5bba425` in a terminal. The
 Everything in this section is about one thing: a translation that stays
 consistent about who is speaking, who they are, and what they are called.
 
+**2026-08-20**
+
+- `3d054dc` — The passport stage no longer discards its own token spend: it wrote the
+  passport to its own file and never saved the project state, so the call
+  reached the run report and vanished from the statistics.
+
 **2026-08-18**
 
 - `0b8f31a` — Project working files moved out of the root into `projects/<book>/`,
