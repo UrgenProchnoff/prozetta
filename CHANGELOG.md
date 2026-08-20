@@ -14,6 +14,9 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-20**
 
+- `6c4635d` — Rebuilding a passport no longer takes back hand corrections silently: an
+  edited passport is copied aside first, and the editor asks before spending the
+  call.
 - `ad7fcb2` — The roadmap now recommends the passport: it was the fourth of six steps
   and the recommendation did not know it, taking a new project straight from
   extraction to translation. Starting Stage 2 without one now asks first.
