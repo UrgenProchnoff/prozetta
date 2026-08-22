@@ -14,6 +14,11 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `9745396` — Two of the three whole-book guards were estimating tokens by dividing
+  characters by four — 8.6% high on Morphotrophic, harmless against a threshold
+  of 250,000 and not against one near the real ceiling. They count now, closely
+  enough to set the bar by: the glossary review estimates 167,850 against the
+  167,852 the API charged. The budget settles at 170,000.
 - `1fe3e97` — The whole-book budget was guarding against the wrong quota. 250,000 is
   the documented per-minute total; what refuses these calls is a lower one over
   input alone. The log brackets it: 167,852 tokens went through, ~195,000 was
