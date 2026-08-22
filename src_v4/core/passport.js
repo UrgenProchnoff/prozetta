@@ -76,6 +76,18 @@ const DOSSIER_TOKENS = config.pipeline.dossierMaxTokens || 600;
  *                   samples: Array<{original: string, translation: string}>}>} voices
  *   Marked speech (dialect, register, verbal tics). The approved samples matter
  *   more than the description: they go into the prompt as few-shot examples.
+ * @property {{name: string|null, gender: 'm'|'f'|'n'|null, note: string|null}|null} author
+ *   Who wrote the book, and their grammatical gender. Needed wherever the author
+ *   speaks in their own first person — preface, afterword, acknowledgements,
+ *   notes — because there "I" is the author, not the narrator, and nothing
+ *   inside a chunk says so. Measured on Morphotrophic: the afterword reads «я
+ *   должна пояснить» and «я обязана трудам Левина», and Greg Egan is a man. The
+ *   chunk had no way to know; the passport does.
+ *
+ *   Deliberately not a member of `characters`, which is the point-of-view cast:
+ *   in a novel the author is not in the story at all. Non-fiction used to file
+ *   them as cast[0], which still works and is still read when this field is
+ *   empty.
  * @property {{marker: string, sample: string|null, source: 'model'|'hand'}|null} dialogue
  *   How direct speech is set in the TARGET LANGUAGE — the punctuation a line of
  *   dialogue opens with, plus an example. A norm, settled before translation
@@ -97,6 +109,7 @@ export function emptyPassport() {
         register: null,
         readerGender: 'm',
         narration: { person: null, tense: null, addressForm: null, addressNote: null },
+        author: null,
         characters: [],
         povMap: [],
         addressRegistry: [],
@@ -125,6 +138,11 @@ export function loadPassport(passportPath) {
             readerGender: raw.readerGender ?? base.readerGender,
             source: { ...base.source, ...(raw.source || {}) },
             narration: { ...base.narration, ...(raw.narration || {}) },
+            // Only worth carrying when it says something. A name without a
+            // gender answers no question the style block asks.
+            author: raw.author && typeof raw.author === 'object' && (raw.author.name || raw.author.gender)
+                ? { name: raw.author.name || null, gender: raw.author.gender || null, note: raw.author.note || null }
+                : base.author,
             characters: Array.isArray(raw.characters) ? raw.characters : [],
             povMap: Array.isArray(raw.povMap) ? raw.povMap : [],
             addressRegistry: Array.isArray(raw.addressRegistry) ? raw.addressRegistry : [],
@@ -237,6 +255,14 @@ const STYLE_WORDS = {
         precision: 'Это НЕхудожественный текст. Переводи ТОЧНО: сохраняй терминологию, факты, числа и структуру. Не украшай, не добавляй образности, которой нет в оригинале.',
         author: (name, genderTxt) => `Автор текста: ${name}, ${genderTxt}. Когда автор говорит о себе («я»), используй этот род.`,
         authorDossier: (text) => `Досье автора: ${text}`,
+        // Fiction only, and deliberately fenced. In a novel «я» belongs to the
+        // narrator on almost every page; the author owns it only in the matter
+        // around the story. Said without the fence, this line would order the
+        // author's gender onto a first-person narrator of the opposite one.
+        authorVoice: (name, genderTxt) => `Автор книги — ${name}, ${genderTxt}. `
+            + `Это правило действует ТОЛЬКО там, где от первого лица говорит сам автор: предисловие, `
+            + `послесловие, благодарности, авторские примечания — там родовые формы при «я» берутся от автора. `
+            + `В основном тексте «я» — это повествователь или персонаж, и род берётся от него.`,
         tense: { present: 'настоящее время', past: 'прошедшее время' },
         narration: (p, t) => `Повествование: ${[p, t ? `основное время — ${t}` : null].filter(Boolean).join(', ')}. ЭТАЛОН ВРЕМЕНИ — ОРИГИНАЛ, фраза за фразой: где автор пишет в прошедшем (воспоминания, события до момента повествования), прошедшее сохраняется — это НЕ нарушение.`,
         address: (form) => `Обращение к читателю в АВТОРСКОМ ПОВЕСТВОВАНИИ: ${form}. Не переключайся между «ты» и «вы» в повествовании. На обращения персонажей друг к другу (диалоги, письма, протоколы, чаты) это правило НЕ распространяется — там уместно и вежливое «вы».`,
@@ -270,6 +296,10 @@ const STYLE_WORDS = {
         precision: 'This is NON-FICTION. Translate PRECISELY: preserve terminology, facts, figures and structure. Do not embellish or add imagery the original does not have.',
         author: (name, genderTxt) => `The author: ${name}, ${genderTxt}. Use this gender when the author speaks of themselves ("I").`,
         authorDossier: (text) => `Author's dossier: ${text}`,
+        authorVoice: (name, genderTxt) => `The author of this book is ${name}, ${genderTxt}. `
+            + `This applies ONLY where the author speaks in their own first person: preface, afterword, `
+            + `acknowledgements, author's notes — there the gendered forms around "I" are the author's. `
+            + `In the body of the book "I" is the narrator or a character, and the gender is theirs.`,
         tense: { present: 'present tense', past: 'past tense' },
         narration: (p, t) => `Narration: ${[p, t ? `base tense — ${t}` : null].filter(Boolean).join(', ')}. THE TENSE AUTHORITY IS THE ORIGINAL, phrase by phrase: where the author writes in the past (memories, events before the narrative moment), the past is kept — that is NOT a violation.`,
         address: (form) => `Form of address to the reader in the AUTHOR'S NARRATION: ${form}. Never switch between formal and informal in the narration. This rule does NOT extend to characters addressing each other (dialogue, letters, transcripts, chats) — polite address is appropriate there.`,
@@ -325,20 +355,35 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
     let dossiersShown = 0;
 
     // Non-fiction: "you" is the reader, whose gender is a project-level decision,
-    // and the cast entry is the author — whose gender governs "I", not "you".
+    // and the author's gender governs "I", not "you". The author lives in its own
+    // field now; passports written before it exists filed them as cast[0], which
+    // is still read so those projects keep working.
+    const author = passport.author?.gender ? passport.author : cast[0];
+    const authorGender = author?.gender === 'm' || author?.gender === 'f' ? author.gender : null;
+
     if (nonfiction) {
         if (person === 'second') {
             lines.push(words.readerGender[passport.readerGender || 'm'] || words.readerGender.m);
         }
-        const author = cast[0];
-        if (author && (author.gender === 'm' || author.gender === 'f')) {
-            lines.push(words.author(author.name, words.genderShort[author.gender]));
+        if (authorGender) {
+            lines.push(words.author(author.name, words.genderShort[authorGender]));
+            // The dossier belongs to the cast entry; the author field carries no
+            // prose, so this only fires on the old shape.
             if (author.dossier) {
                 lines.push(words.authorDossier(fitToTokens(author.dossier, DOSSIER_TOKENS)));
                 dossiersShown++;
             }
         }
         return lines.join('\n');
+    }
+
+    // Fiction: the author is not in the story, and owns "I" only in the matter
+    // around it. Said on every chunk because front and back matter can sit at
+    // either end and nothing here knows which chunk holds them; harmless where
+    // there is no authorial voice, and the one place it bites — Morphotrophic's
+    // afterword — cost a man a feminine verb in his own acknowledgements.
+    if (authorGender && passport.author?.name) {
+        lines.push(words.authorVoice(passport.author.name, words.genderShort[authorGender]));
     }
 
     if (person === 'first' || person === 'second') {
@@ -383,12 +428,13 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
 /** True when the passport carries nothing worth injecting into a prompt. */
 export function isEmptyPassport(passport) {
     if (!passport) return true;
-    const { narration, characters, povMap, addressRegistry, voices, dialogue } = passport;
+    const { narration, characters, povMap, addressRegistry, voices, dialogue, author } = passport;
     const narrationSet = narration && (narration.person || narration.tense || narration.addressForm);
     return !narrationSet
         && !(characters || []).length
         && !(povMap || []).length
         && !(addressRegistry || []).length
         && !(voices || []).length
-        && !dialogue?.marker;
+        && !dialogue?.marker
+        && !author?.gender;
 }

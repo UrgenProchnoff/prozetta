@@ -1499,6 +1499,11 @@ async function renderPassport(prefix) {
                 <span class="cfg-hint">${esc(t('pass.readerHint'))}</span></div></div>` : ''}
             <div class="cfg-field"><label>${esc(t('pass.register'))}</label><div class="cfg-input">
                 <input type="text" data-p="register" value="${esc(p.register || '')}"></div></div>
+            <div class="cfg-field"><label>${esc(t('pass.author'))}</label><div class="cfg-input">
+                <input type="text" data-p="author.name" value="${esc(p.author?.name || '')}" placeholder="${esc(t('pass.authorPlaceholder'))}" style="max-width:220px">
+                ${sel('author.gender', p.author?.gender || '', [['', '—'], ['m', t('gloss.genderM')], ['f', t('gloss.genderF')], ['n', t('gloss.genderN')]])}
+                <span class="cfg-hint">${esc(t('pass.authorHint'))}
+                ${p.author?.note ? '<br>' + esc(t('pass.note')) + ': ' + esc(p.author.note) : ''}</span></div></div>
             <div class="cfg-field"><label>${esc(t('pass.dialogue'))}</label><div class="cfg-input">
                 <input type="text" data-p="dialogue.marker" value="${esc(p.dialogue?.marker || '')}" style="max-width:70px">
                 <span class="cfg-hint">${esc(t('pass.dialogueHint'))}

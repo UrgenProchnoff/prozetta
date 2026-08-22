@@ -147,7 +147,15 @@ export async function runPassportStage(state) {
         `(${Math.round(person.share * 100)}% of counted pronouns).`);
     console.log(`[Passport] ${candidates.length} character candidate(s) prepared as evidence.`);
 
+    // What the owner typed for the export is worth more than what the model can
+    // infer from a text that may never name its author. Passed as evidence
+    // rather than substituted afterwards, so the gender the model returns is
+    // about the right person.
+    const knownAuthor = String(state.data.metadata?.book?.author || '').trim() || undefined;
+    if (knownAuthor) console.log(`[Passport] Book metadata names the author as "${knownAuthor}" — passing it as evidence.`);
+
     const evidence = {
+        knownAuthor,
         narrativePerson: { detected: person.person, share: Number(person.share.toFixed(2)), counts: person.counts },
         characterCandidates: candidates.map(c => ({
             name: c.name,
@@ -209,6 +217,22 @@ export async function runPassportStage(state) {
     // A register is substituted into the prompt as a value: keep it a phrase.
     const registerRaw = String(answer?.register || '').trim();
     passport.register = registerRaw ? registerRaw.split(/[.;\n]/)[0].trim().slice(0, 80) : null;
+
+    // --- who wrote it ---
+    // The gender is the point: it governs "I" in the preface, the afterword and
+    // the acknowledgements, where the narrator's gender does not apply. Recorded
+    // with the model's own account of where it came from, because unlike almost
+    // everything else in this passport it cannot be checked against the book —
+    // a book need never name its author, let alone their gender.
+    const authorName = String(answer?.author?.name || knownAuthor || '').trim().slice(0, 120);
+    const authorGender = normalizeGender(answer?.author?.gender);
+    passport.author = (authorName || authorGender)
+        ? { name: authorName || null, gender: authorGender, note: String(answer?.author?.reason || '').trim().slice(0, 200) || null }
+        : null;
+    console.log(passport.author?.gender
+        ? `[Passport] Author: ${passport.author.name || 'unnamed'} (${passport.author.gender})` +
+          `${passport.author.note ? ` — ${passport.author.note}` : ''}.`
+        : `[Passport] Author: gender not established — the prompts will say nothing about the author's voice.`);
 
     // --- how direct speech is set ---
     // A norm of the target language, settled here, before a word is translated.

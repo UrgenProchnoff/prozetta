@@ -117,7 +117,14 @@ const ru = {
            Цитата должна встречаться в книге ровно один раз. Участки перечисляй строго
            в порядке следования в тексте, от начала до конца, не пропуская смен.
 
-        5. ОФОРМЛЕНИЕ ПРЯМОЙ РЕЧИ на ${targetLang}. Единственный пункт, который НЕ
+        5. АВТОР книги: имя и пол. Нужен там, где автор говорит от себя, —
+           предисловие, послесловие, благодарности, авторские примечания: в этих
+           местах родовые формы при «я» берутся от автора, а не от повествователя.
+           Если имя автора есть в уликах — бери оттуда. Если ни в книге, ни в уликах
+           автора нет и ты его не знаешь — верни null: выдуманный пол хуже
+           отсутствующего.
+
+        6. ОФОРМЛЕНИЕ ПРЯМОЙ РЕЧИ на ${targetLang}. Единственный пункт, который НЕ
            выводится из книги, а вспоминается как норма языка: оригинал написан на
            другом языке, и его пунктуация диалогов здесь — заведомо неверный ответ.
            НЕ переноси знак из оригинала. Назови ОДИН знак, с которого по нормам
@@ -144,6 +151,11 @@ const ru = {
           "povSpans": [
             { "startsWith": "точная цитата первых слов участка", "character": "Имя как в оригинале" }
           ],
+          "author": {
+            "name": "имя автора книги, или null если он нигде не назван и неизвестен",
+            "gender": "m|f|n, или null если пол автора неизвестен",
+            "reason": "коротко, откуда это известно: из улик, из текста книги или из общих знаний"
+          },
           "dialogue": {
             "marker": "ОДИН знак препинания, с которого по нормам ${targetLang} начинается реплика прямой речи (например «—» или «„»)",
             "sample": "одна короткая выдуманная реплика, оформленная по этим нормам на ${targetLang}"
@@ -447,7 +459,14 @@ const en = {
            book. List the stretches strictly in the order they appear, start to finish,
            without skipping a change.
 
-        5. HOW DIRECT SPEECH IS SET in ${targetLang}. The one item that is NOT derived
+        5. THE AUTHOR: name and gender. Needed wherever the author speaks in their own
+           first person — preface, afterword, acknowledgements, author's notes: there
+           the gendered forms around "I" are the author's, not the narrator's. If the
+           author's name is in the evidence, take it from there. If neither the book
+           nor the evidence names them and you do not know who they are, return null:
+           an invented gender is worse than a missing one.
+
+        6. HOW DIRECT SPEECH IS SET in ${targetLang}. The one item that is NOT derived
            from the book but recalled as a norm of the language: the original is
            written in another language, and its dialogue punctuation is the wrong
            answer here. Do NOT carry the mark over from the original. Name ONE mark
@@ -474,6 +493,11 @@ const en = {
           "povSpans": [
             { "startsWith": "exact quote of the stretch's first words", "character": "Name as in the original" }
           ],
+          "author": {
+            "name": "the author's name, or null if they are named nowhere and unknown to you",
+            "gender": "m|f|n, or null if the author's gender is unknown",
+            "reason": "briefly, where this comes from: the evidence, the book's text, or general knowledge"
+          },
           "dialogue": {
             "marker": "ONE punctuation mark that a line of direct speech opens with by the conventions of ${targetLang} (e.g. «—» or «„»)",
             "sample": "one short invented line of dialogue, set by those conventions, in ${targetLang}"
