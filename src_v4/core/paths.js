@@ -31,7 +31,8 @@ export function projectDir(workDir, prefix) {
  * Every path the pipeline writes for a project.
  *
  * @returns {{dir: string, state: string, glossary: string, passport: string,
- *            review: string, log: string, cover: (ext: string) => string}}
+ *            review: string, translationReview: string, log: string,
+ *            cover: (ext: string) => string}}
  */
 export function projectPaths(workDir, prefix) {
     const dir = projectDir(workDir, prefix);
@@ -41,6 +42,7 @@ export function projectPaths(workDir, prefix) {
         glossary: path.join(dir, 'glossary.json'),
         passport: path.join(dir, 'passport.json'),
         review: path.join(dir, 'glossary_review.json'),
+        translationReview: path.join(dir, 'translation_review.json'),
         log: path.join(dir, 'run.log'),
         cover: (ext) => path.join(dir, `cover.${ext}`),
     };

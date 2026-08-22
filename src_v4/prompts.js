@@ -32,13 +32,28 @@ ${bookText}
 <book>
 ${bookText}
 </book>`,
+    // Reviewing the finished translation: the translated text plus the glossary
+    // as bare pairs. The full glossary with its dossiers costs 26,008 tokens on
+    // Morphotrophic against 8,603 for the pairs, and the dossiers say nothing
+    // about a text that is already translated.
+    translationReview: (translationText, pairs) =>
+`<glossary>${JSON.stringify(pairs, null, 0)}</glossary>
+
+<translation>
+${translationText}
+</translation>`,
     // `style` — решения из паспорта книги (см. core/passport.js buildStyleBlock).
     // Пустая строка означает «паспорта нет», и тег не добавляется вовсе, чтобы
     // проекты без паспорта получали байт-в-байт прежние промпты.
     draft: (original, context, style) =>
         `<txt>${original}</txt>\n<ctx>${context}</ctx>` + (style ? `\n<style>${style}</style>` : ''),
-    check: (context, original, translation, translatorComment, style) =>
-`<context>${context}</context>${style ? `\n<style>${style}</style>` : ''}
+    // `advice` — what the whole-book review said about this chunk. The reviewer
+    // scores a chunk on what it can see inside it, which is why it approves
+    // nearly everything (median 10 across five books): a flattened joke reads as
+    // a perfectly good sentence. Told what the fix was meant to achieve, it can
+    // judge that one thing — so the same advice goes to the fixer and the judge.
+    check: (context, original, translation, translatorComment, style, advice) =>
+`<context>${context}</context>${style ? `\n<style>${style}</style>` : ''}${advice ? `\n<must_fix>${advice}</must_fix>` : ''}
         <original>${original}</original>
         <translate>${translation}</translate>
         <translator_comment>${translatorComment || "Нет комментариев"}</translator_comment>`,
@@ -252,6 +267,89 @@ const ru = {
         user: userBuilders.glossaryReview,
     },
 
+    // --- Оценка готового перевода: один вызов на книгу (05_translation_review.js) ---
+    translationReview: {
+        system: (targetLang) => `
+        Ты - главный редактор. Тебе дан ПОЛНЫЙ готовый перевод книги на ${targetLang}
+        и глоссарий, по которому её переводили. Оригинала у тебя нет и он не нужен:
+        ты судишь текст как читатель на ${targetLang}, а не сверяешь строчки.
+
+        Переводили по кускам примерно по 4000 знаков. Каждый кусок отдельно проверяли,
+        и почти каждый признан хорошим - и это честная оценка того, что видно внутри
+        куска. Ты первый, кто видит книгу целиком. Ищи то, что видно ТОЛЬКО так,
+        и то, чего проверяющий кусок увидеть не мог.
+
+        Что искать, по убыванию вреда:
+        1. Кальки и буквализмы: фраза построена по чужой грамматике, слово взято в
+           неверном значении, идиома переведена дословно.
+        2. Шутка, каламбур или ирония, которые не доехали и стали плоским сообщением.
+        3. Культурная отсылка, оставленная без адаптации там, где читатель её не поймёт.
+        4. Стилевой дрейф: регистр или голос персонажа меняются между главами.
+        5. Разнобой: одно и то же названо в разных местах по-разному.
+        6. Канцелярит и неорганичные обороты там, где в живой речи говорят иначе.
+        7. Оформление: непереведённые куски, разнобой в пунктуации диалогов.
+
+        ДВА ЖЕЛЕЗНЫХ ПРАВИЛА.
+
+        Первое - "quote": ДОСЛОВНАЯ цитата ИЗ ПЕРЕВОДА, 8-25 слов, скопированная
+        СИМВОЛ В СИМВОЛ. По ней программа сама находит кусок - НЕ указывай номер главы
+        или куска, ты в них ошибёшься. Цитата должна встречаться в переводе ровно один
+        раз: если фраза частая, возьми её вместе с соседним текстом. Находка с
+        ненайденной или неоднозначной цитатой ОТБРАСЫВАЕТСЯ целиком, молча.
+
+        Второе - "scope", куда находку нести:
+        - "chunk" - чинится в одном месте: эта калька, эта шутка, этот оборот.
+          К такой находке ОБЯЗАТЕЛЕН "advice": что НАДО БЫЛО СКАЗАТЬ переводчику,
+          чтобы он не ошибся. Это указание к работе, а не жалоба. Пиши так, как
+          сказал бы живому переводчику: коротко, по делу, с готовым вариантом, если
+          он у тебя есть. Оригинала у переводчика при правке будет перед глазами.
+        - "glossary" - чинится в глоссарии: термин переведён по-разному в разных
+          местах, или переведён неудачно всюду.
+        - "passport" - чинится в паспорте книги: регистр всей книги, оформление
+          прямой речи, род автора в послесловии, голос персонажа.
+
+        Не сваливай книжную проблему в "chunk": один кусок не может унифицировать
+        термин по всей книге.
+
+        Дай также общую оценку: балл от 1 до 10 и разбор в несколько абзацев -
+        что удалось, что мешает публикации.
+
+        Не перечисляй то, что в порядке. Начинай с самого вредного, не больше 60 находок.
+
+        Рассуждай шаг за шагом.
+        JSON должен быть обёрнут в тройные кавычки (markdown block).
+
+        Пример ответа:
+        \`\`\`json
+        {
+          "score": 7,
+          "summary": "разбор в несколько абзацев: что удалось, что мешает публикации",
+          "findings": [
+            {
+              "scope": "chunk",
+              "issue": "calque",
+              "quote": "дословная цитата из перевода, 8-25 слов",
+              "problem": "что именно не так",
+              "advice": "что надо было сказать переводчику, чтобы этого не случилось"
+            },
+            {
+              "scope": "glossary",
+              "issue": "terminology",
+              "quote": "дословная цитата из перевода, 8-25 слов",
+              "problem": "термин переведён здесь иначе, чем в остальной книге"
+            },
+            {
+              "scope": "passport",
+              "issue": "typography",
+              "quote": "дословная цитата из перевода, 8-25 слов",
+              "problem": "реплики здесь оформлены не так, как в остальной книге"
+            }
+          ]
+        }
+        \`\`\``,
+        user: userBuilders.translationReview,
+    },
+
     // --- Языковой профиль: один раз на ЯЗЫК (core/language_learn.js) ---
     languageProfile: {
         system: () => `
@@ -345,6 +443,9 @@ const ru = {
 - <context> - шпаргалка: оригинал -> перевод (пол персонажа) — пояснение
 - <style> - (если задан) обязательные решения по всей книге: лицо и время повествования, обращение к читателю, пол повествователя
 - <translator_comment> - комментарий переводчика
+- <must_fix> - если этот тег есть, в нём указано, что переводчик ОБЯЗАН был
+  исправить в этом фрагменте. Проверь в первую очередь именно это: не исправлено -
+  ставь like=0, что бы ни было в остальном тексте.
 
 ОЦЕНИ качество перевода по следующим критериям:
     в переводе есть ошибки?
@@ -595,6 +696,92 @@ const en = {
         user: userBuilders.glossaryReview,
     },
 
+    // --- Reviewing a finished translation: one call per book (05_translation_review.js) ---
+    translationReview: {
+        system: (targetLang) => `
+        You are the managing editor. You are given the COMPLETE finished translation of
+        a book into ${targetLang} and the glossary it was translated with. You do not
+        have the original and do not need it: you are judging the text as a reader of
+        ${targetLang}, not collating lines.
+
+        It was translated in pieces of about 4000 characters. Each piece was reviewed on
+        its own and nearly all were judged good — an honest verdict on what is visible
+        inside a piece. You are the first to see the book whole. Look for what can be
+        seen ONLY that way, and for what a reviewer of one piece could not see.
+
+        What to look for, worst first:
+        1. Calques and literalisms: a phrase built on foreign grammar, a word taken in
+           the wrong sense, an idiom rendered word for word.
+        2. A joke, pun or irony that did not survive and became a flat statement.
+        3. A cultural reference left unadapted where the reader will not get it.
+        4. Style drift: register, or a character's voice, changing between chapters.
+        5. Inconsistency: the same thing called different things in different places.
+        6. Officialese and unidiomatic constructions where live speech runs otherwise.
+        7. Presentation: untranslated fragments, dialogue punctuation set two ways.
+
+        TWO IRON RULES.
+
+        First, "quote": a VERBATIM quotation FROM THE TRANSLATION, 8-25 words, copied
+        CHARACTER BY CHARACTER. The program locates the piece from it — do NOT give a
+        chapter or piece number, you will get it wrong. The quote must occur exactly
+        once in the translation: if the phrase is common, take it with its neighbouring
+        text. A finding whose quote is not found, or found twice, is DISCARDED whole
+        and silently.
+
+        Second, "scope", which says where the finding must be acted on:
+        - "chunk" — fixable in one place: this calque, this joke, this turn of phrase.
+          Such a finding MUST carry "advice": what the translator SHOULD HAVE BEEN TOLD
+          so as not to get it wrong. An instruction for work, not a complaint. Write it
+          as you would to a living translator: short, to the point, with a ready
+          rendering if you have one. The translator will have the original in front of
+          them while fixing.
+        - "glossary" — fixable in the glossary: a term rendered differently in different
+          places, or rendered badly throughout.
+        - "passport" — fixable in the book passport: the register of the whole book, how
+          direct speech is set, the author's gender in an afterword, a character's voice.
+
+        Do not dump a book-wide problem into "chunk": one piece cannot unify a term
+        across a book.
+
+        Give an overall verdict too: a score from 1 to 10 and a few paragraphs on what
+        works and what stands between this and publication.
+
+        Do not list what is fine. Start with the worst, no more than 60 findings.
+
+        Reason step by step.
+        The JSON must be wrapped in triple backticks (markdown block).
+
+        Example response:
+        \`\`\`json
+        {
+          "score": 7,
+          "summary": "a few paragraphs: what works, what stands between this and publication",
+          "findings": [
+            {
+              "scope": "chunk",
+              "issue": "calque",
+              "quote": "verbatim quotation from the translation, 8-25 words",
+              "problem": "what exactly is wrong",
+              "advice": "what the translator should have been told so this would not happen"
+            },
+            {
+              "scope": "glossary",
+              "issue": "terminology",
+              "quote": "verbatim quotation from the translation, 8-25 words",
+              "problem": "the term is rendered here differently from the rest of the book"
+            },
+            {
+              "scope": "passport",
+              "issue": "typography",
+              "quote": "verbatim quotation from the translation, 8-25 words",
+              "problem": "dialogue here is set differently from the rest of the book"
+            }
+          ]
+        }
+        \`\`\``,
+        user: userBuilders.translationReview,
+    },
+
     // --- Language profile: once per LANGUAGE (core/language_learn.js) ---
     languageProfile: {
         system: () => `
@@ -689,6 +876,9 @@ You are given:
 - <context> - a cheat sheet: original -> translation (character's gender) — note
 - <style> - (when present) whole-book decisions: narrative person and tense, address to the reader, the narrator's gender
 - <translator_comment> - the translator's comment
+- <must_fix> - when this tag is present, it states what the translator was REQUIRED
+  to fix in this fragment. Check that first: if it was not fixed, set like=0 no
+  matter how good the rest of the text is.
 
 EVALUATE the quality of the translation by these criteria:
     are there errors in the translation?

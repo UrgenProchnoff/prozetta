@@ -6,6 +6,7 @@ import { runExtractionStage } from './stages/01_extraction.js';
 import { runConsolidationStage } from './stages/02_consolidation.js';
 import { runPassportStage } from './stages/03_passport.js';
 import { runGlossaryReviewStage } from './stages/04_glossary_review.js';
+import { runTranslationReviewStage } from './stages/05_translation_review.js';
 import { runTranslationLoopStage } from './stages/translation_loop.js';
 import { llmManager } from './core/llm_client.js';
 import { usageTracker } from './core/usage_tracker.js';
@@ -27,9 +28,10 @@ async function main() {
     const suffixArg = args.find(a => a.startsWith('--suffix='));
 
     if (!stageArg || !fileArg) {
-        console.error('Usage: node src_v4/main.js --stage=<1|passport|glossary|2|export> --file=<path/to/book.txt> [--model=google|local|groq] [--lang=<язык>] [--suffix=<код>]');
+        console.error('Usage: node src_v4/main.js --stage=<1|passport|glossary|2|review|export> --file=<path/to/book.txt> [--model=google|local|groq] [--lang=<язык>] [--suffix=<код>]');
         console.error('  --stage=passport reads the whole book at once (book_model profile) and writes <prefix>_passport.json.');
-        console.error('  --stage=glossary reviews the glossary against the whole book and writes <prefix>_glossary_review.json (applies nothing).');
+        console.error('  --stage=glossary reviews the glossary against the whole book and writes glossary_review.json (applies nothing).');
+        console.error('  --stage=review reads the finished translation in one call and writes translation_review.json (changes nothing).');
         console.error('  --file is always required to identify the project.');
         console.error('  --lang / --suffix override the target language and output suffix from config.js (set once at Stage 1).');
         process.exit(1);
@@ -126,6 +128,11 @@ async function main() {
                 break;
             case 'glossary':
                 await runGlossaryReviewStage(state);
+                state.save();   // flush token-usage stats: the review is its own file
+                reportUsage();
+                break;
+            case 'review':
+                await runTranslationReviewStage(state);
                 state.save();   // flush token-usage stats: the review is its own file
                 reportUsage();
                 break;

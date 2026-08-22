@@ -6,12 +6,13 @@ import { jobManager } from './jobs.js';
 import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER } from '../src_v4/core/llm_client.js';
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
-import { outstandingFindings } from '../src_v4/core/glossary_review.js';
+import { outstandingFindings as glossaryOutstanding } from '../src_v4/core/glossary_review.js';
 import { projectPaths, projectDir, listProjects } from '../src_v4/core/paths.js';
 import { handEdited } from '../src_v4/core/passport.js';
 import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
 import { withoutTranslation } from '../src_v4/core/state_manager.js';
+import { outstandingFindings as reviewOutstanding, findingKey } from '../src_v4/core/translation_review.js';
 import config from '../src_v4/config.js';
 
 import { execFileSync } from 'child_process';
@@ -53,6 +54,7 @@ const paths = (prefix) => projectPaths(ROOT, prefix);
 const statePath = (prefix) => paths(prefix).state;
 const glossaryPath = (prefix) => paths(prefix).glossary;
 const reviewPath = (prefix) => paths(prefix).review;
+const transReviewPath = (prefix) => paths(prefix).translationReview;
 
 /**
  * What version is running, resolved once at startup.
@@ -344,6 +346,28 @@ function projectSummary(prefix) {
         } catch { glossaryCount = 0; }
     }
 
+    // The book model's reading of the finished translation, resolved against the
+    // translation as it stands: a finding whose quote has gone was acted on.
+    let translationReview = null;
+    if (fs.existsSync(transReviewPath(prefix))) {
+        try {
+            const r = readJson(transReviewPath(prefix));
+            const { open, done, hidden } = reviewOutstanding(r, chunks);
+            translationReview = {
+                generatedAt: r.generatedAt || null,
+                model: r.model || null,
+                score: r.score ?? null,
+                summary: r.summary || null,
+                returned: r.returned ?? null,
+                rejected: r.rejected || null,
+                open, done, hidden,
+                // Advice already accepted onto chunks, so the interface can show
+                // what is queued for the next Stage 2 run without walking chunks.
+                accepted: chunks.reduce((n, c) => n + (c.advice?.length || 0), 0),
+            };
+        } catch { translationReview = { broken: true }; }
+    }
+
     let glossaryReview = null;
     if (fs.existsSync(reviewPath(prefix))) {
         try {
@@ -361,6 +385,7 @@ function projectSummary(prefix) {
         glossaryCount,
         glossaryForms,
         glossaryReview,
+        translationReview,
         passport,
         dialogue,
         running: jobManager.isRunning(prefix),
@@ -638,7 +663,7 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
         // Resolved against the glossary as it stands, not as it stood: a finding
         // that has been acted on drops out by itself, so editing one entry never
         // costs the review of the others.
-        const { byRow, additions, hidden } = outstandingFindings(review, terms);
+        const { byRow, additions, hidden } = glossaryOutstanding(review, terms);
         if (findings.length === terms.length) byRow.forEach((list, i) => findings[i].push(...list));
         const outstanding = byRow.reduce((n, list) => n + list.length, 0) + additions.length;
 
@@ -724,8 +749,8 @@ app.put('/api/projects/:prefix/glossary', (req, res) => {
 app.post('/api/run', (req, res) => {
     const { file, prefix: bodyPrefix, stage, model, lang, suffix } = req.body || {};
 
-    if (!['1', 'passport', 'glossary', '2', 'export'].includes(String(stage))) {
-        return res.status(400).json({ error: 'stage must be 1, passport, glossary, 2 or export' });
+    if (!['1', 'passport', 'glossary', '2', 'review', 'export'].includes(String(stage))) {
+        return res.status(400).json({ error: 'stage must be 1, passport, glossary, 2, review or export' });
     }
 
     let prefix, sourceFile;
@@ -758,6 +783,66 @@ app.post('/api/run', (req, res) => {
 
     jobManager.start(prefix, args, ROOT);
     res.json({ ok: true, prefix, args });
+});
+
+/**
+ * Decide a finding from the whole-book review.
+ *
+ * "accept" queues the advice on the chunk the quote was found in; the next
+ * Stage 2 run fixes that chunk with the advice as its instruction and clears it
+ * on approval. "dismiss" records the judgement by findingKey, which survives a
+ * re-review — a finding argued down once should not have to be argued down again
+ * because the pass was repeated.
+ *
+ * Only chunk-scoped findings can be accepted. A glossary or passport finding
+ * names something one chunk cannot repair, and queueing it as chunk advice would
+ * ask a fragment to unify a book.
+ */
+app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — решения заблокированы' });
+    }
+    const { key, action } = req.body || {};
+    if (!key || !['accept', 'dismiss', 'undo'].includes(action)) {
+        return res.status(400).json({ error: 'Expected { key, action: accept|dismiss|undo }' });
+    }
+    const file = transReviewPath(prefix);
+    if (!fs.existsSync(file)) return res.status(404).json({ error: 'No review for this project' });
+
+    let review, state;
+    try {
+        review = readJson(file);
+        state = readJson(statePath(prefix));
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+
+    const finding = (review.findings || []).find(f => findingKey(f) === String(key).toLowerCase());
+    if (!finding) return res.status(404).json({ error: 'No such finding' });
+
+    if (action === 'dismiss') {
+        review.dismissed = [...new Set([...(review.dismissed || []), String(key).toLowerCase()])];
+        writeJsonAtomic(file, review);
+        return res.json({ ok: true, dismissed: review.dismissed.length });
+    }
+
+    if (finding.scope !== 'chunk') {
+        return res.status(400).json({ error: `A "${finding.scope}" finding is fixed in the ${finding.scope}, not in a chunk` });
+    }
+    const chunk = state.chunks?.[finding.chunk];
+    if (!chunk) return res.status(404).json({ error: 'Chunk not found' });
+
+    const k = String(key).toLowerCase();
+    chunk.advice = (chunk.advice || []).filter(a => a.key !== k);
+    if (action === 'accept') {
+        chunk.advice.push({ key: k, issue: finding.issue, advice: finding.advice, quote: finding.quote });
+    }
+    if (!chunk.advice.length) delete chunk.advice;
+
+    state.metadata = state.metadata || {};
+    state.metadata.updatedAt = new Date().toISOString();
+    writeJsonAtomic(statePath(prefix), state);
+    res.json({ ok: true, chunk: finding.chunk, queued: chunk.advice?.length || 0 });
 });
 
 app.post('/api/projects/:prefix/stop', (req, res) => {

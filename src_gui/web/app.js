@@ -904,6 +904,7 @@ async function renderMonitor(prefix) {
                     <span><span class="legend-scores"><span class="cell-score" data-score="7">7</span>/<span class="cell-score" data-score="8.5">8.5</span>/<span class="cell-score" data-score="9.5">9.5</span></span> ${esc(t('legend.score'))}</span>
                 </div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
+                <div id="m-review"></div>
                 <details class="usage-details" open>
                     <summary>${esc(t('usage.heading'))}</summary>
                     <div id="m-usage"></div>
@@ -916,6 +917,7 @@ async function renderMonitor(prefix) {
     `;
 
     const grid = document.getElementById('m-grid');
+    const reviewEl = document.getElementById('m-review');
     const usageEl = document.getElementById('m-usage');
     const logPane = document.getElementById('m-log');
     const statusEl = document.getElementById('m-status');
@@ -1069,8 +1071,15 @@ async function renderMonitor(prefix) {
                   : '—',
               done: !!(s?.passport && !s.passport.broken) },
             { stage: '2', name: t('mon.stepTranslate'), sub: total ? `${done}/${total}` : '—', done: total > 0 && done >= total },
+            // After translation, because it reads the finished text. The count
+            // shown is what is still open, not what was returned: a finding acted
+            // on disappears by itself when its quote is no longer in the book.
+            { stage: 'review', name: t('mon.stepAssess'),
+              sub: s?.translationReview ? (s.translationReview.broken ? t('mon.assessBroken')
+                    : t('mon.assessSub', { n: s.translationReview.open.length, score: s.translationReview.score ?? '—' })) : '—',
+              done: !!(s?.translationReview && !s.translationReview.broken) },
             { stage: 'export', name: t('mon.stepExport'), sub: '', done: false },
-        ].filter(st => withBook || (st.stage !== 'passport' && st.stage !== 'glossary'));
+        ].filter(st => withBook || !['passport', 'glossary', 'review'].includes(st.stage));
         stepsEl.innerHTML = steps.map((st, i) => {
             const cls = ['pipe-step',
                 st.done ? 'done' : '',
@@ -1202,7 +1211,71 @@ async function renderMonitor(prefix) {
                 ${c.score != null ? `style="${cellTint(c.score)}"` : ''}
                 href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}${scoreHtml}</a>`;
         }).join('');
+        drawReview();
     }
+
+    /**
+     * The whole-book review: its verdict, and the findings still open.
+     *
+     * Each finding is a decision, not a notification. A chunk-scoped one can be
+     * taken — its advice is queued on the chunk and the next Stage 2 run fixes
+     * that chunk with it — or dismissed. A glossary or passport one names
+     * something no chunk can repair, so it offers a way to the page where it can
+     * be, and dismissal.
+     */
+    function drawReview() {
+        const r = summary?.translationReview;
+        if (!r || r.broken || !summary) { reviewEl.innerHTML = ''; return; }
+
+        const verdict = [
+            r.score != null ? t('rev.score', { score: r.score }) : null,
+            t('rev.counts', { open: r.open.length, done: r.done, hidden: r.hidden }),
+            r.accepted ? t('rev.queued', { n: r.accepted }) : null,
+        ].filter(Boolean).join(' · ');
+
+        const where = { glossary: `#/glossary/${encodeURIComponent(prefix)}`, passport: `#/passport/${encodeURIComponent(prefix)}` };
+        const rows = r.open.map(f => {
+            const act = f.scope === 'chunk'
+                ? `<button class="primary" data-rev="accept" data-key="${esc(f.key)}">${esc(t('rev.accept'))}</button>`
+                : `<a class="btn" href="${where[f.scope]}">${esc(t('rev.goTo.' + f.scope))}</a>`;
+            return `<div class="rev-item">
+                <div class="rev-head">
+                    <span class="badge b-${f.scope === 'chunk' ? 'best_effort' : 'disputed'}">${esc(t('rev.scope.' + f.scope))}</span>
+                    <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${f.chunk}">${f.chunk + 1}</a>
+                    <span class="rev-issue">${esc(f.issue)}</span>
+                    <span class="spacer"></span>
+                    ${act}
+                    <button data-rev="dismiss" data-key="${esc(f.key)}">${esc(t('rev.dismiss'))}</button>
+                </div>
+                <div class="rev-quote">«${esc(f.quote)}»</div>
+                <div class="rev-problem">${esc(f.problem)}</div>
+                ${f.advice ? `<div class="rev-advice">→ ${esc(f.advice)}</div>` : ''}
+            </div>`;
+        }).join('');
+
+        reviewEl.innerHTML = `<details class="usage-details" ${r.open.length ? 'open' : ''}>
+            <summary>${esc(t('rev.heading'))} <span class="cfg-hint">${esc(verdict)}</span></summary>
+            ${r.summary ? `<div class="rev-summary">${esc(r.summary)}</div>` : ''}
+            ${rows || `<div class="cfg-hint">${esc(t('rev.allHandled'))}</div>`}
+        </details>`;
+    }
+
+    reviewEl.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-rev]');
+        if (!btn) return;
+        btn.disabled = true;
+        try {
+            const res = await api(`/api/projects/${encodeURIComponent(prefix)}/translation-review/decide`,
+                { method: 'POST', body: { key: btn.dataset.key, action: btn.dataset.rev } });
+            toast(btn.dataset.rev === 'accept'
+                ? t('rev.accepted', { chunk: res.chunk + 1 })
+                : t('rev.dismissed'), 'ok');
+            refreshGrid();
+        } catch (err) {
+            btn.disabled = false;
+            toast(t('common.error', { msg: err.message }), 'error');
+        }
+    });
 
     let refreshTimer = null;
     function refreshGrid() {

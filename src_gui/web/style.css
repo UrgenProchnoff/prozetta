@@ -960,3 +960,30 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 /* A hash git cannot resolve is struck through rather than linked: a dead
    reference should look dead, not merely fail when clicked. */
 .cm-ref.dead { color: var(--red); text-decoration: line-through; cursor: help; }
+
+/* Findings from the whole-book review, on the monitor. One block per finding:
+   what it objects to, in the translation's own words, and what to do about it. */
+.rev-summary {
+    margin: 8px 0 14px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--blue);
+    background: var(--panel2);
+    border-radius: 0 6px 6px 0;
+    white-space: pre-wrap;
+    font-size: 13px;
+}
+.rev-item {
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+}
+.rev-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rev-issue { color: var(--muted); font-size: 12px; }
+.rev-quote {
+    margin: 6px 0 4px;
+    font-style: italic;
+    color: var(--text);
+    border-left: 2px solid var(--border);
+    padding-left: 10px;
+}
+.rev-problem { font-size: 13px; color: var(--muted); }
+.rev-advice { margin-top: 4px; font-size: 13px; color: var(--green); }

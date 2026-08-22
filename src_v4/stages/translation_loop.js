@@ -5,6 +5,7 @@ import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
 import { wholeWordRegex } from '../core/text_stats.js';
 import { loadPassport, buildStyleBlock, isEmptyPassport } from '../core/passport.js';
+import { adviceForChunk } from '../core/translation_review.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
@@ -64,8 +65,13 @@ export async function runTranslationLoopStage(state) {
     for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
 
+        // Advice from the whole-book review is work outstanding on a chunk that
+        // is otherwise finished, so it has to be looked at before the "already
+        // done" test — which would otherwise skip every chunk the review named.
+        const advice = adviceForChunk(chunk.advice);
+
         // Skip if already finalized (success=true) or has good score
-        if (chunk.translation && chunk.translation_status === 'success') {
+        if (chunk.translation && chunk.translation_status === 'success' && !advice) {
             continue;
         }
         if (chunk.translation_status === 'blocked' && chunk.translation_blocked_by === modelSignature) {
@@ -90,7 +96,26 @@ export async function runTranslationLoopStage(state) {
         // so the block differs between chapters and scenes).
         const styleBlock = buildStyleBlock(passport, i, config.translation.promptLang, chunk.original);
 
-        if (history.length === 0) {
+        // A chunk carrying advice already has a translation somebody wants kept
+        // and corrected. It goes straight to a fix with that advice as the
+        // instruction: redrafting would throw away the nine tenths of the chunk
+        // nobody complained about, and the reviewer that would then judge the
+        // redraft approves everything anyway (median 10 across five books).
+        const currentText = chunk.translation || history[history.length - 1]?.text || '';
+        if (advice && currentText) {
+            console.log(`   -> Fixing on ${chunk.advice.length} piece(s) of advice from the whole-book review...`);
+            const fixed = await fixTranslation(client, prompts, targetLang, chunk.original,
+                currentText, globalContext, advice, styleBlock);
+            currentTranslation = fixed.translation;
+            currentComment = fixed.comment;
+            history.push({
+                step: 'advice_fix',
+                text: currentTranslation,
+                translator_comment: currentComment,
+                advice,
+                timestamp: new Date().toISOString(),
+            });
+        } else if (history.length === 0) {
             console.log(`   -> Drafting...`);
             const draft = await draftTranslation(client, prompts, targetLang, chunk.original, globalContext, styleBlock);
             currentTranslation = draft.translation;
@@ -136,7 +161,7 @@ export async function runTranslationLoopStage(state) {
 
             console.log(`   [DEBUG] Before check: currentTranslation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
             // CHECK
-            const checkResult = await checkTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, currentComment, styleBlock);
+            const checkResult = await checkTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, currentComment, styleBlock, advice);
             history.push({
                 step: `check_${attempts}`,
                 result: checkResult,
@@ -165,7 +190,10 @@ export async function runTranslationLoopStage(state) {
                     history: history,
                     // This model got through where another was refused; leaving
                     // the old block behind would keep the chunk skipped forever.
-                    ...(chunk.translation_blocked_by ? { translation_blocked_by: null } : {})
+                    ...(chunk.translation_blocked_by ? { translation_blocked_by: null } : {}),
+                    // The advice has been acted on and approved. Left in place it
+                    // would re-fix this chunk on every run from here on.
+                    ...(advice ? { advice: null } : {})
                 });
             } else {
                 // Break if max retries reached to avoid wasted fix/redraft
@@ -447,9 +475,9 @@ async function draftTranslation(client, prompts, targetLang, original, context, 
     ]);
 }
 
-async function checkTranslation(client, prompts, targetLang, original, translation, context, translatorComment, style) {
+async function checkTranslation(client, prompts, targetLang, original, translation, context, translatorComment, style, advice) {
     usageTracker.setStage('check');
-    const input = prompts.check.user(context, original, translation, translatorComment, style);
+    const input = prompts.check.user(context, original, translation, translatorComment, style, advice);
 
     const prompt = prompts.check.system(targetLang);
 

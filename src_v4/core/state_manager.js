@@ -24,6 +24,9 @@ export const TRANSLATION_FIELDS = [
     'translation_blocked_by',
     'history',
     'dispute',
+    // Advice accepted from the whole-book review, waiting for the next run to
+    // act on it. It describes a translation that a reset is about to delete.
+    'advice',
 ];
 
 /** A copy of `chunk` with Stage 2's output removed and nothing else touched. */
@@ -52,6 +55,10 @@ export class ProjectState {
         // because nothing here is applied automatically: the file is a report
         // about the glossary, not a version of it.
         this.glossaryReviewFile = paths.review;
+        // The book model's reading of the finished translation. Apart from the
+        // state for the same reason as the glossary review: it is a report about
+        // the translation, not a version of it.
+        this.translationReviewFile = paths.translationReview;
 
         this.data = {
             metadata: {
@@ -114,6 +121,10 @@ export class ProjectState {
 
     getGlossaryReviewPath() {
         return this.glossaryReviewFile;
+    }
+
+    getTranslationReviewPath() {
+        return this.translationReviewFile;
     }
 
     getChunks() {
