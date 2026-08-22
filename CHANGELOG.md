@@ -14,6 +14,13 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `1fe3e97` — The whole-book budget was guarding against the wrong quota. 250,000 is
+  the documented per-minute total; what refuses these calls is a lower one over
+  input alone. The log brackets it: 167,852 tokens went through, ~195,000 was
+  refused four times over eight minutes. The budget is now 165,000, counts the
+  instructions it used to leave out, and a 429 on that quota is no longer
+  retried — a request larger than the window fails the same however long it
+  waits.
 - `c9bba51` — The translation review is now shown the passport. It was being asked to
   send findings to a passport it had never seen — and whether a drifting register
   belongs to the passport or to the chunk depends entirely on whether a register
