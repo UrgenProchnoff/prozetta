@@ -901,6 +901,7 @@ async function renderMonitor(prefix) {
                     <span><span class="dot" style="background:#1f242e"></span>${esc(t('status.pending'))}</span>
                     <span><span class="dot ext-dot"></span>${esc(t('legend.extracted'))}</span>
                     <span><span class="dot blocked-dot"></span>${esc(t('legend.blocked'))}</span>
+                    <span><span class="dot advice-dot"></span>${esc(t('legend.advice'))}</span>
                     <span><span class="legend-scores"><span class="cell-score" data-score="7">7</span>/<span class="cell-score" data-score="8.5">8.5</span>/<span class="cell-score" data-score="9.5">9.5</span></span> ${esc(t('legend.score'))}</span>
                 </div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
@@ -1201,13 +1202,14 @@ async function renderMonitor(prefix) {
                 + (c.blocked ? '\n' + t('mon.chunkBlocked') + (c.blockedBy ? ' ' + t('mon.chunkBlockedBy', { model: c.blockedBy }) : '') : '')
                 + (c.status === 'blocked' ? '\n' + t('mon.chunkTransBlocked') + (c.translationBlockedBy ? ' ' + t('mon.chunkTransBlockedBy', { model: c.translationBlockedBy }) : '') : '')
                 + (c.disputed ? '\n' + t('mon.chunkDisputed') : '')
+                + (c.advice ? '\n' + t('mon.chunkAdvice', { n: c.advice }) : '')
                 + (c.score != null ? t('mon.chunkScore', { score: c.score }) : '')
                 + (c.attempts ? t('mon.chunkSteps', { n: c.attempts }) : '')
                 + `\n${c.preview}`;
             const scoreHtml = c.score != null
                 ? `<span class="cell-score">${Math.round(c.score * 10) / 10}</span>`
                 : '';
-            return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.blocked ? 'blocked' : ''} ${c.disputed ? 'disputed' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
+            return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.blocked ? 'blocked' : ''} ${c.disputed ? 'disputed' : ''} ${c.advice ? 'advice' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
                 ${c.score != null ? `style="${cellTint(c.score)}"` : ''}
                 href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}${scoreHtml}</a>`;
         }).join('');

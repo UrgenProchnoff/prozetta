@@ -300,6 +300,10 @@ function projectSummary(prefix) {
             // fresh draft) — the loop stopped instead of burning budget, and a
             // human should settle it.
             disputed: !!c.dispute,
+            // Advice accepted from the whole-book review and waiting for the next
+            // Stage 2 run. Work outstanding on a chunk that otherwise looks done,
+            // so the map has to say so or 35 queued fixes are invisible.
+            advice: c.advice?.length || 0,
             nTerms: Array.isArray(c.extracted_terms) ? c.extracted_terms.length : null,
             score: lastScore(c),
             attempts: c.history ? c.history.length : 0,

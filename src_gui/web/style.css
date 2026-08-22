@@ -10,6 +10,7 @@
     --yellow: #d9a13b;
     --red: #d95757;
     --blue: #4f8cff;
+    --violet: #a06cff;
 }
 
 * { box-sizing: border-box; }
@@ -987,3 +988,15 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 }
 .rev-problem { font-size: 13px; color: var(--muted); }
 .rev-advice { margin-top: 4px; font-size: 13px; color: var(--green); }
+
+/* A chunk with advice queued from the whole-book review. An inset ring rather
+   than a fourth corner: ::before and ::after are already spoken for by the
+   blocked and extracted/disputed markers, and a colour of its own because the
+   four status colours all mean something else — most of these chunks are green,
+   having been approved before anyone objected to them. */
+.chunk-cell.advice { box-shadow: inset 0 0 0 2px var(--violet); }
+.dot.advice-dot {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    box-shadow: inset 0 0 0 2px var(--violet);
+}
