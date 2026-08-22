@@ -245,9 +245,13 @@ const STYLE_WORDS = {
         dossier: (text) => `Досье повествователя: ${text}`,
         other: (name, text) => `Также в этом фрагменте: ${name}. Досье: ${text}`,
         dialogueAddress: 'В диалогах форму обращения («ты»/«вы») выбирай по отношениям персонажей из досье: подчинённые к начальству, свидетели к полиции, незнакомцы и деловые собеседники — обычно на «вы»; близкие, семья и приятели — на «ты».',
-        dialogueMarker: (marker, sample) => `Оформление прямой речи: реплика начинается с «${marker}». `
-            + `Так оформлена вся книга — не переноси пунктуацию диалогов из оригинала.`
-            + (sample ? `\nОбразец из этой же книги: ${sample}` : ''),
+        // Says "the norm of the target language", not "this is how the book is
+        // set": the marker is settled before anything is translated, so on the
+        // first chunk the claim would be false — and the sample is invented for
+        // the language, not quoted from the book.
+        dialogueMarker: (marker, sample) => `Оформление прямой речи: реплика начинается с «${marker}» — это норма целевого языка. `
+            + `Держи её одинаково во всей книге и НЕ переноси пунктуацию диалогов из оригинала.`
+            + (sample ? `\nОбразец оформления: ${sample}` : ''),
         undetermined: 'Кто повествователь этого фрагмента — НЕ определено. НЕ приписывай повествователю род: держи время повествования и перестраивай фразы так, чтобы родовые формы не требовались.',
     },
     en: {
@@ -274,9 +278,9 @@ const STYLE_WORDS = {
         dossier: (text) => `Narrator's dossier: ${text}`,
         other: (name, text) => `Also in this fragment: ${name}. Dossier: ${text}`,
         dialogueAddress: 'In dialogue, choose the form of address (formal/informal) from the characters\' relationships in the dossiers: subordinates to superiors, witnesses to police, strangers and business contacts are usually formal; family and close friends informal.',
-        dialogueMarker: (marker, sample) => `Setting of direct speech: a line of dialogue opens with "${marker}". `
-            + `The whole book is set that way — do not carry the original's dialogue punctuation across.`
-            + (sample ? `\nAn example from this same book: ${sample}` : ''),
+        dialogueMarker: (marker, sample) => `Setting of direct speech: a line of dialogue opens with "${marker}" — the norm of the target language. `
+            + `Keep it uniform through the whole book and do NOT carry the original's dialogue punctuation across.`
+            + (sample ? `\nExample of the setting: ${sample}` : ''),
         undetermined: 'The narrator of this fragment is NOT determined. Do not assign the narrator a gender: keep the narrative tense and rephrase so gendered forms are not needed.',
     },
 };
