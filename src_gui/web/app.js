@@ -363,12 +363,13 @@ async function renderGlossary(prefix) {
     setCrumbs(`${crumbHome()} / ${esc(prefix)} / ${esc(t('gloss.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
-    let terms, counts, findings, review, estimate, running, bookModel;
+    let terms, counts, findings, forms, review, estimate, running, bookModel;
     try {
         const data = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary`);
         terms = data.terms;
         counts = data.counts;
         findings = data.findings || [];
+        forms = data.forms || [];
         review = data.review || null;
         estimate = data.estimate || {};
         running = !!data.running;
@@ -400,7 +401,7 @@ async function renderGlossary(prefix) {
     // instead of after a round trip.
     const countOutstanding = () =>
         findings.reduce((n, f) => n + (f || []).filter(isModel).length, 0) + (review?.additions?.length || 0);
-    let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated' | 'model'
+    let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated' | 'model' | 'forms'
 
     const knownTypes = [...new Set(['name', 'term', ...terms.map(t => t.type).filter(Boolean)])];
 
@@ -479,11 +480,13 @@ async function renderGlossary(prefix) {
         const box = document.getElementById('g-issues');
         if (!box) return;
         const defects = countDefects(), policy = countPolicy(), model = countModel();
-        box.hidden = !(defects || policy || model);
+        const formCount = new Set(forms.filter(Boolean).map(f => f.group)).size;
+        box.hidden = !(defects || policy || model || formCount);
         const keep = box.value || rowFilter;
         box.innerHTML = `<option value="all">${esc(t('gloss.filterAll'))}</option>`
             + (model ? `<option value="model">${esc(t('gloss.filterModel', { n: model }))}</option>` : '')
             + (defects ? `<option value="defects">${esc(t('gloss.filterDefects', { n: defects }))}</option>` : '')
+            + (formCount ? `<option value="forms">${esc(t('gloss.filterForms', { n: formCount }))}</option>` : '')
             + (policy ? `<option value="untranslated">${esc(t('gloss.filterUntranslated', { n: policy }))}</option>` : '');
         // A filter whose category just emptied falls back to showing everything.
         box.value = [...box.options].some(o => o.value === keep) ? keep : 'all';
@@ -498,12 +501,23 @@ async function renderGlossary(prefix) {
                 const f = findings[idx] || [];
                 if (rowFilter === 'model') return f.some(isModel);
                 if (rowFilter === 'defects') return f.some(x => !isPolicy(x) && !isModel(x));
+                if (rowFilter === 'forms') return !!forms[idx];
                 return f.some(isPolicy);
             })
             .filter(({ t }) => !q
                 || (t.original || '').toLowerCase().includes(q)
                 || (t.translation || '').toLowerCase().includes(q)
                 || (t.notes || '').toLowerCase().includes(q));
+
+        // Grouped only under the filter that is about groups. Everywhere else the
+        // glossary keeps the order it has on disk, which is the order a person
+        // edited it into and has its own meaning.
+        if (rowFilter === 'forms') {
+            rows.sort((a, b) => {
+                const fa = forms[a.idx], fb = forms[b.idx];
+                return (fb.spread - fa.spread) || (fa.group - fb.group) || (a.idx - b.idx);
+            });
+        }
 
         countEl.textContent = `${rows.length} / ${terms.length}`;
 
@@ -517,7 +531,14 @@ async function renderGlossary(prefix) {
             const issueTitle = issues.map(i => '• ' + i.detail).join('\n');
             const typeOpts = knownTypes.map(k =>
                 `<option value="${esc(k)}" ${term.type === k ? 'selected' : ''}>${esc(k)}</option>`).join('');
-            return `<tr data-idx="${idx}" class="${worst ? 'has-issue issue-' + worst : ''}">
+            // Members of one group get the same tint and neighbouring groups
+            // alternate, so under the group filter the eye reads blocks rather
+            // than a list. Nothing is shaded outside that filter — the shading
+            // means "these are the same word", which is only being claimed there.
+            const g = rowFilter === 'forms' ? forms[idx] : null;
+            const groupClass = g ? ` form-group form-group-${g.group % 2}` : '';
+            const groupTitle = g ? ` title="${esc(t('gloss.formsRow', { n: g.size }))}"` : '';
+            return `<tr data-idx="${idx}"${groupTitle} class="${worst ? 'has-issue issue-' + worst : ''}${groupClass}">
                 <td><input data-f="original" value="${esc(term.original)}">${issues.length
                     ? `<span class="issue-flag" title="${esc(issueTitle)}">${worst === 'note' ? '·' : issues.length > 1 ? issues.length : '!'}</span>` : ''}</td>
                 <td><input data-f="translation" value="${esc(term.translation)}"></td>

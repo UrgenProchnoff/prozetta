@@ -1000,3 +1000,10 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
     border: 1px solid var(--border);
     box-shadow: inset 0 0 0 2px var(--violet);
 }
+
+/* Under the "forms of one word" filter, members of a group share a tint and
+   neighbouring groups alternate, so the eye reads blocks instead of a list.
+   Applied only under that filter: the shading claims "these are the same word",
+   and that claim is only being made there. */
+.glossary tr.form-group-0 td { background: rgba(160, 108, 255, 0.10); }
+.glossary tr.form-group-1 td { background: rgba(160, 108, 255, 0.04); }

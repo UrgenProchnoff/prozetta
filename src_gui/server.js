@@ -245,6 +245,26 @@ function speechAdherence(chunks, expected) {
     };
 }
 
+
+/**
+ * Inflection groups as a per-row annotation.
+ *
+ * `group` numbers the members so the editor can bring them together, and
+ * `spread` is how unlike their translations are — the sort key, and nothing
+ * more. What the code cannot judge is whether a group is a real disagreement or
+ * a singular beside its plural; that is a person's call, and the ranking exists
+ * to put the ones worth a glance at the top.
+ */
+function formGroups(terms) {
+    const byRow = new Array(terms.length).fill(null);
+    inflectionGroups(terms).forEach((group, n) => {
+        for (const entry of group.entries) {
+            byRow[entry.index] = { group: n, spread: Number(group.spread.toFixed(2)), size: group.entries.length };
+        }
+    });
+    return byRow;
+}
+
 function chunkStatus(chunk) {
     if (chunk.translation_status === 'success') return 'success';
     if (chunk.translation_status === 'failed_best_effort') return 'best_effort';
@@ -699,6 +719,12 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
 
     res.json({
         terms, counts, findings,
+        // Entries that are inflections of one source word and are translated two
+        // ways. Sent per row rather than as a list of groups: the editor shows
+        // rows, and a group number on each member is what lets it gather them
+        // and put the widest disagreement first. The warning before Stage 2
+        // promised this list opens here, and for a while it did not.
+        forms: formGroups(terms),
         review: reviewMeta,
         // The editor offers to run the review itself, and both of these decide
         // whether it may: a stage already running, or an estimate that will not
