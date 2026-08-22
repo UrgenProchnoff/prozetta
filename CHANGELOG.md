@@ -14,6 +14,11 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `d15c9cc` — The passport prompt now actually asks about direct speech. The field
+  reached the model in the example JSON alone, the only one with no matching
+  instruction, while the prompt's opening tells the model to trust the text —
+  which is the wrong instruction for the one question that must not be answered
+  from the book.
 - `68024c1` — The dialogue marker became a norm of the target language, settled before
   translation, instead of something read off the finished text. Measuring makes
   the majority right by definition, so a badly translated book would teach the
