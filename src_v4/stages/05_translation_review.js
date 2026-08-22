@@ -17,6 +17,7 @@ import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
 import { countTokens } from '../core/tokenizer.js';
 import { verifyFindings } from '../core/translation_review.js';
+import { loadPassport, isEmptyPassport } from '../core/passport.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
@@ -79,6 +80,31 @@ export async function runTranslationReviewStage(state) {
         } catch { /* an unreadable previous review must not block a new one */ }
     }
 
+    // The decisions the book was translated under. Without them the reviewer has
+    // to infer the intent from the text, which makes the majority right by
+    // definition — and, worse, leaves it unable to route its own findings: it is
+    // asked to send some to the passport while never having seen it, so it
+    // cannot tell "the passport says nothing about this" from "the passport says
+    // it and this chunk disobeyed", which are different repairs.
+    //
+    // The point-of-view map is left out. It is written in chunk indices, and the
+    // reviewer is given one joined text with no chunk boundaries in it; 62 spans
+    // on Morphotrophic would be 1,400 tokens of numbers it cannot resolve. What
+    // stays costs 700 tokens against a 193,400-token prompt.
+    const passport = loadPassport(state.getPassportPath());
+    const intent = isEmptyPassport(passport) ? null : {
+        kind: passport.kind || undefined,
+        register: passport.register || undefined,
+        narration: passport.narration?.person ? passport.narration : undefined,
+        author: passport.author?.gender ? { name: passport.author.name, gender: passport.author.gender } : undefined,
+        dialogue: passport.dialogue?.marker ? { marker: passport.dialogue.marker, sample: passport.dialogue.sample } : undefined,
+        characters: passport.characters?.length ? passport.characters : undefined,
+        voices: passport.voices?.length ? passport.voices : undefined,
+        addressRegistry: passport.addressRegistry?.length ? passport.addressRegistry : undefined,
+    };
+    if (intent) console.log(`[Review] Sending the passport's decisions along: the reviewer needs to know what was intended.`);
+    else console.log(`[Review] No passport — the reviewer will have to judge the text against its own idea of what it should be.`);
+
     const translationText = chunks.map(c => c.translation || '').filter(Boolean).join('\n');
     const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
     const prompts = getPrompts(config.translation.promptLang);
@@ -86,9 +112,11 @@ export async function runTranslationReviewStage(state) {
     // --- does it fit? ---
     const textTokens = countTokens(translationText);
     const glossaryTokens = pairs.length ? countTokens(JSON.stringify(pairs)) : 0;
-    const total = textTokens + glossaryTokens;
+    const intentTokens = intent ? countTokens(JSON.stringify(intent)) : 0;
+    const total = textTokens + glossaryTokens + intentTokens;
     const fmt = n => n.toLocaleString('en-US');
-    console.log(`[Review] Prompt: ~${fmt(textTokens)} tokens of translation + ~${fmt(glossaryTokens)} of glossary = ~${fmt(total)}.`);
+    console.log(`[Review] Prompt: ~${fmt(textTokens)} tokens of translation + ~${fmt(glossaryTokens)} of glossary` +
+        `${intentTokens ? ` + ~${fmt(intentTokens)} of passport` : ''} = ~${fmt(total)}.`);
 
     if (total > TOKEN_BUDGET) {
         console.error(`\n[Review] TOO LARGE: ~${fmt(total)} tokens against a budget of ${fmt(TOKEN_BUDGET)}.`);
@@ -114,7 +142,7 @@ export async function runTranslationReviewStage(state) {
     try {
         const response = await client.invoke([
             new HumanMessage(prompts.translationReview.system(targetLang)),
-            new HumanMessage(prompts.translationReview.user(translationText, pairs)),
+            new HumanMessage(prompts.translationReview.user(translationText, pairs, intent)),
         ]);
         raw = extractJson(response.content || '');
     } catch (e) {

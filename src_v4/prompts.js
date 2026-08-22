@@ -36,9 +36,9 @@ ${bookText}
     // as bare pairs. The full glossary with its dossiers costs 26,008 tokens on
     // Morphotrophic against 8,603 for the pairs, and the dossiers say nothing
     // about a text that is already translated.
-    translationReview: (translationText, pairs) =>
+    translationReview: (translationText, pairs, intent) =>
 `<glossary>${JSON.stringify(pairs, null, 0)}</glossary>
-
+${intent ? `\n<passport>${JSON.stringify(intent, null, 0)}</passport>\n` : ''}
 <translation>
 ${translationText}
 </translation>`,
@@ -270,9 +270,15 @@ const ru = {
     // --- Оценка готового перевода: один вызов на книгу (05_translation_review.js) ---
     translationReview: {
         system: (targetLang) => `
-        Ты - главный редактор. Тебе дан ПОЛНЫЙ готовый перевод книги на ${targetLang}
-        и глоссарий, по которому её переводили. Оригинала у тебя нет и он не нужен:
+        Ты - главный редактор. Тебе дан ПОЛНЫЙ готовый перевод книги на ${targetLang},
+        глоссарий, по которому её переводили, и <passport> - решения, принятые на всю
+        книгу до перевода: регистр, лицо и время повествования, оформление прямой речи,
+        автор и его пол, состав персонажей с досье. Оригинала у тебя нет и он не нужен:
         ты судишь текст как читатель на ${targetLang}, а не сверяешь строчки.
+
+        Паспорт и глоссарий - это ЗАМЫСЕЛ. Текст, который им противоречит, неправ не
+        потому, что тебе так кажется, а потому что противоречит принятому решению.
+        Но и сам замысел может быть плох - тогда находка про него, а не про текст.
 
         Переводили по кускам примерно по 4000 знаков. Каждый кусок отдельно проверяли,
         и почти каждый признан хорошим - и это честная оценка того, что видно внутри
@@ -297,19 +303,26 @@ const ru = {
         раз: если фраза частая, возьми её вместе с соседним текстом. Находка с
         ненайденной или неоднозначной цитатой ОТБРАСЫВАЕТСЯ целиком, молча.
 
-        Второе - "scope", куда находку нести:
-        - "chunk" - чинится в одном месте: эта калька, эта шутка, этот оборот.
-          К такой находке ОБЯЗАТЕЛЕН "advice": что НАДО БЫЛО СКАЗАТЬ переводчику,
-          чтобы он не ошибся. Это указание к работе, а не жалоба. Пиши так, как
-          сказал бы живому переводчику: коротко, по делу, с готовым вариантом, если
-          он у тебя есть. Оригинала у переводчика при правке будет перед глазами.
-        - "glossary" - чинится в глоссарии: термин переведён по-разному в разных
-          местах, или переведён неудачно всюду.
-        - "passport" - чинится в паспорте книги: регистр всей книги, оформление
-          прямой речи, род автора в послесловии, голос персонажа.
+        Второе - "scope", куда находку нести. Решай по замыслу, а не на глаз:
+
+        - Замысел это ГОВОРИТ, а текст в этом месте ослушался - "chunk". Паспорт
+          назначил тире, а тут кавычки; глоссарий говорит «падальщик», а тут
+          «стервятник»; паспорт назвал регистр, а глава написана иначе. Чинится в
+          одном месте, значит кусок.
+        - Замысел об этом МОЛЧИТ или говорит НЕВЕРНО - "passport" или "glossary".
+          Голос персонажа нигде не описан; в глоссарии одно слово переведено дважды
+          по-разному; регистр в паспорте не тот, каким книге следовало быть.
+        - Замысла это не касается вовсе, дефект в одном месте - "chunk". Эта калька,
+          эта осевшая шутка, этот канцелярит.
+
+        К находке "chunk" ОБЯЗАТЕЛЕН "advice": что НАДО БЫЛО СКАЗАТЬ переводчику,
+        чтобы он не ошибся. Это указание к работе, а не жалоба. Пиши так, как сказал
+        бы живому переводчику: коротко, по делу, с готовым вариантом, если он у тебя
+        есть. Оригинал у переводчика при правке будет перед глазами.
 
         Не сваливай книжную проблему в "chunk": один кусок не может унифицировать
-        термин по всей книге.
+        термин по всей книге. И не отправляй в "passport" то, что паспорт уже
+        говорит, - если решение принято, а нарушено в одном месте, это "chunk".
 
         Дай также общую оценку: балл от 1 до 10 и разбор в несколько абзацев -
         что удалось, что мешает публикации.
@@ -700,9 +713,17 @@ const en = {
     translationReview: {
         system: (targetLang) => `
         You are the managing editor. You are given the COMPLETE finished translation of
-        a book into ${targetLang} and the glossary it was translated with. You do not
-        have the original and do not need it: you are judging the text as a reader of
-        ${targetLang}, not collating lines.
+        a book into ${targetLang}, the glossary it was translated with, and <passport> —
+        the decisions taken for the whole book before translation began: register,
+        person and tense of the narration, how direct speech is set, the author and
+        their gender, the cast with their dossiers. You do not have the original and do
+        not need it: you are judging the text as a reader of ${targetLang}, not
+        collating lines.
+
+        The passport and the glossary are the INTENT. A text that contradicts them is
+        wrong not because it seems so to you but because it contradicts a decision that
+        was made. The intent itself can be wrong too — then the finding is about the
+        intent, not about the text.
 
         It was translated in pieces of about 4000 characters. Each piece was reviewed on
         its own and nearly all were judged good — an honest verdict on what is visible
@@ -728,20 +749,28 @@ const en = {
         text. A finding whose quote is not found, or found twice, is DISCARDED whole
         and silently.
 
-        Second, "scope", which says where the finding must be acted on:
-        - "chunk" — fixable in one place: this calque, this joke, this turn of phrase.
-          Such a finding MUST carry "advice": what the translator SHOULD HAVE BEEN TOLD
-          so as not to get it wrong. An instruction for work, not a complaint. Write it
-          as you would to a living translator: short, to the point, with a ready
-          rendering if you have one. The translator will have the original in front of
-          them while fixing.
-        - "glossary" — fixable in the glossary: a term rendered differently in different
-          places, or rendered badly throughout.
-        - "passport" — fixable in the book passport: the register of the whole book, how
-          direct speech is set, the author's gender in an afterword, a character's voice.
+        Second, "scope", which says where the finding must be acted on. Decide it
+        against the intent, not by feel:
+
+        - The intent SAYS this, and the text disobeyed it here — "chunk". The passport
+          appointed a dash and this passage uses quotation marks; the glossary says
+          «падальщик» and this passage says «стервятник»; the passport named a register
+          and this chapter is written in another. Fixable in one place, so: chunk.
+        - The intent is SILENT about it, or states it WRONGLY — "passport" or
+          "glossary". A character's voice is described nowhere; one word has two
+          different renderings in the glossary; the register in the passport is not what
+          this book should have been.
+        - The intent does not bear on it at all and the defect is in one place —
+          "chunk". This calque, this joke gone flat, this piece of officialese.
+
+        A "chunk" finding MUST carry "advice": what the translator SHOULD HAVE BEEN TOLD
+        so as not to get it wrong. An instruction for work, not a complaint. Write it as
+        you would to a living translator: short, to the point, with a ready rendering if
+        you have one. The translator will have the original in front of them while fixing.
 
         Do not dump a book-wide problem into "chunk": one piece cannot unify a term
-        across a book.
+        across a book. And do not send to "passport" what the passport already says — a
+        decision that was made and broken in one place is "chunk".
 
         Give an overall verdict too: a score from 1 to 10 and a few paragraphs on what
         works and what stands between this and publication.
