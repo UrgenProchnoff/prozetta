@@ -1209,8 +1209,15 @@ async function renderMonitor(prefix) {
             const scoreHtml = c.score != null
                 ? `<span class="cell-score">${Math.round(c.score * 10) / 10}</span>`
                 : '';
+            // The tint is an inline background, so it beats the status class. That
+            // is right while the score describes the translation being shown, and
+            // wrong once the status is about something else: a chunk refused by
+            // the content filter during a fix keeps the 10 it earned when it was
+            // approved, and painted that 10 it looked finished. The status wins
+            // there; the score is still on the cell as a number.
+            const tinted = c.score != null && c.status !== 'blocked';
             return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.blocked ? 'blocked' : ''} ${c.disputed ? 'disputed' : ''} ${c.advice ? 'advice' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
-                ${c.score != null ? `style="${cellTint(c.score)}"` : ''}
+                ${tinted ? `style="${cellTint(c.score)}"` : ''}
                 href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}${scoreHtml}</a>`;
         }).join('');
         drawReview();
