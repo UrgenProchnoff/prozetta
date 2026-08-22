@@ -14,6 +14,12 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `c9bba51` — The translation review is now shown the passport. It was being asked to
+  send findings to a passport it had never seen — and whether a drifting register
+  belongs to the passport or to the chunk depends entirely on whether a register
+  was ever set. The point-of-view map stays out: it is written in chunk indices
+  the reviewer cannot resolve. The rest costs 651 tokens in a 193,400-token
+  prompt.
 - `7a097ac` — "Assess translation" on the monitor: one call reads the whole finished
   text and reports what a chunk-by-chunk reviewer cannot see — calques, a joke
   gone flat, a voice that drifts. Each finding quotes the translation and the
