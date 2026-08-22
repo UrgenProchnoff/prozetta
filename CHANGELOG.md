@@ -12,6 +12,15 @@ a link in the interface, an argument to `git show 5bba425` in a terminal. The
 Everything in this section is about one thing: a translation that stays
 consistent about who is speaking, who they are, and what they are called.
 
+**2026-08-23**
+
+- `777fce2` — A chunk being corrected on advice is no longer rewritten from nothing.
+  The checker was told to answer an unmet requirement with like=0, which is the
+  loop's signal for "write it again": chunk 27 of Morphotrophic scored 9, was
+  called excellent in the same breath, and was redrafted whole because one word
+  came out «сухо» instead of «коротко». Under advice the loop now fixes whatever
+  flags come back, and the prompt stops prescribing them.
+
 **2026-08-22**
 
 - `94035a8` — What the first real review runs exposed. A quote can straddle a chunk
