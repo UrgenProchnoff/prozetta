@@ -14,6 +14,12 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `94035a8` — What the first real review runs exposed. A quote can straddle a chunk
+  boundary the reviewer never saw — the translation-only prompt is seamless — so
+  one found in no single chunk is now located on the joined text. And scope is
+  the model's hint rather than its verdict: the bilingual run filed four findings
+  under "glossary" whose own wording said the glossary was right and the text
+  disobeyed. Anything carrying advice can now be queued on its chunk.
 - `6489ad9` — The whole-book prompt can be carried to a console with a bigger window
   by hand: the monitor builds it, hands it over, and takes the answer back
   through exactly the checks an API answer gets. Morphotrophic needs 195,472
