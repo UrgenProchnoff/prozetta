@@ -12,6 +12,16 @@ a link in the interface, an argument to `git show 5bba425` in a terminal. The
 Everything in this section is about one thing: a translation that stays
 consistent about who is speaking, who they are, and what they are called.
 
+**2026-08-22**
+
+- `2fe4aeb` — The passport now carries how direct speech is set, and the glossary is
+  checked for answering one question twice. The dialogue marker is counted from
+  the book rather than looked up in a table, so it works in any language — no
+  table here lists the dash that Russian and Spanish set dialogue with. The
+  glossary check ranks groups by how unlike their translations are and leaves
+  the verdict to a person: guessing at the morphology of an unknown language is
+  how a warning turns into noise.
+
 **2026-08-20**
 
 - `e699ce0` — A chunk the content filter refuses no longer takes the whole book down
