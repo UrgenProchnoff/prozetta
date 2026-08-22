@@ -76,7 +76,8 @@ const DOSSIER_TOKENS = config.pipeline.dossierMaxTokens || 600;
  *                   samples: Array<{original: string, translation: string}>}>} voices
  *   Marked speech (dialect, register, verbal tics). The approved samples matter
  *   more than the description: they go into the prompt as few-shot examples.
- * @property {{name: string|null, gender: 'm'|'f'|'n'|null, note: string|null}|null} author
+ * @property {{name: string|null, gender: 'm'|'f'|'n'|null, inText: boolean|null,
+ *             note: string|null}|null} author
  *   Who wrote the book, and their grammatical gender. Needed wherever the author
  *   speaks in their own first person — preface, afterword, acknowledgements,
  *   notes — because there "I" is the author, not the narrator, and nothing
@@ -88,6 +89,15 @@ const DOSSIER_TOKENS = config.pipeline.dossierMaxTokens || 600;
  *   in a novel the author is not in the story at all. Non-fiction used to file
  *   them as cast[0], which still works and is still read when this field is
  *   empty.
+ *
+ *   `inText` says what the answer rests on, because the two cases look identical
+ *   from the outside and are not. Morphotrophic carries "Copyright © Greg Egan,
+ *   2024" on its first page, so the name is checkable and checks out. Powrot's
+ *   42,656 characters name nobody — no author, no copyright, not even the word
+ *   "autor" — and the model answered from recognising the book. Both answers may
+ *   well be right; only one can be verified, and a confident wrong name would be
+ *   indistinguishable from either without this flag. `null` means nobody has
+ *   looked, which is what a name typed by hand gets.
  * @property {{marker: string, sample: string|null, source: 'model'|'hand'}|null} dialogue
  *   How direct speech is set in the TARGET LANGUAGE — the punctuation a line of
  *   dialogue opens with, plus an example. A norm, settled before translation
@@ -141,7 +151,12 @@ export function loadPassport(passportPath) {
             // Only worth carrying when it says something. A name without a
             // gender answers no question the style block asks.
             author: raw.author && typeof raw.author === 'object' && (raw.author.name || raw.author.gender)
-                ? { name: raw.author.name || null, gender: raw.author.gender || null, note: raw.author.note || null }
+                ? {
+                    name: raw.author.name || null,
+                    gender: raw.author.gender || null,
+                    inText: typeof raw.author.inText === 'boolean' ? raw.author.inText : null,
+                    note: raw.author.note || null,
+                }
                 : base.author,
             characters: Array.isArray(raw.characters) ? raw.characters : [],
             povMap: Array.isArray(raw.povMap) ? raw.povMap : [],

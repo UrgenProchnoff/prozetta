@@ -1503,6 +1503,8 @@ async function renderPassport(prefix) {
                 <input type="text" data-p="author.name" value="${esc(p.author?.name || '')}" placeholder="${esc(t('pass.authorPlaceholder'))}" style="max-width:220px">
                 ${sel('author.gender', p.author?.gender || '', [['', '—'], ['m', t('gloss.genderM')], ['f', t('gloss.genderF')], ['n', t('gloss.genderN')]])}
                 <span class="cfg-hint">${esc(t('pass.authorHint'))}
+                ${p.author?.inText === true ? '<br>' + esc(t('pass.authorInText')) : ''}
+                ${p.author?.inText === false ? '<br>' + esc(t('pass.authorRecognised')) : ''}
                 ${p.author?.note ? '<br>' + esc(t('pass.note')) + ': ' + esc(p.author.note) : ''}</span></div></div>
             <div class="cfg-field"><label>${esc(t('pass.dialogue'))}</label><div class="cfg-input">
                 <input type="text" data-p="dialogue.marker" value="${esc(p.dialogue?.marker || '')}" style="max-width:70px">
@@ -1552,6 +1554,10 @@ async function renderPassport(prefix) {
             // model, and has to say so — otherwise the next passport rebuild
             // measures the book again and quietly puts the old one back.
             if (key === 'dialogue.marker' && p.dialogue?.marker) p.dialogue.source = 'hand';
+            // Whether a name occurs in the book is answered by searching the
+            // book, which this page cannot do. A name typed here has not been
+            // checked, and must not keep the previous name's verdict.
+            if (key === 'author.name' && p.author) p.author.inText = null;
             markDirty();
             return;
         }

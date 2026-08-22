@@ -15,7 +15,7 @@ import { HumanMessage } from '@langchain/core/messages';
 import { llmManager, bookModelEnabled, explainCallFailure } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
-import { detectNarrativePerson, characterCandidates } from '../core/text_stats.js';
+import { detectNarrativePerson, characterCandidates, wholeWordRegex } from '../core/text_stats.js';
 import { buildPovMap, describePovMap } from '../core/pov_map.js';
 import { spansFromQuotes } from '../core/quoted_spans.js';
 import { splitTextIntoChunks } from '../core/tokenizer.js';
@@ -226,12 +226,25 @@ export async function runPassportStage(state) {
     // a book need never name its author, let alone their gender.
     const authorName = String(answer?.author?.name || knownAuthor || '').trim().slice(0, 120);
     const authorGender = normalizeGender(answer?.author?.gender);
+    // Whether the book itself names them. Strict — this exact name, whole words:
+    // a false here says "not verifiable from the text", which is true even when
+    // the book spells the name some other way, and erring toward unverifiable is
+    // the safe direction. Whole words matter more than they look: a bare
+    // substring search finds "Egan" 92 times in Morphotrophic, 89 of them inside
+    // the word "began".
+    const inText = authorName ? wholeWordRegex(authorName, 'giu').test(bookText) : false;
     passport.author = (authorName || authorGender)
-        ? { name: authorName || null, gender: authorGender, note: String(answer?.author?.reason || '').trim().slice(0, 200) || null }
+        ? {
+            name: authorName || null,
+            gender: authorGender,
+            inText,
+            note: String(answer?.author?.reason || '').trim().slice(0, 200) || null,
+        }
         : null;
     console.log(passport.author?.gender
-        ? `[Passport] Author: ${passport.author.name || 'unnamed'} (${passport.author.gender})` +
-          `${passport.author.note ? ` — ${passport.author.note}` : ''}.`
+        ? `[Passport] Author: ${passport.author.name || 'unnamed'} (${passport.author.gender}), ` +
+          `${inText ? 'named in the book itself' : 'NOT named anywhere in the book — the model recognised it'}` +
+          `${passport.author.note ? ` — ${passport.author.note}` : '.'}`
         : `[Passport] Author: gender not established — the prompts will say nothing about the author's voice.`);
 
     // --- how direct speech is set ---
