@@ -14,6 +14,12 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `0db9610` — Resetting a project to its post-Stage-1 state no longer drops everything
+  the chunk had gained since the tool was written. It rebuilt each chunk from
+  three named fields, so Morphotrophic's 169 chunks lost their token counts and
+  the whole-book budget guards fell back to counting characters. Now a deny-list
+  of what Stage 2 writes, shared with the GUI's reset button, which carried the
+  same list and the same defect.
 - `c1d938a` — The passport says whether the book names its author or the model merely
   recognised it. Morphotrophic carries a copyright line and checks out; Powrot
   names nobody in 42,656 characters and the answer came from recognition. Both
