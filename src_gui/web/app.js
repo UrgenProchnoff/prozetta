@@ -1415,6 +1415,28 @@ async function renderBook(prefix) {
  * rather than a table: what a person needs to see is whether the alternation
  * looks right, and where the gaps are, not thirty-nine rows of indices.
  */
+/**
+ * What the finished translation actually does about dialogue, next to the norm
+ * the passport sets. Silent until something is translated: before that there is
+ * no observation to make, and an empty line under the field would read as one.
+ */
+function speechNote(speech) {
+    if (!speech || !speech.counts) return '';
+    const counts = Object.entries(speech.counts).map(([m, n]) => `${m} ${n}`).join(',  ');
+    const parts = [t('pass.dialogueCounts', { counts })];
+    if (!speech.expected) {
+        parts.push(t('pass.dialogueNoNorm'));
+    } else if (speech.deviations.length) {
+        parts.push(t('pass.dialogueOff', {
+            pct: Math.round(100 * speech.share),
+            n: speech.deviations.length,
+        }));
+    } else {
+        parts.push(t('pass.dialogueHeld'));
+    }
+    return '<br>' + parts.map(esc).join('<br>');
+}
+
 async function renderPassport(prefix) {
     setCrumbs(`${crumbHome()} / <a href="#/monitor/${encodeURIComponent(prefix)}">${esc(prefix)}</a> / ${esc(t('pass.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
@@ -1480,11 +1502,9 @@ async function renderPassport(prefix) {
             <div class="cfg-field"><label>${esc(t('pass.dialogue'))}</label><div class="cfg-input">
                 <input type="text" data-p="dialogue.marker" value="${esc(p.dialogue?.marker || '')}" style="max-width:70px">
                 <span class="cfg-hint">${esc(t('pass.dialogueHint'))}
-                ${p.dialogue?.counts ? '<br>' + esc(t('pass.dialogueCounts', {
-                    counts: Object.entries(p.dialogue.counts).map(([m, n]) => `${m} ${n}`).join(',  ')
-                })) : ''}
                 ${p.dialogue?.source ? '<br>' + esc(t('pass.dialogueFrom.' + p.dialogue.source)) : ''}
-                ${p.dialogue?.sample ? '<br>' + esc(t('pass.dialogueSample', { sample: p.dialogue.sample })) : ''}</span></div></div>
+                ${p.dialogue?.sample ? '<br>' + esc(t('pass.dialogueSample', { sample: p.dialogue.sample })) : ''}
+                ${speechNote(data.speech)}</span></div></div>
             ${p.narration?.addressNote ? `<div class="cfg-hint" style="margin-top:8px">${esc(t('pass.note'))}: ${esc(p.narration.addressNote)}</div>` : ''}
         </div>
 
@@ -1526,10 +1546,7 @@ async function renderPassport(prefix) {
             // A marker chosen by hand outranks both the measurement and the
             // model, and has to say so — otherwise the next passport rebuild
             // measures the book again and quietly puts the old one back.
-            if (key === 'dialogue.marker' && p.dialogue?.marker) {
-                p.dialogue.source = 'hand';
-                p.dialogue.counts = null;
-            }
+            if (key === 'dialogue.marker' && p.dialogue?.marker) p.dialogue.source = 'hand';
             markDirty();
             return;
         }

@@ -9,7 +9,7 @@ import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { outstandingFindings } from '../src_v4/core/glossary_review.js';
 import { projectPaths, projectDir, listProjects } from '../src_v4/core/paths.js';
 import { handEdited } from '../src_v4/core/passport.js';
-import { dominantMarker, deviatingChunks } from '../src_v4/core/dialogue.js';
+import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
 import config from '../src_v4/config.js';
 
@@ -217,6 +217,29 @@ function validPrefix(req, res) {
     return prefix;
 }
 
+/**
+ * How well a translation keeps to the marker its dialogue is supposed to open
+ * with. `expected` is the passport's; where there is none the text is measured
+ * against its own majority, and `expected: null` says so — that only answers
+ * whether the book agrees with itself, never whether it agrees with the language.
+ */
+function speechAdherence(chunks, expected) {
+    const translated = chunks.map(c => c.translation || '').filter(Boolean).join('\n');
+    if (!translated) return null;
+    const book = dominantMarker(translated);
+    const reference = expected || book.marker;
+    if (!reference) return null;
+    const kept = adherence(book, reference);
+    return {
+        expected,
+        observed: book.marker,
+        marker: reference,
+        share: kept ? Number(kept.share.toFixed(3)) : 0,
+        counts: Object.fromEntries(book.tally.slice(0, 6)),
+        deviations: deviatingChunks(chunks, book, reference).map(d => d.i),
+    };
+}
+
 function chunkStatus(chunk) {
     if (chunk.translation_status === 'success') return 'success';
     if (chunk.translation_status === 'failed_best_effort') return 'best_effort';
@@ -295,23 +318,11 @@ function projectSummary(prefix) {
         } catch { passport = { broken: true }; }
     }
 
-    // How consistently the finished text sets direct speech. Counted from the
-    // translation itself, so it says nothing until there is one — and it is the
-    // one defect of this kind that no chunk could have avoided on its own.
-    let dialogue = null;
-    const translated = chunks.map(c => c.translation || '').filter(Boolean).join('\n');
-    if (translated) {
-        const book = dominantMarker(translated);
-        if (book.marker) {
-            dialogue = {
-                marker: book.marker,
-                share: Number(book.share.toFixed(3)),
-                counts: Object.fromEntries(book.tally.slice(0, 6)),
-                rivals: book.rivals.map(r => r.marker),
-                deviations: deviatingChunks(chunks, book).map(d => d.i),
-            };
-        }
-    }
+    // Does the finished text keep to the marker the passport prescribes? Counted
+    // from the translation, so it says nothing until there is one. Without a
+    // passport the text is compared against its own majority — a weaker question
+    // (does the book agree with itself?) and reported as such.
+    const dialogue = speechAdherence(chunks, passport?.dialogue?.marker || null);
 
     let glossaryCount = null;
     let glossaryForms = null;
@@ -543,8 +554,15 @@ app.get('/api/projects/:prefix/passport', (req, res) => {
         const passport = readJson(pp);
         // Chunk count lets the map be drawn to scale even where spans are sparse.
         let total = 0;
-        if (fs.existsSync(statePath(prefix))) total = (readJson(statePath(prefix)).chunks || []).length;
-        res.json({ exists: true, passport, totalChunks: total });
+        let chunks = [];
+        if (fs.existsSync(statePath(prefix))) {
+            chunks = readJson(statePath(prefix)).chunks || [];
+            total = chunks.length;
+        }
+        // The dialogue field is a norm; whether the text obeys it is a separate
+        // fact, and the page that invites you to change the norm is where you
+        // want to see what changing it would be arguing with.
+        res.json({ exists: true, passport, totalChunks: total, speech: speechAdherence(chunks, passport?.dialogue?.marker || null) });
     } catch (e) {
         res.status(500).json({ error: `Не удалось прочитать паспорт: ${e.message}` });
     }

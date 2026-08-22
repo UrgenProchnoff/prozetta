@@ -1,23 +1,23 @@
 /**
- * How a book sets direct speech — counted, not looked up.
+ * Checking a translation against the way its language sets direct speech.
  *
  * Every language marks dialogue with punctuation at the start of a line: “ in
- * English, — in Russian and Spanish, „ in German, 「 in Japanese. Which one a
- * book uses is therefore a countable fact about the book, and counting it needs
- * no table of languages and no model call.
+ * English, — in Russian and Spanish, „ in German, 「 in Japanese. Which one to
+ * use is a norm of the target language, decided once in the passport before a
+ * word is translated. Nothing here decides it.
  *
- * A table was the obvious alternative and it would have been wrong. language.js
- * already carries `quotePairs` for six languages and five scripts, and not one
- * entry lists a dash — so a table lookup would have decided that the Russian
- * translation of Morphotrophic is a book set in quotation marks, when 1464 of
- * its 1792 speech paragraphs open with —. Counting cannot make that mistake,
- * because it assumes nothing.
+ * What is here is the count, and it answers a different question: does the
+ * finished text keep to what the passport says? An earlier version let the
+ * count set the passport as well, seeded from the translation. That is
+ * backwards — it makes the majority right by definition, so a book translated
+ * badly teaches the passport its own mistake, and a 60/40 split enshrines the
+ * 60. The measurement observes; the passport prescribes.
  *
- * Measured across four finished books: Ryuker's translation deviates from its
- * own convention in 10 paragraphs out of 1445 (0.7%), Morphotrophic in 328 out
+ * Measured across four finished books: Ryuker's translation departs from the
+ * Russian convention in 10 lines out of 1445 (0.7%), Morphotrophic in 328 out
  * of 1792 (18%) — including 25 that kept the English “ outright. So the count
- * does not merely name the convention, it separates a consistent book from an
- * inconsistent one.
+ * does separate a consistent book from an inconsistent one, which is all it is
+ * asked to do.
  */
 
 // Opening/closing/initial/final punctuation, dashes, and other punctuation:
@@ -75,7 +75,11 @@ const RIVAL_SHARE = 0.1;
 const MIN_MARKED = 8;
 
 /**
- * The convention a text follows, and what competes with it.
+ * The convention a text actually follows, and what competes with it.
+ *
+ * An observation, not a decision — used to report what a finished translation
+ * does, and as the fallback reference for a book whose passport predates the
+ * dialogue field.
  *
  * Returns `marker: null` when there is nothing to see: a text whose speech is
  * set inside paragraphs rather than broken out gives no line-initial evidence,
@@ -98,6 +102,25 @@ export function dominantMarker(text) {
         .map(([m, n]) => ({ marker: m, count: n, share: n / marked }));
 
     return { marker, count, share: count / marked, marked, rivals, tally };
+}
+
+/**
+ * How much of the dialogue a text sets with `marker`.
+ *
+ * Counted against the markers that could be a dialogue convention here — the
+ * reference plus anything holding a real share of the book — not against every
+ * line that happens to start with punctuation. Overtime opens 77 lines with —
+ * and nothing else at that scale, but also six with a bracket and four with an
+ * italic star; measured against all of them it scored 85% while departing from
+ * the norm in exactly zero chunks, and two numbers that disagree are worse than
+ * one.
+ */
+export function adherence(book, marker) {
+    if (!book?.marked || !marker) return null;
+    const relevant = book.tally.filter(([m, n]) => m === marker || n / book.marked >= RIVAL_SHARE);
+    const total = relevant.reduce((sum, [, n]) => sum + n, 0);
+    const count = book.tally.find(([m]) => m === marker)?.[1] || 0;
+    return { count, total, share: total ? count / total : 0 };
 }
 
 /**
@@ -126,27 +149,39 @@ export function sampleLine(text, marker) {
 }
 
 /**
- * Which chunks depart from the book's own convention.
+ * Which chunks depart from the marker the book is supposed to use.
+ *
+ * `reference` is the passport's marker — the norm of the target language. It
+ * falls back to what the text mostly does only when no passport says, which is
+ * a worse answer and is meant as one: it can only report that a book disagrees
+ * with itself, never that it disagrees with the language.
  *
  * Only a marker that competes across the whole book counts as a departure. The
- * looser rule — any marker out-numbering the book's inside one chunk — reads
+ * looser rule — any marker out-numbering the reference inside one chunk — reads
  * ordinary typography as dialogue: it flagged a chunk of Ryuker for seventeen
  * lines of `*`, which is a bolded FAQ, and a chunk of Overtime for four, which
- * is a poem in italics. A second convention worth reporting shows up book-wide;
- * `book.rivals` is exactly that test, already applied.
+ * is a poem in italics. A second convention worth reporting shows up book-wide.
  *
  * Chunks with no marked lines are not deviations — narration without dialogue
  * is not a punctuation choice.
  *
  * @param {Array<{translation?: string, original?: string}>} chunks
- * @param {{marker: string, rivals: Array<{marker: string}>}} book  from dominantMarker
+ * @param {{marker: string|null, tally: Array<[string, number]>, marked: number}} book
+ * @param {string|null} reference  the marker that ought to be used
  * @param {'translation'|'original'} field
  * @returns {Array<{i: number, marker: string, count: number, own: number, sample: string|null}>}
  */
-export function deviatingChunks(chunks, book, field = 'translation') {
-    const marker = book?.marker;
-    if (!marker) return [];
-    const competing = new Set((book.rivals || []).map(r => r.marker));
+export function deviatingChunks(chunks, book, reference = null, field = 'translation') {
+    const marker = reference || book?.marker;
+    if (!marker || !book?.marked) return [];
+
+    // Everything else that holds a real share of the book — including whatever
+    // the text mostly does, when that is not the marker it ought to be using.
+    const competing = new Set(
+        book.tally
+            .filter(([m, n]) => m !== marker && n / book.marked >= RIVAL_SHARE)
+            .map(([m]) => m)
+    );
     if (!competing.size) return [];
 
     const out = [];
@@ -165,21 +200,3 @@ export function deviatingChunks(chunks, book, field = 'translation') {
     return out;
 }
 
-/**
- * Everything the passport needs about dialogue, measured from a text.
- *
- * @returns {{marker: string, sample: string|null, counts: object, source: 'measured'}|null}
- */
-export function measureDialogue(text) {
-    const found = dominantMarker(text);
-    if (!found.marker) return null;
-    return {
-        marker: found.marker,
-        sample: sampleLine(text, found.marker),
-        // Kept so the interface can show "— 1464, « 303, “ 25" rather than a
-        // bare verdict: the counts are the argument for the verdict, and a
-        // person overruling it should see what they are overruling.
-        counts: Object.fromEntries(found.tally.slice(0, 6)),
-        source: 'measured',
-    };
-}

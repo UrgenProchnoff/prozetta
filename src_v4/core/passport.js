@@ -76,11 +76,13 @@ const DOSSIER_TOKENS = config.pipeline.dossierMaxTokens || 600;
  *                   samples: Array<{original: string, translation: string}>}>} voices
  *   Marked speech (dialect, register, verbal tics). The approved samples matter
  *   more than the description: they go into the prompt as few-shot examples.
- * @property {{marker: string, sample: string|null, counts: object|null,
- *             source: 'measured'|'model'|'hand'}|null} dialogue
- *   How direct speech is set in the target language — the punctuation a line of
- *   dialogue opens with, plus a real example. A property of the book as a whole
- *   that no single chunk can see: measured on Morphotrophic, 1464 speech lines
+ * @property {{marker: string, sample: string|null, source: 'model'|'hand'}|null} dialogue
+ *   How direct speech is set in the TARGET LANGUAGE — the punctuation a line of
+ *   dialogue opens with, plus an example. A norm, settled before translation
+ *   starts, not an observation about any text: the original's convention is the
+ *   one thing that must not be carried across, and the translation's own
+ *   majority would make a badly translated book the authority on how it should
+ *   have been translated. On Morphotrophic, where nobody settled it, 1464 lines
  *   open with — and 303 with «, because the 27 chunks that chose quotation marks
  *   had no way of knowing what the other 142 had done.
  */
