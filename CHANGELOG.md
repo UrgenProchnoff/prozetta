@@ -14,6 +14,11 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `7974d28` — The chunk map shows which chunks are waiting for a fix. Thirty-five of
+  Morphotrophic's had advice queued and looked exactly like the hundred and
+  thirty with nothing outstanding. Marked with an inset ring in a colour of its
+  own — the four status colours all mean something else, and most of these
+  chunks are green.
 - `777fce2` — A chunk being corrected on advice is no longer rewritten from nothing.
   The checker was told to answer an unmet requirement with like=0, which is the
   loop's signal for "write it again": chunk 27 of Morphotrophic scored 9, was
