@@ -1423,6 +1423,12 @@ app.post('/api/config/test', async (req, res) => {
 // snapshot keyed by model id. Bump GOOGLE_FREE_TIER_AS_OF when you refresh it
 // (source: https://ai.google.dev/gemini-api/docs/rate-limits + AI Studio).
 const GOOGLE_FREE_TIER_AS_OF = '2026-07-24';
+// `tpm` here is the documented TOTAL per-minute allowance, and it is NOT what
+// refuses a whole-book call. There is a separate, lower quota over input alone —
+// GenerateContentInputTokensPerModelPerMinute-FreeTier. Measured on
+// gemini-3.7-flash: 167,852 input tokens went through and ~195,000 was refused,
+// while this table says 250,000. pipeline.bookCallTokenBudget is the number that
+// governs those calls; this one only describes the tier in Settings.
 const GOOGLE_FREE_TIER_LIMITS = {
     'gemini-2.5-flash':              { rpm: 5,  tpm: 250000, rpd: 20 },
     'gemini-2.5-flash-lite':         { rpm: 10, tpm: 250000, rpd: 20 },

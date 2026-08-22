@@ -111,12 +111,21 @@ const defaults = {
         // enormous entry from crowding out the text being translated.
         dossierMaxTokens: 600,
 
-        // Whole-book calls (passport, glossary review): how many tokens one
-        // prompt may carry. The binding constraint is the provider's tokens per
-        // minute, not the model's context window — Gemini's free tier allows
-        // 250k/min and refuses the call outright rather than truncating it.
-        // Raise this on a paid tier.
-        bookCallTokenBudget: 250000,
+        // Whole-book calls (passport, glossary review, translation review): how
+        // many tokens one prompt may carry. The binding constraint is the
+        // provider's tokens per minute, not the model's context window, and the
+        // call is refused outright rather than truncated.
+        //
+        // 250,000 was the documented figure and it is the wrong one: that is the
+        // total per-minute allowance, while what actually refuses these calls is
+        // a separate, lower quota over INPUT alone —
+        // GenerateContentInputTokensPerModelPerMinute-FreeTier. Measured on
+        // gemini-3.7-flash free tier: 157,411 / 159,533 / 167,843 / 167,852
+        // tokens of input all went through, and ~195,000 was refused four times
+        // over eight minutes. So the ceiling sits between 168k and 195k, and this
+        // is set below the largest input actually seen accepted, with room for
+        // the instructions the caller adds on top. Raise it on a paid tier.
+        bookCallTokenBudget: 165000,
 
         // Stage 2: Translation loop
         translationMaxRetries: 10,

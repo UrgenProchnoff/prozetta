@@ -113,16 +113,22 @@ export async function runTranslationReviewStage(state) {
     const textTokens = countTokens(translationText);
     const glossaryTokens = pairs.length ? countTokens(JSON.stringify(pairs)) : 0;
     const intentTokens = intent ? countTokens(JSON.stringify(intent)) : 0;
-    const total = textTokens + glossaryTokens + intentTokens;
+    // The instructions count against the same quota as the data. Left out, the
+    // guard was measuring something other than what it claimed to measure, and
+    // the gap is a thousand tokens of it.
+    const promptTokens = countTokens(prompts.translationReview.system(targetLang));
+    const total = textTokens + glossaryTokens + intentTokens + promptTokens;
     const fmt = n => n.toLocaleString('en-US');
     console.log(`[Review] Prompt: ~${fmt(textTokens)} tokens of translation + ~${fmt(glossaryTokens)} of glossary` +
-        `${intentTokens ? ` + ~${fmt(intentTokens)} of passport` : ''} = ~${fmt(total)}.`);
+        `${intentTokens ? ` + ~${fmt(intentTokens)} of passport` : ''} + ~${fmt(promptTokens)} of instructions = ~${fmt(total)}.`);
 
     if (total > TOKEN_BUDGET) {
         console.error(`\n[Review] TOO LARGE: ~${fmt(total)} tokens against a budget of ${fmt(TOKEN_BUDGET)}.`);
         console.error(`[Review] The translation has to be sent whole: half a book cannot show that a term is`);
         console.error(`[Review] rendered two ways or that a voice drifts, which is the entire point of this pass.`);
-        console.error(`[Review] Either raise the limit for a paid tier, or read this one by hand.\n`);
+        console.error(`[Review] What refuses a call this size is a per-minute quota on INPUT alone, which is`);
+        console.error(`[Review] lower than the documented total. Raise pipeline.bookCallTokenBudget for a paid`);
+        console.error(`[Review] tier, or read this one by hand.\n`);
         process.exitCode = 1;
         return;
     }

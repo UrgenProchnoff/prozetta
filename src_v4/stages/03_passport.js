@@ -28,7 +28,10 @@ import { getPrompts } from '../prompts.js';
 
 // Above this the prompt is unlikely to fit a provider's per-minute token budget
 // even when it fits the model's context window, so warn rather than fail late.
-const LARGE_BOOK_TOKENS = 200000;
+// The same number the other whole-book calls are held to: 200,000 stood here
+// while the measured ceiling turned out to be under 168,000, so the warning
+// would have stayed quiet through a refusal.
+const LARGE_BOOK_TOKENS = config.pipeline.bookCallTokenBudget || 165000;
 
 function normalizeGender(value) {
     const s = String(value || '').trim().toLowerCase();

@@ -95,9 +95,11 @@ export async function runGlossaryReviewStage(state) {
     // which is the point of the exercise.
     const bookTokens = chunks.reduce((n, c) => n + (c.tokens || Math.round(c.original.length / 4)), 0);
     const glossaryTokens = countTokens(JSON.stringify(evidence, null, 0));
-    const total = bookTokens + glossaryTokens;
+    // The instructions count against the same quota as the data.
+    const promptTokens = countTokens(prompts.glossaryReview.system(targetLang));
+    const total = bookTokens + glossaryTokens + promptTokens;
     const fmt = n => n.toLocaleString('en-US');
-    console.log(`[Review] Prompt: ~${fmt(bookTokens)} tokens of book + ~${fmt(glossaryTokens)} of glossary = ~${fmt(total)}.`);
+    console.log(`[Review] Prompt: ~${fmt(bookTokens)} tokens of book + ~${fmt(glossaryTokens)} of glossary + ~${fmt(promptTokens)} of instructions = ~${fmt(total)}.`);
 
     if (total > TOKEN_BUDGET) {
         console.error(`\n[Review] TOO LARGE: ~${fmt(total)} tokens against a budget of ${fmt(TOKEN_BUDGET)}.`);

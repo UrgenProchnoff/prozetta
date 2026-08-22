@@ -134,7 +134,22 @@ export function parseRateLimit(error) {
     }
 
     if (retryDelayMs != null && !Number.isFinite(retryDelayMs)) retryDelayMs = null;
-    return { retryDelayMs, quotaId };
+    return { retryDelayMs, quotaId, oversized: isOversizedPrompt(quotaId) };
+}
+
+/**
+ * Is this a 429 that waiting cannot cure — one prompt larger than a per-minute
+ * allowance?
+ *
+ * A per-minute quota normally clears by waiting, which is why 429s are retried
+ * at all. But when the quota counts input tokens and a single request exceeds
+ * the window on its own, every retry sends the same oversized prompt into the
+ * same wall. Measured on Morphotrophic: a 195,000-token review was refused four
+ * times over eight minutes, each attempt waiting out the delay the API itself
+ * asked for, and it could not have succeeded on the hundredth.
+ */
+function isOversizedPrompt(quotaId) {
+    return /InputTokens/i.test(String(quotaId || '')) && /PerMinute/i.test(String(quotaId || ''));
 }
 
 /**
@@ -179,7 +194,14 @@ export function explainInvokeError(error, provider, model) {
         error.rateLimited = true;
         error.retryDelayMs = rl.retryDelayMs;
         error.quotaId = rl.quotaId;
+        error.oversizedPrompt = rl.oversized;
         const quotaTxt = rl.quotaId ? ` (quota: ${rl.quotaId})` : '';
+        if (rl.oversized) {
+            error.message = `[${model}] The prompt is larger than this model's per-minute input allowance` +
+                `${quotaTxt}. Waiting will not help — one request cannot fit in a window it exceeds on its own. ` +
+                `Lower pipeline.bookCallTokenBudget so the size is caught before the call, or move to a paid tier.`;
+            return error;
+        }
         const waitTxt = rl.retryDelayMs ? `; API asks to retry after ${Math.round(rl.retryDelayMs / 1000)}s` : '';
         error.message = `[${model}] Rate limit hit — HTTP 429${quotaTxt}${waitTxt}. ` +
             `Lower maxRPM in settings or wait for the quota window to reset.`;
@@ -435,6 +457,12 @@ class LLMClient {
                                 break;
                             } catch (rawError) {
                                 const error = explainInvokeError(rawError, provider, model);
+                                // A prompt bigger than the per-minute input
+                                // window fails identically however long we wait,
+                                // and the waiting is not free: four attempts on
+                                // Morphotrophic cost eight minutes to learn
+                                // nothing the first attempt had not already said.
+                                if (error.oversizedPrompt) throw error;
                                 if (error.rateLimited && attempt < MAX_RATE_RETRIES) {
                                     const waitMs = error.retryDelayMs ?? (attempt + 1) * 10000;
                                     if (waitMs <= MAX_WAIT_MS) {
