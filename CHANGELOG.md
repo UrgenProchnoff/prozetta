@@ -14,10 +14,16 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
-- `2fe4aeb` — The passport now carries how direct speech is set, and the glossary is
-  checked for answering one question twice. The dialogue marker is counted from
-  the book rather than looked up in a table, so it works in any language — no
-  table here lists the dash that Russian and Spanish set dialogue with. The
+- `68024c1` — The dialogue marker became a norm of the target language, settled before
+  translation, instead of something read off the finished text. Measuring makes
+  the majority right by definition, so a badly translated book would teach the
+  passport its own mistake. Counting now answers only whether the text keeps to
+  the norm — and against a norm the book does not follow it reports 17% and 108
+  chunks where it used to report 83% and 27.
+- `2fe4aeb` — The passport gained how direct speech is set, and the glossary is checked
+  for answering one question twice. The marker was seeded by counting the
+  translation, which the next commit undoes; the counting itself stays, because
+  no table here lists the dash that Russian and Spanish set dialogue with. The
   glossary check ranks groups by how unlike their translations are and leaves
   the verdict to a person: guessing at the morphology of an unknown language is
   how a warning turns into noise.
