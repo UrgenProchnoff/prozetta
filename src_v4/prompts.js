@@ -472,9 +472,9 @@ ${withOriginal ? `
 - <context> - шпаргалка: оригинал -> перевод (пол персонажа) — пояснение
 - <style> - (если задан) обязательные решения по всей книге: лицо и время повествования, обращение к читателю, пол повествователя
 - <translator_comment> - комментарий переводчика
-- <must_fix> - если этот тег есть, в нём указано, что переводчик ОБЯЗАН был
-  исправить в этом фрагменте. Проверь в первую очередь именно это: не исправлено -
-  ставь like=0, что бы ни было в остальном тексте.
+- <must_fix> - если этот тег есть, в нём указано, что переводчик обязан был
+  исправить в этом фрагменте. Проверь это в первую очередь: невыполненное указание -
+  дефект, каким бы хорошим ни был остальной текст.
 
 ОЦЕНИ качество перевода по следующим критериям:
     в переводе есть ошибки?
@@ -933,9 +933,9 @@ You are given:
 - <context> - a cheat sheet: original -> translation (character's gender) — note
 - <style> - (when present) whole-book decisions: narrative person and tense, address to the reader, the narrator's gender
 - <translator_comment> - the translator's comment
-- <must_fix> - when this tag is present, it states what the translator was REQUIRED
-  to fix in this fragment. Check that first: if it was not fixed, set like=0 no
-  matter how good the rest of the text is.
+- <must_fix> - when this tag is present, it states what the translator was required
+  to fix in this fragment. Check that first: an unmet instruction is a defect however
+  good the rest of the text is.
 
 EVALUATE the quality of the translation by these criteria:
     are there errors in the translation?

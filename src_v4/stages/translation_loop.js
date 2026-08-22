@@ -153,6 +153,7 @@ export async function runTranslationLoopStage(state) {
         // rules conflict; a human can, so mark the chunk disputed and move on.
         let redrafts = 0;
         let lastRedraftComplaint = null;
+        let lastFixComplaint = null;
         let dispute = null;
 
         while (attempts < MAX_RETRIES && !success) {
@@ -205,9 +206,34 @@ export async function runTranslationLoopStage(state) {
                 // Decide: FIX (доработка) vs REDRAFT (перевод заново)
                 // Fix only if checker likes the direction AND score is above threshold
                 // Otherwise retranslate from scratch — no point fixing a fundamentally broken translation
-                const shouldFix = (checkResult.like === 1 && checkResult.score >= REDRAFT_SCORE_THRESHOLD);
+                //
+                // Except under advice, where a redraft is never the right repair.
+                // That chunk is not a failed attempt: it was translated, reviewed,
+                // approved, and then one thing in it was objected to. Measured on
+                // the first real run of this path, chunk 27 of Morphotrophic
+                // scored 9 with "соблюдены все стилистические и терминологические
+                // требования" and was rewritten from nothing because a single word
+                // came out «сухо» instead of «коротко». Correcting is what was
+                // asked for; starting over answers a question nobody put.
+                const shouldFix = advice
+                    ? true
+                    : (checkResult.like === 1 && checkResult.score >= REDRAFT_SCORE_THRESHOLD);
 
                 if (shouldFix) {
+                    // Under advice the redraft cap does not apply, so a fixer and
+                    // a reviewer who disagree could trade the same objection until
+                    // the retry budget runs out. The same deadlock the redraft path
+                    // already recognises, and the same answer: two identical
+                    // complaints mean a human should look, not that a third attempt
+                    // will land.
+                    if (advice && lastFixComplaint && complaintsAlike(lastFixComplaint, checkResult.comment)) {
+                        dispute = { reason: checkResult.comment, kind: 'advice_not_met' };
+                        console.warn(`   -> DISPUTED: the reviewer repeats the same objection after a fix — the advice ` +
+                            `and the text are in conflict, a human should settle it. | "${String(checkResult.comment).slice(0, 120)}"`);
+                        break;
+                    }
+                    lastFixComplaint = checkResult.comment;
+
                     // Checker likes the direction, score is acceptable → FIX (доработка)
                     console.log(`   -> REJECTED for fixing (Score: ${checkResult.score}, Errors: ${checkResult.error}) | Reason: "${checkResult.comment}". Fixing...`);
 
