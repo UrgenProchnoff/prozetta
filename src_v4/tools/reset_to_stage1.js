@@ -1,10 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { projectDir } from '../core/paths.js';
-import { ProjectState } from '../core/state_manager.js';
+import { ProjectState, withoutTranslation } from '../core/state_manager.js';
 
 // Simple script to reset project state to "After Stage 1"
-// This keeps 'extracted_terms' but removes 'translation', 'translation_status', and 'history'.
+// Removes what Stage 2 wrote (translation, status, history, ...) and keeps
+// everything else the chunk carries — the text, its token count, Stage 1's terms.
 // Usage: node src_v4/tools/reset_to_stage1.js --file=txt/book.txt
 
 async function resetToStage1() {
@@ -35,25 +36,12 @@ async function resetToStage1() {
     fs.copyFileSync(state.stateFile, backupPath);
     console.log(`Backup saved to: ${backupPath}`);
 
-    // Modify chunks
+    // Drop Stage 2's output and leave the rest of the chunk alone — see
+    // TRANSLATION_FIELDS in core/state_manager.js for why this is a deny-list.
     let modifiedCount = 0;
     const cleanChunks = chunks.map(chunk => {
-        // Create a new object preserving explicit fields we want from Stage 1
-        // We want: original, extracted_terms, extraction_status (if exists)
-        // We explicitly DROP: translation, translation_status, history, etc.
-
-        const newChunk = {
-            original: chunk.original,
-            extracted_terms: chunk.extracted_terms, // Stage 1 output
-            extraction_status: chunk.extraction_status, // Stage 1 status
-        };
-
-        // Check if we actually changed anything (for logging)
-        if (chunk.translation || chunk.history || chunk.translation_status) {
-            modifiedCount++;
-        }
-
-        return newChunk;
+        if (chunk.translation || chunk.history || chunk.translation_status) modifiedCount++;
+        return withoutTranslation(chunk);
     });
 
     state.setChunks(cleanChunks);

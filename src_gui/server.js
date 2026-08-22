@@ -11,6 +11,7 @@ import { projectPaths, projectDir, listProjects } from '../src_v4/core/paths.js'
 import { handEdited } from '../src_v4/core/passport.js';
 import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
+import { withoutTranslation } from '../src_v4/core/state_manager.js';
 import config from '../src_v4/config.js';
 
 import { execFileSync } from 'child_process';
@@ -779,9 +780,10 @@ app.get('/api/projects/:prefix/job', (req, res) => {
     res.json(job);
 });
 
-// Revert the whole project to its post-Stage-1 state: keep extracted terms,
-// drop all translation output (translation, status, history) so Stage 2 can be
-// re-run from scratch. Mirrors src_v4/tools/reset_to_stage1.js. Backs up first.
+// Revert the whole project to its post-Stage-1 state: drop what Stage 2 wrote so
+// it can be re-run from scratch, and leave the rest of the chunk alone. Shares
+// withoutTranslation() with src_v4/tools/reset_to_stage1.js — the two used to
+// carry the same list separately, and the same defect with it. Backs up first.
 app.post('/api/projects/:prefix/reset-stage1', (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
@@ -800,11 +802,7 @@ app.post('/api/projects/:prefix/reset-stage1', (req, res) => {
     let modified = 0;
     state.chunks = (state.chunks || []).map(chunk => {
         if (chunk.translation || chunk.history || chunk.translation_status) modified++;
-        return {
-            original: chunk.original,
-            extracted_terms: chunk.extracted_terms,
-            extraction_status: chunk.extraction_status,
-        };
+        return withoutTranslation(chunk);
     });
 
     state.metadata = state.metadata || {};

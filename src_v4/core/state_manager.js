@@ -2,6 +2,37 @@ import fs from 'fs';
 import { usageTracker } from './usage_tracker.js';
 import { projectPaths, ensureProjectDir } from './paths.js';
 
+/**
+ * What Stage 2 writes onto a chunk. Everything else — the source text, its token
+ * count, Stage 1's terms and status, which model refused it — belongs to the
+ * chunk and must survive a reset of the translation.
+ *
+ * A deny-list on purpose. This used to be an allow-list, rebuilding every chunk
+ * as {original, extracted_terms, extraction_status}, and so it silently dropped
+ * whatever the rest of the pipeline had added since it was written. Measured on
+ * Morphotrophic: all 169 chunks lost `tokens`, and the whole-book budget guards
+ * fell back to counting characters — 8.6% out. `blocked_by` went the same way,
+ * turning "refused by this model" into "refused by nobody in particular".
+ *
+ * An allow-list has to be revisited every time a field is added anywhere else.
+ * It was not, twice. A deny-list only has to be revisited when Stage 2 itself
+ * grows a field, which is where the person editing Stage 2 is already looking.
+ */
+export const TRANSLATION_FIELDS = [
+    'translation',
+    'translation_status',
+    'translation_blocked_by',
+    'history',
+    'dispute',
+];
+
+/** A copy of `chunk` with Stage 2's output removed and nothing else touched. */
+export function withoutTranslation(chunk) {
+    const clean = { ...chunk };
+    for (const field of TRANSLATION_FIELDS) delete clean[field];
+    return clean;
+}
+
 export class ProjectState {
     constructor(workDir, filePrefix) {
         this.workDir = workDir || process.cwd();
