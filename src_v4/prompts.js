@@ -136,7 +136,11 @@ const ru = {
           ],
           "povSpans": [
             { "startsWith": "точная цитата первых слов участка", "character": "Имя как в оригинале" }
-          ]
+          ],
+          "dialogue": {
+            "marker": "ОДИН знак препинания, с которого по нормам ${targetLang} начинается реплика прямой речи (например «—» или «„»)",
+            "sample": "одна короткая выдуманная реплика, оформленная по этим нормам на ${targetLang}"
+          }
         }
         \`\`\``,
         user: userBuilders.passport,
@@ -455,7 +459,11 @@ const en = {
           ],
           "povSpans": [
             { "startsWith": "exact quote of the stretch's first words", "character": "Name as in the original" }
-          ]
+          ],
+          "dialogue": {
+            "marker": "ONE punctuation mark that a line of direct speech opens with by the conventions of ${targetLang} (e.g. «—» or «„»)",
+            "sample": "one short invented line of dialogue, set by those conventions, in ${targetLang}"
+          }
         }
         \`\`\``,
         user: userBuilders.passport,

@@ -9,6 +9,8 @@ import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { outstandingFindings } from '../src_v4/core/glossary_review.js';
 import { projectPaths, projectDir, listProjects } from '../src_v4/core/paths.js';
 import { handEdited } from '../src_v4/core/passport.js';
+import { dominantMarker, deviatingChunks } from '../src_v4/core/dialogue.js';
+import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
 import config from '../src_v4/config.js';
 
 import { execFileSync } from 'child_process';
@@ -286,15 +288,48 @@ function projectSummary(prefix) {
                 person: p.narration?.person || null,
                 characters: (p.characters || []).length,
                 spans: (p.povMap || []).length,
+                dialogue: p.dialogue?.marker ? p.dialogue : null,
                 // Whether rebuilding it would take back somebody's corrections.
                 edited: handEdited(p),
             };
         } catch { passport = { broken: true }; }
     }
 
+    // How consistently the finished text sets direct speech. Counted from the
+    // translation itself, so it says nothing until there is one — and it is the
+    // one defect of this kind that no chunk could have avoided on its own.
+    let dialogue = null;
+    const translated = chunks.map(c => c.translation || '').filter(Boolean).join('\n');
+    if (translated) {
+        const book = dominantMarker(translated);
+        if (book.marker) {
+            dialogue = {
+                marker: book.marker,
+                share: Number(book.share.toFixed(3)),
+                counts: Object.fromEntries(book.tally.slice(0, 6)),
+                rivals: book.rivals.map(r => r.marker),
+                deviations: deviatingChunks(chunks, book).map(d => d.i),
+            };
+        }
+    }
+
     let glossaryCount = null;
+    let glossaryForms = null;
     if (fs.existsSync(glossaryPath(prefix))) {
-        try { glossaryCount = readJson(glossaryPath(prefix)).length; } catch { glossaryCount = 0; }
+        try {
+            const gl = readJson(glossaryPath(prefix));
+            glossaryCount = gl.length;
+            // Entries that are forms of one source word translated two ways. Only
+            // the worst few travel in the summary; the rest are a click away.
+            const groups = inflectionGroups(gl);
+            glossaryForms = {
+                groups: groups.length,
+                top: groups.slice(0, 5).map(g => ({
+                    spread: Number(g.spread.toFixed(2)),
+                    entries: g.entries.map(e => ({ original: e.original, translation: e.translation })),
+                })),
+            };
+        } catch { glossaryCount = 0; }
     }
 
     let glossaryReview = null;
@@ -312,8 +347,10 @@ function projectSummary(prefix) {
         statuses,
         extracted,
         glossaryCount,
+        glossaryForms,
         glossaryReview,
         passport,
+        dialogue,
         running: jobManager.isRunning(prefix),
         chunks: chunkList
     };

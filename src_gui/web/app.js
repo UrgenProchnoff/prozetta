@@ -1026,6 +1026,18 @@ async function renderMonitor(prefix) {
         const started = s.statuses.success + s.statuses.best_effort;
         if (needsPassport(s) && started === 0)
             return t('pre.noPassport');
+        // The glossary answering one question twice. Warned, never blocked: on a
+        // suffixing language most groups are a singular beside its plural and
+        // perfectly fine, and the code cannot tell which is which in a language
+        // nobody told it about. Same reason it is only shown before the first
+        // chunk — a book already half translated has lived with the answer.
+        if (s.glossaryForms?.groups && started === 0) {
+            const worst = s.glossaryForms.top?.[0];
+            return t('pre.glossaryForms', {
+                n: s.glossaryForms.groups,
+                example: worst ? worst.entries.map(e => `${e.original} → ${e.translation}`).join('  /  ') : '',
+            });
+        }
         return null;
     }
 
@@ -1465,6 +1477,14 @@ async function renderPassport(prefix) {
                 <span class="cfg-hint">${esc(t('pass.readerHint'))}</span></div></div>` : ''}
             <div class="cfg-field"><label>${esc(t('pass.register'))}</label><div class="cfg-input">
                 <input type="text" data-p="register" value="${esc(p.register || '')}"></div></div>
+            <div class="cfg-field"><label>${esc(t('pass.dialogue'))}</label><div class="cfg-input">
+                <input type="text" data-p="dialogue.marker" value="${esc(p.dialogue?.marker || '')}" style="max-width:70px">
+                <span class="cfg-hint">${esc(t('pass.dialogueHint'))}
+                ${p.dialogue?.counts ? '<br>' + esc(t('pass.dialogueCounts', {
+                    counts: Object.entries(p.dialogue.counts).map(([m, n]) => `${m} ${n}`).join(',  ')
+                })) : ''}
+                ${p.dialogue?.source ? '<br>' + esc(t('pass.dialogueFrom.' + p.dialogue.source)) : ''}
+                ${p.dialogue?.sample ? '<br>' + esc(t('pass.dialogueSample', { sample: p.dialogue.sample })) : ''}</span></div></div>
             ${p.narration?.addressNote ? `<div class="cfg-hint" style="margin-top:8px">${esc(t('pass.note'))}: ${esc(p.narration.addressNote)}</div>` : ''}
         </div>
 
@@ -1503,6 +1523,13 @@ async function renderPassport(prefix) {
             let obj = p;
             while (parts.length > 1) { const k = parts.shift(); obj[k] = obj[k] || {}; obj = obj[k]; }
             obj[parts[0]] = e.target.value === '' ? null : e.target.value;
+            // A marker chosen by hand outranks both the measurement and the
+            // model, and has to say so — otherwise the next passport rebuild
+            // measures the book again and quietly puts the old one back.
+            if (key === 'dialogue.marker' && p.dialogue?.marker) {
+                p.dialogue.source = 'hand';
+                p.dialogue.counts = null;
+            }
             markDirty();
             return;
         }

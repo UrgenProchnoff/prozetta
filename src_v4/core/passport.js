@@ -76,6 +76,13 @@ const DOSSIER_TOKENS = config.pipeline.dossierMaxTokens || 600;
  *                   samples: Array<{original: string, translation: string}>}>} voices
  *   Marked speech (dialect, register, verbal tics). The approved samples matter
  *   more than the description: they go into the prompt as few-shot examples.
+ * @property {{marker: string, sample: string|null, counts: object|null,
+ *             source: 'measured'|'model'|'hand'}|null} dialogue
+ *   How direct speech is set in the target language — the punctuation a line of
+ *   dialogue opens with, plus a real example. A property of the book as a whole
+ *   that no single chunk can see: measured on Morphotrophic, 1464 speech lines
+ *   open with — and 303 with «, because the 27 chunks that chose quotation marks
+ *   had no way of knowing what the other 142 had done.
  */
 
 /** A passport with nothing decided yet. */
@@ -92,6 +99,7 @@ export function emptyPassport() {
         povMap: [],
         addressRegistry: [],
         voices: [],
+        dialogue: null,
     };
 }
 
@@ -119,6 +127,10 @@ export function loadPassport(passportPath) {
             povMap: Array.isArray(raw.povMap) ? raw.povMap : [],
             addressRegistry: Array.isArray(raw.addressRegistry) ? raw.addressRegistry : [],
             voices: Array.isArray(raw.voices) ? raw.voices : [],
+            // Only a real marker counts. An entry without one would put an empty
+            // instruction into every prompt, which is worse than no instruction.
+            dialogue: raw.dialogue && typeof raw.dialogue === 'object' && raw.dialogue.marker
+                ? raw.dialogue : base.dialogue,
         };
     } catch (e) {
         console.warn(`[Passport] Failed to read ${passportPath}: ${e.message}. Continuing without it.`);
@@ -231,6 +243,9 @@ const STYLE_WORDS = {
         dossier: (text) => `Досье повествователя: ${text}`,
         other: (name, text) => `Также в этом фрагменте: ${name}. Досье: ${text}`,
         dialogueAddress: 'В диалогах форму обращения («ты»/«вы») выбирай по отношениям персонажей из досье: подчинённые к начальству, свидетели к полиции, незнакомцы и деловые собеседники — обычно на «вы»; близкие, семья и приятели — на «ты».',
+        dialogueMarker: (marker, sample) => `Оформление прямой речи: реплика начинается с «${marker}». `
+            + `Так оформлена вся книга — не переноси пунктуацию диалогов из оригинала.`
+            + (sample ? `\nОбразец из этой же книги: ${sample}` : ''),
         undetermined: 'Кто повествователь этого фрагмента — НЕ определено. НЕ приписывай повествователю род: держи время повествования и перестраивай фразы так, чтобы родовые формы не требовались.',
     },
     en: {
@@ -257,6 +272,9 @@ const STYLE_WORDS = {
         dossier: (text) => `Narrator's dossier: ${text}`,
         other: (name, text) => `Also in this fragment: ${name}. Dossier: ${text}`,
         dialogueAddress: 'In dialogue, choose the form of address (formal/informal) from the characters\' relationships in the dossiers: subordinates to superiors, witnesses to police, strangers and business contacts are usually formal; family and close friends informal.',
+        dialogueMarker: (marker, sample) => `Setting of direct speech: a line of dialogue opens with "${marker}". `
+            + `The whole book is set that way — do not carry the original's dialogue punctuation across.`
+            + (sample ? `\nAn example from this same book: ${sample}` : ''),
         undetermined: 'The narrator of this fragment is NOT determined. Do not assign the narrator a gender: keep the narrative tense and rephrase so gendered forms are not needed.',
     },
 };
@@ -286,6 +304,11 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
     if (personTxt || tenseTxt) lines.push(words.narration(personTxt, tenseTxt));
     if (nonfiction) lines.push(words.precision);
     if (passport.register) lines.push(words.register(passport.register));
+    // Before the address form and the cast, because it applies to every chunk
+    // alike: how speech is set is the one decision that has no exceptions.
+    if (passport.dialogue?.marker) {
+        lines.push(words.dialogueMarker(passport.dialogue.marker, passport.dialogue.sample));
+    }
     if (addressForm) lines.push(words.address(addressForm));
     // Second person hides two opposite referents behind one pronoun, so it is
     // spelled out rather than left to the model to infer.
@@ -354,11 +377,12 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
 /** True when the passport carries nothing worth injecting into a prompt. */
 export function isEmptyPassport(passport) {
     if (!passport) return true;
-    const { narration, characters, povMap, addressRegistry, voices } = passport;
+    const { narration, characters, povMap, addressRegistry, voices, dialogue } = passport;
     const narrationSet = narration && (narration.person || narration.tense || narration.addressForm);
     return !narrationSet
         && !(characters || []).length
         && !(povMap || []).length
         && !(addressRegistry || []).length
-        && !(voices || []).length;
+        && !(voices || []).length
+        && !dialogue?.marker;
 }

@@ -21,6 +21,7 @@ import { spansFromQuotes } from '../core/quoted_spans.js';
 import { splitTextIntoChunks } from '../core/tokenizer.js';
 import { carryExtraction } from '../core/rechunk.js';
 import { loadPassport, savePassport, handEdited } from '../core/passport.js';
+import { measureDialogue } from '../core/dialogue.js';
 import { profileForText, reloadLearnedProfiles } from '../core/language.js';
 import { learnLanguageProfile, validateLanguageProfile, saveLearnedProfile } from '../core/language_learn.js';
 import config from '../config.js';
@@ -209,6 +210,33 @@ export async function runPassportStage(state) {
     // A register is substituted into the prompt as a value: keep it a phrase.
     const registerRaw = String(answer?.register || '').trim();
     passport.register = registerRaw ? registerRaw.split(/[.;\n]/)[0].trim().slice(0, 80) : null;
+
+    // --- how direct speech is set ---
+    // Counted from the book's own translation when there is one: what the book
+    // already does beats what a model believes about the language, and the count
+    // also says how firmly it does it. With nothing translated yet there is
+    // nothing to count, so the model answers — the only part of this field it is
+    // ever asked for.
+    //
+    // A marker set by hand outranks both. This is a typographic decision about
+    // someone's book, and rebuilding the cast is no reason to revisit it.
+    const translated = chunks.map(c => c.translation || '').filter(Boolean).join('\n');
+    const measured = translated ? measureDialogue(translated) : null;
+    if (passport.dialogue?.source === 'hand' && passport.dialogue.marker) {
+        console.log(`[Passport] Direct speech: keeping "${passport.dialogue.marker}", set by hand.`);
+    } else if (measured) {
+        passport.dialogue = measured;
+        const counts = Object.entries(measured.counts).map(([m, n]) => `${m} ${n}`).join(', ');
+        console.log(`[Passport] Direct speech measured from the translation: "${measured.marker}" (${counts}).`);
+    } else {
+        const marker = String(answer?.dialogue?.marker || '').trim().slice(0, 4);
+        passport.dialogue = marker
+            ? { marker, sample: String(answer?.dialogue?.sample || '').trim().slice(0, 120) || null, counts: null, source: 'model' }
+            : null;
+        console.log(passport.dialogue
+            ? `[Passport] Direct speech, per the model, is set with "${passport.dialogue.marker}" in ${targetLang}.`
+            : `[Passport] Direct speech: the model named no marker and nothing is translated yet — left unset.`);
+    }
 
     const address = normalizeAddressForm(answer?.narration?.addressForm);
     passport.narration = {
