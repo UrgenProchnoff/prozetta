@@ -828,8 +828,17 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
         return res.json({ ok: true, dismissed: review.dismissed.length });
     }
 
-    if (finding.scope !== 'chunk') {
-        return res.status(400).json({ error: `A "${finding.scope}" finding is fixed in the ${finding.scope}, not in a chunk` });
+    // Scope is the model's routing hint, and it gets it wrong: the bilingual
+    // review of Morphotrophic sent four findings to the glossary and the passport
+    // that said, in their own words, "the glossary fixes X and this says Y" —
+    // which is a chunk disobeying a correct glossary. What decides whether a
+    // finding can be queued is whether it says what to do, not where it thinks it
+    // belongs.
+    if (!finding.advice) {
+        return res.status(400).json({
+            error: `This finding carries no advice, so there is nothing to tell the translator. ` +
+                `It is filed under "${finding.scope}" — fix it there.`,
+        });
     }
     const chunk = state.chunks?.[finding.chunk];
     if (!chunk) return res.status(404).json({ error: 'Chunk not found' });

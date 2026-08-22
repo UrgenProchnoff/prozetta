@@ -1264,9 +1264,15 @@ async function renderMonitor(prefix) {
 
         const where = { glossary: `#/glossary/${encodeURIComponent(prefix)}`, passport: `#/passport/${encodeURIComponent(prefix)}` };
         const rows = r.open.map(f => {
-            const act = f.scope === 'chunk'
-                ? `<button class="primary" data-rev="accept" data-key="${esc(f.key)}">${esc(t('rev.accept'))}</button>`
-                : `<a class="btn" href="${where[f.scope]}">${esc(t('rev.goTo.' + f.scope))}</a>`;
+            // Anything carrying advice can be queued on its chunk, whatever scope
+            // the model filed it under — it gets that wrong, and a misrouted
+            // finding should be one click from useful rather than a dead end. The
+            // link to the page it names stays alongside for the ones that really
+            // do belong there.
+            const act = [
+                f.advice ? `<button class="primary" data-rev="accept" data-key="${esc(f.key)}">${esc(t('rev.accept'))}</button>` : '',
+                f.scope !== 'chunk' ? `<a class="btn" href="${where[f.scope]}">${esc(t('rev.goTo.' + f.scope))}</a>` : '',
+            ].filter(Boolean).join(' ');
             return `<div class="rev-item">
                 <div class="rev-head">
                     <span class="badge b-${f.scope === 'chunk' ? 'best_effort' : 'disputed'}">${esc(t('rev.scope.' + f.scope))}</span>

@@ -326,7 +326,12 @@ ${withOriginal ? `
         - Замысла это не касается вовсе, дефект в одном месте - "chunk". Эта калька,
           эта осевшая шутка, этот канцелярит.
 
-        К находке "chunk" ОБЯЗАТЕЛЕН "advice": что НАДО БЫЛО СКАЗАТЬ переводчику,
+        Проверь себя так: если ты пишешь «в глоссарии закреплено X, а тут Y» или
+        «паспорт предписывает X, а тут Y», то замысел ГОВОРИТ правильно, а ослушался
+        текст - это "chunk", а не "glossary" и не "passport".
+
+        "advice" ОБЯЗАТЕЛЕН для "chunk" и нужен везде, где поправку можно внести в
+        одном месте, какой бы ни был scope. Это что НАДО БЫЛО СКАЗАТЬ переводчику,
         чтобы он не ошибся. Это указание к работе, а не жалоба. Пиши так, как сказал
         бы живому переводчику: коротко, по делу, с готовым вариантом, если он у тебя
         есть. Оригинал у переводчика при правке будет перед глазами.
@@ -780,8 +785,14 @@ ${withOriginal ? `
         - The intent does not bear on it at all and the defect is in one place —
           "chunk". This calque, this joke gone flat, this piece of officialese.
 
-        A "chunk" finding MUST carry "advice": what the translator SHOULD HAVE BEEN TOLD
-        so as not to get it wrong. An instruction for work, not a complaint. Write it as
+        Test yourself this way: if you find yourself writing "the glossary fixes X and
+        this says Y" or "the passport prescribes X and this says Y", then the intent
+        says the right thing and the text disobeyed — that is "chunk", not "glossary"
+        and not "passport".
+
+        "advice" is REQUIRED for "chunk" and wanted wherever the correction can be made
+        in one place, whatever the scope. It is what the translator SHOULD HAVE BEEN
+        TOLD so as not to get it wrong. An instruction for work, not a complaint. Write it as
         you would to a living translator: short, to the point, with a ready rendering if
         you have one. The translator will have the original in front of them while fixing.
 

@@ -33,6 +33,30 @@ import { locateQuote } from './quoted_spans.js';
 const SCOPES = new Set(['chunk', 'glossary', 'passport']);
 
 /**
+ * Find a quote in the translation as one text, and say which chunk it begins in.
+ *
+ * The joined text has to be built the same way the prompt builds it, or offsets
+ * mean nothing: one newline between chunks, in order.
+ *
+ * @returns {{chunk: number, occurrences: number}} chunk -1 when not found
+ */
+function locateInJoined(chunks, quote) {
+    const bounds = [];
+    let at = 0;
+    const parts = [];
+    for (const c of chunks) {
+        const text = c?.translation || '';
+        bounds.push([at, at + text.length]);
+        parts.push(text);
+        at += text.length + 1;   // the '\n' the join inserts
+    }
+    const found = locateQuote(parts.join('\n'), quote);
+    if (found.occurrences === 0) return { chunk: -1, occurrences: 0 };
+    const index = bounds.findIndex(([from, to]) => found.offset >= from && found.offset < to);
+    return { chunk: index, occurrences: found.occurrences };
+}
+
+/**
  * Check every finding before anyone sees it.
  *
  * Survives only if it names a scope we implement, quotes the translation, that
@@ -87,6 +111,19 @@ export function verifyFindings(raw, chunks) {
             const text = chunks[i]?.translation;
             if (!text) continue;
             if (locateQuote(text, quote).occurrences > 0) hits.push(i);
+        }
+        // A quote can straddle a boundary the reviewer never saw: the
+        // translation-only prompt is one seamless text, so nothing tells it where
+        // chunk 12 ends. Measured on Morphotrophic, that is exactly what happened
+        // to the untranslated "Chapter 4" — the heading closes one chunk and the
+        // sentence quoted after it opens the next, and searching chunk by chunk
+        // found it in neither. The text is in the book; only the address needed
+        // work, so it is looked up on the joined text and attributed to the chunk
+        // it starts in.
+        if (!hits.length) {
+            const at = locateInJoined(chunks, quote);
+            if (at.chunk >= 0) hits.push(at.chunk);
+            if (at.occurrences > 1) hits.push(at.chunk);   // ambiguous, and said so below
         }
         if (!hits.length) { drop('badQuote', item); continue; }
         // Uniqueness is required only where the chunk decides what gets fixed. A
