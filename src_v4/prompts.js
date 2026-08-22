@@ -117,6 +117,13 @@ const ru = {
            Цитата должна встречаться в книге ровно один раз. Участки перечисляй строго
            в порядке следования в тексте, от начала до конца, не пропуская смен.
 
+        5. ОФОРМЛЕНИЕ ПРЯМОЙ РЕЧИ на ${targetLang}. Единственный пункт, который НЕ
+           выводится из книги, а вспоминается как норма языка: оригинал написан на
+           другом языке, и его пунктуация диалогов здесь — заведомо неверный ответ.
+           НЕ переноси знак из оригинала. Назови ОДИН знак, с которого по нормам
+           ${targetLang} начинается реплика, и приведи одну короткую выдуманную
+           реплику как образец.
+
         Рассуждай шаг за шагом.
         JSON должен быть обёрнут в тройные кавычки (markdown block).
 
@@ -439,6 +446,13 @@ const en = {
            stretch in the text automatically. The quote must occur exactly once in the
            book. List the stretches strictly in the order they appear, start to finish,
            without skipping a change.
+
+        5. HOW DIRECT SPEECH IS SET in ${targetLang}. The one item that is NOT derived
+           from the book but recalled as a norm of the language: the original is
+           written in another language, and its dialogue punctuation is the wrong
+           answer here. Do NOT carry the mark over from the original. Name ONE mark
+           that a line of dialogue opens with by the conventions of ${targetLang}, and
+           give one short invented line as an example.
 
         Reason step by step.
         The JSON must be wrapped in triple backticks (markdown block).
