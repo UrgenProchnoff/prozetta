@@ -14,6 +14,13 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `6489ad9` — The whole-book prompt can be carried to a console with a bigger window
+  by hand: the monitor builds it, hands it over, and takes the answer back
+  through exactly the checks an API answer gets. Morphotrophic needs 195,472
+  tokens and the free tier refuses about 168,000, so it could not be reviewed at
+  all. With a million-token window the original fits too — 355,795 bilingually —
+  and the review can then find meaning turned inside out, not only clumsy
+  Russian.
 - `9745396` — Two of the three whole-book guards were estimating tokens by dividing
   characters by four — 8.6% high on Morphotrophic, harmless against a threshold
   of 250,000 and not against one near the real ceiling. They count now, closely
