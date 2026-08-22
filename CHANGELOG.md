@@ -14,6 +14,10 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `a471028` — A chunk the content filter refused mid-fix was painted green: the
+  score tint is an inline background and beats the status class, and the chunk
+  still carried the 10 it earned before anyone objected to it. The status colour
+  wins now.
 - `7974d28` — The chunk map shows which chunks are waiting for a fix. Thirty-five of
   Morphotrophic's had advice queued and looked exactly like the hundred and
   thirty with nothing outstanding. Marked with an inset ring in a colour of its
