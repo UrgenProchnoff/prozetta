@@ -14,6 +14,13 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `7a097ac` — "Assess translation" on the monitor: one call reads the whole finished
+  text and reports what a chunk-by-chunk reviewer cannot see — calques, a joke
+  gone flat, a voice that drifts. Each finding quotes the translation and the
+  code works out which chunk that is, because asked by hand this same review was
+  right about all fifteen problems and wrong about where they were. Accepted
+  advice goes into the fix prompt and into the checker's, so the pass that
+  approves everything can judge the one thing the fix was for.
 - `0db9610` — Resetting a project to its post-Stage-1 state no longer drops everything
   the chunk had gained since the tool was written. It rebuilt each chunk from
   three named fields, so Morphotrophic's 169 chunks lost their token counts and
