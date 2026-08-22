@@ -14,6 +14,12 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `b18abf5` — The passport records the author and their gender. Morphotrophic's
+  afterword has Greg Egan writing of himself in feminine forms: in a novel the
+  narrator owns "I" on every page, and nothing told the translator that the
+  matter around the story is the one place where the author does. The
+  instruction is fenced to those places — unfenced it would put the author's
+  gender on a narrator of the opposite one.
 - `9e8f56b` — The style block stopped claiming the book was already set that way. It
   said so when the marker was measured from the translation; settled ahead of
   translation, the claim is false on the first chunk, and the sample beside it
