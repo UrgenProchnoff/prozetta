@@ -14,6 +14,10 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `9e8f56b` — The style block stopped claiming the book was already set that way. It
+  said so when the marker was measured from the translation; settled ahead of
+  translation, the claim is false on the first chunk, and the sample beside it
+  was never in any book.
 - `d15c9cc` — The passport prompt now actually asks about direct speech. The field
   reached the model in the example JSON alone, the only one with no matching
   instruction, while the prompt's opening tells the model to trust the text —
