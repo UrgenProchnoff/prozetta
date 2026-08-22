@@ -14,6 +14,9 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `81460ab` — The glossary can be sorted alphabetically, by original or by
+  translation. Display only — the file keeps its own order, and an edit lands on
+  the entry it was made on whatever the view is doing.
 - `196f3fe` — The glossary editor gained the grouping its own warning had been
   promising: forms of one word brought together, widest disagreement first,
   members shaded as a block. The groups had been computed only for the dialog's
