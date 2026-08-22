@@ -14,6 +14,11 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `196f3fe` — The glossary editor gained the grouping its own warning had been
+  promising: forms of one word brought together, widest disagreement first,
+  members shaded as a block. The groups had been computed only for the dialog's
+  count, so the sentence "the list opens in the glossary editor" pointed at
+  nothing.
 - `a471028` — A chunk the content filter refused mid-fix was painted green: the
   score tint is an inline background and beats the status class, and the chunk
   still carried the 10 it earned before anyone objected to it. The status colour
