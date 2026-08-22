@@ -275,6 +275,10 @@
 
             'chunk.crumb': 'Чанк {n}',
             'chunk.heading': 'Чанк {i} / {total}',
+            'gloss.sortTitle': 'Порядок строк. Только для показа — файл сохраняется в своём порядке.',
+            'gloss.sortFile': 'как в файле',
+            'gloss.sortOriginal': 'по алфавиту: оригинал',
+            'gloss.sortTranslation': 'по алфавиту: перевод',
             'gloss.filterAll': 'все записи',
             'gloss.filterModel': '◆ разбор модели ({n})',
             'gloss.filterDefects': '⚑ спорные ({n})',
@@ -739,6 +743,10 @@
 
             'chunk.crumb': 'Chunk {n}',
             'chunk.heading': 'Chunk {i} / {total}',
+            'gloss.sortTitle': 'Row order. Display only — the file is saved in its own order.',
+            'gloss.sortFile': 'as in the file',
+            'gloss.sortOriginal': 'A→Z by original',
+            'gloss.sortTranslation': 'A→Z by translation',
             'gloss.filterAll': 'all entries',
             'gloss.filterModel': '◆ model review ({n})',
             'gloss.filterDefects': '⚑ flagged ({n})',

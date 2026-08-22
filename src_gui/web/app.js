@@ -402,6 +402,10 @@ async function renderGlossary(prefix) {
     const countOutstanding = () =>
         findings.reduce((n, f) => n + (f || []).filter(isModel).length, 0) + (review?.additions?.length || 0);
     let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated' | 'model' | 'forms'
+    // Display order only. The file keeps the order somebody edited it into, and
+    // saving writes `terms`, which this never touches — rows carry their own
+    // index, so an edit lands on the entry it was made on however they are sorted.
+    let rowSort = 'file';    // 'file' | 'original' | 'translation'
 
     const knownTypes = [...new Set(['name', 'term', ...terms.map(t => t.type).filter(Boolean)])];
 
@@ -415,6 +419,11 @@ async function renderGlossary(prefix) {
             <span id="g-count" class="badge"></span>
             <span class="badge" title="${esc(t('gloss.junkHintTitle'))}">${esc(t('gloss.junkHint'))}</span>
             <select id="g-issues" class="issues-select" title="${esc(t('gloss.issuesTitle'))}"></select>
+            <select id="g-sort" class="issues-select" title="${esc(t('gloss.sortTitle'))}">
+                <option value="file">${esc(t('gloss.sortFile'))}</option>
+                <option value="original">${esc(t('gloss.sortOriginal'))}</option>
+                <option value="translation">${esc(t('gloss.sortTranslation'))}</option>
+            </select>
             <span class="spacer"></span>
             <span id="g-dirty" class="dirty" hidden>${esc(t('gloss.unsaved'))}</span>
             <button id="g-save" class="primary">${esc(t('common.save'))}</button>
@@ -509,14 +518,21 @@ async function renderGlossary(prefix) {
                 || (t.translation || '').toLowerCase().includes(q)
                 || (t.notes || '').toLowerCase().includes(q));
 
-        // Grouped only under the filter that is about groups. Everywhere else the
-        // glossary keeps the order it has on disk, which is the order a person
-        // edited it into and has its own meaning.
+        // Grouped under the filter that is about groups — there the order IS the
+        // information, and an alphabet would scatter the blocks it exists to
+        // gather. Otherwise the chosen order, defaulting to the file's own.
         if (rowFilter === 'forms') {
             rows.sort((a, b) => {
                 const fa = forms[a.idx], fb = forms[b.idx];
                 return (fb.spread - fa.spread) || (fa.group - fb.group) || (a.idx - b.idx);
             });
+        } else if (rowSort !== 'file') {
+            // localeCompare rather than < : it puts «Ё» where a reader expects it,
+            // sorts a Cyrillic glossary against a Latin one sensibly, and treats
+            // «Дом 2» and «Дом 10» as a person would.
+            const key = rowSort === 'original' ? 'original' : 'translation';
+            rows.sort((a, b) => String(a.t[key] || '').localeCompare(String(b.t[key] || ''),
+                undefined, { sensitivity: 'base', numeric: true }) || (a.idx - b.idx));
         }
 
         countEl.textContent = `${rows.length} / ${terms.length}`;
@@ -670,6 +686,9 @@ async function renderGlossary(prefix) {
 
     const issuesBox = document.getElementById('g-issues');
     if (issuesBox) issuesBox.addEventListener('change', () => { rowFilter = issuesBox.value; renderRows(); });
+
+    const sortBox = document.getElementById('g-sort');
+    if (sortBox) sortBox.addEventListener('change', () => { rowSort = sortBox.value; renderRows(); });
 
     tbody.addEventListener('input', (e) => {
         const tr = e.target.closest('tr');
