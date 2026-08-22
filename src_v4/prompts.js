@@ -36,12 +36,17 @@ ${bookText}
     // as bare pairs. The full glossary with its dossiers costs 26,008 tokens on
     // Morphotrophic against 8,603 for the pairs, and the dossiers say nothing
     // about a text that is already translated.
-    translationReview: (translationText, pairs, intent) =>
+    // `withOriginal` interleaves source and translation chunk by chunk instead of
+    // sending the translation alone. Aligning 169 of one against 169 of the other
+    // is work the model would have to do before it could compare anything, and
+    // getting it wrong turns every comparison into noise; the alignment is a fact
+    // we hold, so it is given rather than asked.
+    translationReview: (body, pairs, intent, withOriginal) =>
 `<glossary>${JSON.stringify(pairs, null, 0)}</glossary>
 ${intent ? `\n<passport>${JSON.stringify(intent, null, 0)}</passport>\n` : ''}
-<translation>
-${translationText}
-</translation>`,
+<${withOriginal ? 'pairs' : 'translation'}>
+${body}
+</${withOriginal ? 'pairs' : 'translation'}>`,
     // `style` — решения из паспорта книги (см. core/passport.js buildStyleBlock).
     // Пустая строка означает «паспорта нет», и тег не добавляется вовсе, чтобы
     // проекты без паспорта получали байт-в-байт прежние промпты.
@@ -269,12 +274,18 @@ const ru = {
 
     // --- Оценка готового перевода: один вызов на книгу (05_translation_review.js) ---
     translationReview: {
-        system: (targetLang) => `
+        system: (targetLang, withOriginal) => `
         Ты - главный редактор. Тебе дан ПОЛНЫЙ готовый перевод книги на ${targetLang},
         глоссарий, по которому её переводили, и <passport> - решения, принятые на всю
         книгу до перевода: регистр, лицо и время повествования, оформление прямой речи,
-        автор и его пол, состав персонажей с досье. Оригинала у тебя нет и он не нужен:
-        ты судишь текст как читатель на ${targetLang}, а не сверяешь строчки.
+        автор и его пол, состав персонажей с досье.
+${withOriginal ? `
+        Текст дан парами <pair>: <src> - оригинал куска, <dst> - его перевод. Куски уже
+        сопоставлены, сопоставлять самому не надо. Раз оригинал перед тобой, ищи и то,
+        чего по одному переводу не видно: смысл, вывернутый наизнанку; пропущенное
+        предложение или абзац; добавленное от себя; термин, понятый неверно. Такие
+        находки самые тяжёлые - ставь их первыми.` : `        Оригинала у тебя нет и он не нужен:
+        ты судишь текст как читатель на ${targetLang}, а не сверяешь строчки.`}
 
         Паспорт и глоссарий - это ЗАМЫСЕЛ. Текст, который им противоречит, неправ не
         потому, что тебе так кажется, а потому что противоречит принятому решению.
@@ -711,14 +722,20 @@ const en = {
 
     // --- Reviewing a finished translation: one call per book (05_translation_review.js) ---
     translationReview: {
-        system: (targetLang) => `
+        system: (targetLang, withOriginal) => `
         You are the managing editor. You are given the COMPLETE finished translation of
         a book into ${targetLang}, the glossary it was translated with, and <passport> —
         the decisions taken for the whole book before translation began: register,
         person and tense of the narration, how direct speech is set, the author and
-        their gender, the cast with their dossiers. You do not have the original and do
-        not need it: you are judging the text as a reader of ${targetLang}, not
-        collating lines.
+        their gender, the cast with their dossiers.
+${withOriginal ? `
+        The text comes in <pair> blocks: <src> is a piece of the original, <dst> is its
+        translation. The pieces are already aligned; do not align them yourself. With
+        the original in front of you, look also for what the translation alone cannot
+        show: meaning turned inside out, a sentence or paragraph dropped, something
+        added that was never there, a term misunderstood. Those are the gravest — put
+        them first.` : `        You do not have the original and do not need it: you are
+        judging the text as a reader of ${targetLang}, not collating lines.`}
 
         The passport and the glossary are the INTENT. A text that contradicts them is
         wrong not because it seems so to you but because it contradicts a decision that

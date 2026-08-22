@@ -11,7 +11,9 @@ import { projectPaths, projectDir, listProjects } from '../src_v4/core/paths.js'
 import { handEdited } from '../src_v4/core/passport.js';
 import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
-import { withoutTranslation } from '../src_v4/core/state_manager.js';
+import { withoutTranslation, ProjectState } from '../src_v4/core/state_manager.js';
+import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/stages/05_translation_review.js';
+import { extractJson } from '../src_v4/utils/parsers.js';
 import { outstandingFindings as reviewOutstanding, findingKey } from '../src_v4/core/translation_review.js';
 import config from '../src_v4/config.js';
 
@@ -843,6 +845,87 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
     state.metadata.updatedAt = new Date().toISOString();
     writeJsonAtomic(statePath(prefix), state);
     res.json({ ok: true, chunk: finding.chunk, queued: chunk.advice?.length || 0 });
+});
+
+/**
+ * Hand the whole-book prompt over so it can be run somewhere else.
+ *
+ * The per-minute input quota, not the context window, is what refuses these
+ * calls; a web console is a different quota surface with a far bigger window.
+ * `original=1` pairs each chunk with its source, which no free tier would take
+ * and a million-token window will — that is the manual route's own advantage,
+ * not merely a way around a limit.
+ */
+app.get('/api/projects/:prefix/translation-review/prompt', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    const withOriginal = req.query.original === '1';
+    let state;
+    try { state = new ProjectState(ROOT, prefix); state.load(); }
+    catch (e) { return res.status(500).json({ error: e.message }); }
+
+    let built;
+    try { built = buildTranslationReviewPrompt(state, { withOriginal }); }
+    catch (e) { return res.status(400).json({ error: e.message }); }
+
+    // The fingerprint travels inside the text, because it has to come back with
+    // an answer a person carried by hand and there is nowhere else to put it.
+    const text = `${built.system}\n\n${built.user}\n\n` +
+        `<!-- prozetta: ${prefix} · fingerprint ${built.fingerprint} · ` +
+        `${built.withOriginal ? 'bilingual' : 'translation only'} · ~${built.tokens.total} tokens -->\n`;
+
+    if (req.query.download === '1') {
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition',
+            `attachment; filename="review-prompt-${encodeURIComponent(prefix)}${withOriginal ? '-bilingual' : ''}.txt"`);
+        return res.send(text);
+    }
+    res.json({
+        ok: true,
+        fingerprint: built.fingerprint,
+        tokens: built.tokens,
+        withOriginal: built.withOriginal,
+        budget: built.budget,
+        warnings: built.warnings,
+        chars: text.length,
+        text,
+    });
+});
+
+/** Take an answer obtained elsewhere through exactly the checks an API one gets. */
+app.post('/api/projects/:prefix/translation-review/answer', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — приём ответа заблокирован' });
+    }
+    const { answer, model, fingerprint: fp, withOriginal } = req.body || {};
+    if (typeof answer !== 'string' || !answer.trim()) {
+        return res.status(400).json({ error: 'Expected { answer } — the model’s reply, JSON and all' });
+    }
+
+    let state;
+    try { state = new ProjectState(ROOT, prefix); state.load(); }
+    catch (e) { return res.status(500).json({ error: e.message }); }
+
+    let raw;
+    try { raw = extractJson(answer); }
+    catch (e) {
+        return res.status(400).json({ error: `No JSON found in the answer: ${e.message}. ` +
+            `Paste the reply whole, including its \`\`\`json block.` });
+    }
+
+    try {
+        const { review, findings, rejected, notes } = applyTranslationReview(state, raw, {
+            model: String(model || '').trim() || 'unnamed (run by hand)',
+            source: 'manual',
+            fingerprint: fp,
+            withOriginal: !!withOriginal,
+        });
+        res.json({ ok: true, returned: review.returned, findings: findings.length, rejected, notes });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
 });
 
 app.post('/api/projects/:prefix/stop', (req, res) => {

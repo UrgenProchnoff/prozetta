@@ -1223,9 +1223,38 @@ async function renderMonitor(prefix) {
      * something no chunk can repair, so it offers a way to the page where it can
      * be, and dismissal.
      */
+    /**
+     * Running the whole-book review somewhere else.
+     *
+     * Offered whenever there is a translation, not only when the automatic route
+     * is blocked: the same box is the only way to send the original along, which
+     * no free tier will carry and which turns the pass from "is this good
+     * Russian" into "does this say what the book said".
+     */
+    function manualRunBox() {
+        const done = summary ? summary.statuses.success + summary.statuses.best_effort : 0;
+        if (!done) return '';
+        return `<details class="usage-details" id="m-manual">
+            <summary>${esc(t('rev.manualHeading'))}</summary>
+            <div class="cfg-hint">${esc(t('rev.manualWhy'))}</div>
+            <div class="rev-head" style="margin:10px 0">
+                <label class="cfg-freeonly"><input type="checkbox" id="rv-bilingual"> ${esc(t('rev.withOriginal'))}</label>
+                <button id="rv-build">${esc(t('rev.build'))}</button>
+                <span id="rv-built" class="cfg-hint"></span>
+            </div>
+            <div id="rv-answer" hidden>
+                <div class="cfg-hint">${esc(t('rev.pasteHint'))}</div>
+                <input type="text" id="rv-model" placeholder="${esc(t('rev.modelPlaceholder'))}" style="margin:8px 0;max-width:280px">
+                <textarea id="rv-text" rows="6" style="width:100%" placeholder="${esc(t('rev.pastePlaceholder'))}"></textarea>
+                <button id="rv-accept" class="primary" style="margin-top:8px">${esc(t('rev.acceptAnswer'))}</button>
+            </div>
+        </details>`;
+    }
+
     function drawReview() {
-        const r = summary?.translationReview;
-        if (!r || r.broken || !summary) { reviewEl.innerHTML = ''; return; }
+        if (!summary) { reviewEl.innerHTML = ''; return; }
+        const r = summary.translationReview;
+        if (!r || r.broken) { reviewEl.innerHTML = manualRunBox(); wireManual(); return; }
 
         const verdict = [
             r.score != null ? t('rev.score', { score: r.score }) : null,
@@ -1257,7 +1286,72 @@ async function renderMonitor(prefix) {
             <summary>${esc(t('rev.heading'))} <span class="cfg-hint">${esc(verdict)}</span></summary>
             ${r.summary ? `<div class="rev-summary">${esc(r.summary)}</div>` : ''}
             ${rows || `<div class="cfg-hint">${esc(t('rev.allHandled'))}</div>`}
-        </details>`;
+        </details>` + manualRunBox();
+        wireManual();
+    }
+
+    // The fingerprint of the text the prompt was built from, kept for as long as
+    // the page lives. Without it the answer is still accepted — a person who
+    // reloaded the page has already spent the call — but nothing then notices
+    // that they fixed three chunks in between and the quotes have moved.
+    let promptFingerprint = null;
+    let promptBilingual = false;
+
+    function wireManual() {
+        const build = document.getElementById('rv-build');
+        if (!build) return;
+        const built = document.getElementById('rv-built');
+        const answer = document.getElementById('rv-answer');
+
+        build.addEventListener('click', async () => {
+            promptBilingual = document.getElementById('rv-bilingual').checked;
+            build.disabled = true;
+            built.textContent = t('rev.building');
+            try {
+                const q = `?original=${promptBilingual ? 1 : 0}`;
+                const res = await api(`/api/projects/${encodeURIComponent(prefix)}/translation-review/prompt${q}`);
+                promptFingerprint = res.fingerprint;
+                const mb = (res.chars / 1048576).toFixed(2);
+                built.innerHTML = esc(t('rev.builtInfo', { tokens: fmtNum(res.tokens.total), mb }))
+                    + ` <a class="btn" href="/api/projects/${encodeURIComponent(prefix)}/translation-review/prompt${q}&download=1">${esc(t('rev.download'))}</a>`
+                    + ` <button id="rv-copy">${esc(t('rev.copy'))}</button>`;
+                document.getElementById('rv-copy').addEventListener('click', async (e) => {
+                    try {
+                        await navigator.clipboard.writeText(res.text);
+                        e.target.textContent = t('rev.copied');
+                    } catch { toast(t('rev.copyFailed'), 'error'); }
+                });
+                answer.hidden = false;
+                (res.warnings || []).forEach(w => toast(w, 'error'));
+            } catch (e) {
+                built.textContent = '';
+                toast(t('common.error', { msg: e.message }), 'error');
+            }
+            build.disabled = false;
+        });
+
+        document.getElementById('rv-accept').addEventListener('click', async (e) => {
+            const text = document.getElementById('rv-text').value;
+            if (!text.trim()) return;
+            e.target.disabled = true;
+            try {
+                const res = await api(`/api/projects/${encodeURIComponent(prefix)}/translation-review/answer`, {
+                    method: 'POST',
+                    body: {
+                        answer: text,
+                        model: document.getElementById('rv-model').value,
+                        fingerprint: promptFingerprint,
+                        withOriginal: promptBilingual,
+                    },
+                });
+                toast(t('rev.answerTaken', { n: res.findings, returned: res.returned }), 'ok');
+                document.getElementById('rv-text').value = '';
+                refreshGrid();
+            } catch (err) {
+                toast(t('common.error', { msg: err.message }), 'error');
+            }
+            e.target.disabled = false;
+        });
     }
 
     reviewEl.addEventListener('click', async (e) => {
