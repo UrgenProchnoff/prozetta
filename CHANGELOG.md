@@ -14,6 +14,10 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-22**
 
+- `c1d938a` — The passport says whether the book names its author or the model merely
+  recognised it. Morphotrophic carries a copyright line and checks out; Powrot
+  names nobody in 42,656 characters and the answer came from recognition. Both
+  may be right, only one is verifiable, and until now they looked identical.
 - `b18abf5` — The passport records the author and their gender. Morphotrophic's
   afterword has Greg Egan writing of himself in feminine forms: in a novel the
   narrator owns "I" on every page, and nothing told the translator that the
