@@ -18,7 +18,7 @@ import { extractJson } from '../utils/parsers.js';
 import { detectNarrativePerson, characterCandidates, wholeWordRegex } from '../core/text_stats.js';
 import { buildPovMap, describePovMap } from '../core/pov_map.js';
 import { spansFromQuotes } from '../core/quoted_spans.js';
-import { splitTextIntoChunks } from '../core/tokenizer.js';
+import { splitTextIntoChunks, chunkTokens } from '../core/tokenizer.js';
 import { carryExtraction } from '../core/rechunk.js';
 import { loadPassport, savePassport, handEdited } from '../core/passport.js';
 import { profileForText, reloadLearnedProfiles } from '../core/language.js';
@@ -91,11 +91,15 @@ export async function runPassportStage(state) {
     }
 
     const bookText = chunks.map(c => c.original).join('\n');
-    const approxTokens = Math.round(bookText.length / 4);
-    console.log(`[Passport] Book: ${chunks.length} chunks, ~${approxTokens.toLocaleString('en-US')} tokens.`);
-    if (approxTokens > LARGE_BOOK_TOKENS) {
-        console.warn(`[Passport] WARNING: this is a large prompt. Free tiers usually cap tokens per minute ` +
-            `well below this, and the call may be refused even though the model's context window fits it.`);
+    // Counted, not divided by four. The old estimate read Morphotrophic 8.6%
+    // high, which is more than the margin this threshold now leaves: it would
+    // have warned about a call that has succeeded twice.
+    const bookTokens = chunkTokens(chunks);
+    console.log(`[Passport] Book: ${chunks.length} chunks, ~${bookTokens.toLocaleString('en-US')} tokens.`);
+    if (bookTokens > LARGE_BOOK_TOKENS) {
+        console.warn(`[Passport] WARNING: this is a large prompt. Free tiers cap INPUT tokens per minute ` +
+            `below the documented total, and the call may be refused even though the model's context ` +
+            `window fits it (pipeline.bookCallTokenBudget is ${LARGE_BOOK_TOKENS.toLocaleString('en-US')}).`);
     }
 
     const glossaryPath = state.getGlossaryPath();

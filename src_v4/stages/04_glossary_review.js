@@ -16,7 +16,7 @@ import { HumanMessage } from '@langchain/core/messages';
 import { llmManager, bookModelEnabled, explainCallFailure } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
-import { countTokens } from '../core/tokenizer.js';
+import { countTokens, chunkTokens } from '../core/tokenizer.js';
 import { glossaryEvidence, verifyFindings } from '../core/glossary_review.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
@@ -93,7 +93,7 @@ export async function runGlossaryReviewStage(state) {
     // measured with the same tokenizer. Both halves have to be sent whole — a
     // review of half a glossary cannot see that one person occupies two entries,
     // which is the point of the exercise.
-    const bookTokens = chunks.reduce((n, c) => n + (c.tokens || Math.round(c.original.length / 4)), 0);
+    const bookTokens = chunkTokens(chunks);
     const glossaryTokens = countTokens(JSON.stringify(evidence, null, 0));
     // The instructions count against the same quota as the data.
     const promptTokens = countTokens(prompts.glossaryReview.system(targetLang));

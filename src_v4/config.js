@@ -123,9 +123,15 @@ const defaults = {
         // gemini-3.7-flash free tier: 157,411 / 159,533 / 167,843 / 167,852
         // tokens of input all went through, and ~195,000 was refused four times
         // over eight minutes. So the ceiling sits between 168k and 195k, and this
-        // is set below the largest input actually seen accepted, with room for
-        // the instructions the caller adds on top. Raise it on a paid tier.
-        bookCallTokenBudget: 165000,
+        // sits just above the largest input actually seen accepted — blocking a
+        // call the provider has already taken is as wrong as passing one it will
+        // refuse.
+        //
+        // No safety margin on top, because none is needed any more: the callers
+        // now count the instructions as well as the data, and the glossary review
+        // of Morphotrophic estimates 167,850 against the 167,852 the API charged.
+        // Raise this on a paid tier.
+        bookCallTokenBudget: 170000,
 
         // Stage 2: Translation loop
         translationMaxRetries: 10,

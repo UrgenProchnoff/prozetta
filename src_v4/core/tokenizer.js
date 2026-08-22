@@ -14,6 +14,24 @@ function initTokenizer() {
     return tokenizer;
 }
 
+/**
+ * Tokens in the text a set of chunks holds.
+ *
+ * The splitter records `tokens` on every chunk, and where that survives this is
+ * exact and costs nothing. Where it does not — a project reset used to drop the
+ * field — the text is counted properly rather than divided by four. Measured on
+ * Morphotrophic: chars/4 reads 169,704 against a true 156,097, and an estimate
+ * 8.6% high is the difference between a size guard that fires when it should and
+ * one that refuses a call the provider would have accepted.
+ */
+export function chunkTokens(chunks, field = 'original') {
+    const list = chunks || [];
+    if (field === 'original' && list.length && list.every(c => c?.tokens)) {
+        return list.reduce((n, c) => n + c.tokens, 0);
+    }
+    return countTokens(list.map(c => c?.[field] || '').join('\n'));
+}
+
 export function countTokens(text) {
     try {
         const t = initTokenizer();
