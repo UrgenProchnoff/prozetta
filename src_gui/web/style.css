@@ -605,6 +605,41 @@ table.glossary .del { text-align: center; }
 .chunk-cell.s-pending { color: var(--muted); }
 .chunk-cell.active { animation: pulse 1.2s infinite; border-color: #fff; }
 
+/* Every cell is a link and nothing said so. `cursor: pointer` only appears once
+   the mouse is already on it, and the browser's own tooltip takes about a second
+   to arrive — so the grid read as a status board, and people did not know there
+   was anything behind it.
+
+   The lift is a transform, which does not reflow the grid, and it is paired with
+   a brighter border so it reads on a cell of any status colour. The focus ring is
+   separate: the cells have always been tabbable and there was no way to see where
+   you were. */
+.chunk-cell {
+    transition: transform 90ms ease-out, box-shadow 90ms ease-out, filter 90ms ease-out;
+}
+.chunk-cell:hover {
+    transform: scale(1.18);
+    z-index: 2;
+    filter: brightness(1.35);
+    border-color: #fff;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+}
+.chunk-cell:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    transform: scale(1.18);
+    z-index: 2;
+}
+/* The ring that marks queued advice is itself an inset shadow, so hovering such
+   a cell must not drop it. */
+.chunk-cell.advice:hover { box-shadow: inset 0 0 0 2px var(--violet), 0 3px 10px rgba(0, 0, 0, 0.55); }
+
+.grid-hint {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 
 .log-pane {

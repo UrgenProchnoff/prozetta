@@ -1050,6 +1050,7 @@ async function renderMonitor(prefix) {
                     <span><span class="dot fixed-dot"></span>${esc(t('legend.fixed'))}</span>
                     <span><span class="legend-scores"><span class="cell-score" data-score="7">7</span>/<span class="cell-score" data-score="8.5">8.5</span>/<span class="cell-score" data-score="9.5">9.5</span></span> ${esc(t('legend.score'))}</span>
                 </div>
+                <div class="grid-hint">${esc(t('mon.gridHint'))}</div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
                 <div id="m-review"></div>
                 <details class="usage-details" open>
