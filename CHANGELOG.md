@@ -14,6 +14,11 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `f5bb704` — The score and the summary of a review were being thrown away. With
+  no ```json fence, the parser looked for an array before an object, so in
+  {"score": …, "findings": [ … ]} it matched the findings and discarded what
+  wrapped them. It takes the outermost structure now, keeps the reply as it
+  arrived, and accepts a verdict written as prose beside the JSON.
 - `81460ab` — The glossary can be sorted alphabetically, by original or by
   translation. Display only — the file keeps its own order, and an edit lands on
   the entry it was made on whatever the view is doing.
