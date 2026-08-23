@@ -14,6 +14,11 @@ question a person opened the page with.
 
 **2026-08-23**
 
+- `eeecce5` — The chunk map stopped spending its ink on what every chunk has in
+  common. The "terms extracted" corner fired on 96% of cells and 85% showed a
+  score of exactly 10, so a finished book was a field of identical squares and
+  the four chunks that scored 9.0 hid in it. The corner is inverted to mark
+  chunks with no terms; the score and its tint appear only below 10.
 - `3d8b8a1` — Nothing on the chunk map said it could be clicked. The cells have
   always been links, with no hover and no focus ring — a grid of coloured squares
   reads as a status board. They lift under the pointer now, and a line says what
