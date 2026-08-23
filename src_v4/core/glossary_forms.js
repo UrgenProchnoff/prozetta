@@ -30,16 +30,35 @@
  * ranking on an unfamiliar language — a bad ranking only reorders the list.
  */
 
+// Words that are grammar rather than the term: one entry filed with an article
+// and one without is the same entry twice, which is precisely the duplication
+// worth showing. Kept to articles — anything longer starts merging terms that
+// differ in meaning.
+const GRAMMAR_WORDS = /^(the|a|an|le|la|les|un|une|der|die|das|el|los|las)$/i;
+
 /** Is `b` `a` plus a short wordless tail — the same word, inflected? */
 function inflectionOf(a, b) {
-    const x = String(a || '').trim().toLowerCase();
-    const y = String(b || '').trim().toLowerCase();
+    const x = strip(a);
+    const y = strip(b);
     if (x.length < 3 || y.length < 3) return false;
     const [short, long] = x.length <= y.length ? [x, y] : [y, x];
     if (short === long) return true;
     if (!long.startsWith(short)) return false;
     const tail = long.slice(short.length);
     return tail.length <= 3 && !/\s/.test(tail);
+}
+
+/**
+ * The entry without its leading article.
+ *
+ * Measured on Morphotrophic, where the glossary holds both "exchange" → «обмен»
+ * and "the exchange" → «Обмен», so the book capitalises the same ritual two ways
+ * with no system. The prefix rule missed it — "the exchange" does not start with
+ * "exchange" — and it is exactly the kind of duplication the grouping is for.
+ */
+function strip(text) {
+    const words = String(text || '').trim().toLowerCase().split(/\s+/);
+    return (words.length > 1 && GRAMMAR_WORDS.test(words[0]) ? words.slice(1) : words).join(' ');
 }
 
 /** Character bigrams of a string, for comparing two texts in any script. */
@@ -101,7 +120,12 @@ export function inflectionGroups(glossary) {
     const groups = [];
     for (const entries of buckets.values()) {
         if (entries.length < 2) continue;
-        const translations = [...new Set(entries.map(e => e.translation.toLowerCase()))];
+        // Compared as written, not lowercased. A capital is a difference and
+        // sometimes the whole defect: the glossary holds "exchange" → «обмен» and
+        // "the exchange" → «Обмен», so the same ritual is a common noun in one
+        // chapter and a proper one in the next. Folded to lower case that group
+        // looked like agreement and was dropped.
+        const translations = [...new Set(entries.map(e => e.translation))];
         // Every form translated identically is the glossary agreeing with itself.
         if (translations.length < 2) continue;
 
@@ -111,6 +135,17 @@ export function inflectionGroups(glossary) {
                 spread = Math.max(spread, dissimilarity(entries[i].translation, entries[j].translation));
             }
         }
+
+        // A difference of case only. Bigram overlap reads «обмен» against «Обмен»
+        // as identical and ranks the pair last, under ten harmless plurals — but
+        // this is the one kind of disagreement that is certain rather than
+        // probable. Everything the ranking usually puts low is morphology that is
+        // probably fine; a word capitalised two ways is a word capitalised two
+        // ways, and it made the same ritual a proper noun in one chapter of
+        // Morphotrophic and a common one in the next. So it is placed above the
+        // uncertain and below the outright different.
+        const caseOnly = new Set(translations.map(x => x.toLowerCase())).size < translations.length;
+        if (caseOnly) spread = Math.max(spread, 0.75);
         groups.push({ entries, translations: entries.map(e => e.translation), spread });
     }
 

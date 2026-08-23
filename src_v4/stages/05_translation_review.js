@@ -32,6 +32,17 @@ import { getPrompts } from '../prompts.js';
 // refuses the call outright rather than truncating.
 const TOKEN_BUDGET = config.pipeline.bookCallTokenBudget || 170000;
 
+
+/** The glossary as a plain array, or empty when there is none to read. */
+function readGlossary(state) {
+    const path = state.getGlossaryPath();
+    if (!fs.existsSync(path)) return [];
+    try {
+        const glossary = JSON.parse(fs.readFileSync(path, 'utf-8'));
+        return Array.isArray(glossary) ? glossary : [];
+    } catch { return []; }
+}
+
 /**
  * Everything the reviewer is to be given, and what it adds up to.
  *
@@ -154,16 +165,19 @@ export function applyTranslationReview(state, raw, meta) {
     // where it sat, so a model that repeats itself stays dismissed.
     const reviewPath = state.getTranslationReviewPath();
     let carriedDismissals = [];
+    let carriedHandled = [];
     if (fs.existsSync(reviewPath)) {
         try {
             const previous = JSON.parse(fs.readFileSync(reviewPath, 'utf-8'));
             carriedDismissals = Array.isArray(previous.dismissed) ? previous.dismissed : [];
+            carriedHandled = Array.isArray(previous.handled) ? previous.handled : [];
             if (carriedDismissals.length) notes.push(`Carrying over ${carriedDismissals.length} finding(s) you had dismissed.`);
+            if (carriedHandled.length) notes.push(`Carrying over ${carriedHandled.length} finding(s) you had marked done.`);
         } catch { /* an unreadable previous review must not block a new one */ }
     }
 
     const list = Array.isArray(raw?.findings) ? raw.findings : (Array.isArray(raw) ? raw : []);
-    const { findings, rejected, rejectedFindings } = verifyFindings(list, chunks);
+    const { findings, rejected, rejectedFindings } = verifyFindings(list, chunks, readGlossary(state));
 
     // An answer that was not empty but survived nothing is a pasted mistake far
     // more often than a book with nothing wrong in it, and overwriting the last
@@ -196,6 +210,7 @@ export function applyTranslationReview(state, raw, meta) {
         // it away because of where it was written would be pedantry.
         summary: String(raw?.summary || '').trim() || proseAround(meta.answerText) || null,
         dismissed: carriedDismissals,
+        handled: carriedHandled,
         rejected,
         findings,
         // Deliberately last and under a name nothing else reads: these failed

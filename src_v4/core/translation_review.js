@@ -66,9 +66,10 @@ function locateInJoined(chunks, quote) {
  *
  * @param {Array} raw        findings as parsed from the model
  * @param {Array} chunks     project chunks, carrying `translation`
+ * @param {Array} glossary   the glossary, for checking the entry a finding names
  * @returns {{findings: Array, rejected: object, rejectedFindings: Array}}
  */
-export function verifyFindings(raw, chunks) {
+export function verifyFindings(raw, chunks, glossary = []) {
     const rejected = {
         malformed: 0,        // not an object, or a scope we do not implement
         badQuote: 0,         // the quote is in no chunk's translation
@@ -133,12 +134,27 @@ export function verifyFindings(raw, chunks) {
         // throw away exactly the findings that are most certainly true.
         if (scope === 'chunk' && hits.length > 1) { drop('ambiguousQuote', item); continue; }
 
+        // Which glossary entry a glossary finding is about. Checked against the
+        // glossary rather than taken on trust, and a finding that names none is
+        // kept without one: it is still a true thing about the book, and losing
+        // it over a missing field would be the contract eating what it exists to
+        // protect. Without a term the chunks it affects cannot be offered, and
+        // that is the whole cost.
+        let term = null;
+        if (scope === 'glossary') {
+            const named = String(item.term || '').trim();
+            if (named && glossary.some(t => String(t?.original || '').trim().toLowerCase() === named.toLowerCase())) {
+                term = named;
+            }
+        }
+
         findings.push({
             scope,
             chunk: hits[0],
             issue: String(item.issue || '').trim().slice(0, 40) || 'other',
             problem: String(item.problem || '').trim().slice(0, 400),
             advice: advice.slice(0, 400) || null,
+            ...(term ? { term } : {}),
             quote,
         });
     }
@@ -188,12 +204,20 @@ function appliedInHistory(chunk, key, advice) {
  */
 export function outstandingFindings(review, chunks) {
     const dismissed = new Set((review?.dismissed || []).map(k => String(k).toLowerCase()));
+    // Findings a person says they have dealt with, kept apart from the ones they
+    // say are wrong. The dismissal list is evidence about how far an unverified
+    // finding can be trusted — the same question rejectedFindings exists to
+    // answer — and folding "I did this" into it would spoil the only record that
+    // can answer it. A glossary or passport finding has no other way to close:
+    // nothing it asks for shows up in the text it quoted.
+    const handled = new Set((review?.handled || []).map(k => String(k).toLowerCase()));
     const open = [];
     let done = 0, hidden = 0;
 
     for (const f of review?.findings || []) {
         const key = findingKey(f);
         if (dismissed.has(key)) { hidden++; continue; }
+        if (handled.has(key)) { done++; continue; }
 
         const chunk = chunks[f.chunk];
         const text = chunk?.translation;

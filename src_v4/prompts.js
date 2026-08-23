@@ -368,6 +368,7 @@ ${withOriginal ? `
             {
               "scope": "glossary",
               "issue": "terminology",
+              "term": "запись глоссария, о которой речь, ровно как она там написана",
               "quote": "дословная цитата из перевода, 8-25 слов",
               "problem": "термин переведён здесь иначе, чем в остальной книге"
             },
@@ -829,6 +830,7 @@ ${withOriginal ? `
             {
               "scope": "glossary",
               "issue": "terminology",
+              "term": "the glossary entry this is about, exactly as it is written there",
               "quote": "verbatim quotation from the translation, 8-25 words",
               "problem": "the term is rendered here differently from the rest of the book"
             },
