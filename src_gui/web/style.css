@@ -1122,3 +1122,14 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
     color: var(--muted);
     font-size: 11.5px;
 }
+
+/* A whole-book call on a page that has no pipeline: both routes to the same
+   call, gathered rather than scattered — one into the toolbar and one to the
+   bottom of the page, which is where they were. */
+.bookcall-card { margin: 16px 0; }
+.bookcall-card .title { margin-bottom: 6px; }
+.bookcall-card .bc-manual {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}

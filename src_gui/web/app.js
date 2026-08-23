@@ -401,11 +401,9 @@ async function renderDashboard() {
  * review of the finished translation — because what differs between them is
  * which halves run, not how a person carries the middle.
  */
-function manualCallBox(kind, { variants = false, open = false } = {}) {
-    return `<details class="usage-details bookcall" data-kind="${kind}"${open ? ' open' : ''}>
-        <summary>${esc(t('rev.manualHeadingFor', { stage: t(STAGE_LABEL[BOOK_STAGE_OF[kind]] || 'rev.heading') }))}</summary>
-        <div class="cfg-hint">${esc(t('rev.manualWhy'))}</div>
-        <div class="rev-head" style="margin:10px 0">
+/** The build button, what it reports, and the box the answer is pasted into. */
+function manualCallControls(variants) {
+    return `<div class="rev-head" style="margin:10px 0">
             ${variants ? `<label class="cfg-freeonly"><input type="checkbox" data-bc="bilingual"> ${esc(t('rev.withOriginal'))}</label>` : ''}
             <button data-bc="build">${esc(t('rev.build'))}</button>
             <span data-bc="built" class="cfg-hint"></span>
@@ -415,8 +413,44 @@ function manualCallBox(kind, { variants = false, open = false } = {}) {
             <input type="text" data-bc="model" placeholder="${esc(t('rev.modelPlaceholder'))}" style="margin:8px 0;max-width:280px">
             <textarea data-bc="text" rows="6" style="width:100%" placeholder="${esc(t('rev.pastePlaceholder'))}"></textarea>
             <button data-bc="accept" class="primary" style="margin-top:8px">${esc(t('rev.acceptAnswer'))}</button>
-        </div>
+        </div>`;
+}
+
+/** Folded away on the monitor, where the pipeline is the thing being looked at. */
+function manualCallBox(kind, { variants = false, open = false } = {}) {
+    return `<details class="usage-details bookcall" data-kind="${kind}"${open ? ' open' : ''}>
+        <summary>${esc(t('rev.manualHeadingFor', { stage: t(STAGE_LABEL[BOOK_STAGE_OF[kind]] || 'rev.heading') }))}</summary>
+        <div class="cfg-hint">${esc(t('rev.manualWhy'))}</div>
+        ${manualCallControls(variants)}
     </details>`;
+}
+
+/**
+ * A whole-book call as a thing of its own, for the pages that have no pipeline.
+ *
+ * On the monitor the API route is the pipeline's Start button and the manual one
+ * sits beside it. The glossary and the passport have neither, so both routes are
+ * gathered here: the same two doors, in a block that says which call it is and
+ * what pressing either will do.
+ */
+function bookCallCard(kind, { variants = false, runId = '' } = {}) {
+    const stage = t(STAGE_LABEL[BOOK_STAGE_OF[kind]] || 'rev.heading');
+    // `runId` hands the API button to a page that already knows how to run this
+    // call — the glossary watches the job and refreshes itself without sending
+    // anybody to the monitor and back, which is the whole point of running it
+    // from there. Pages with no such machinery get the shared handler.
+    const run = runId
+        ? `<button id="${runId}" class="primary"></button><span id="${runId}-note" class="ask-note"></span>`
+        : `<button data-bc="run" class="primary">${esc(t('bc.run'))}</button>`;
+    return `<div class="card bookcall bookcall-card" data-kind="${kind}">
+        <div class="title">${esc(t('bc.heading', { stage }))}</div>
+        <div class="cfg-hint">${esc(t('bc.purpose.' + kind))}</div>
+        <div class="rev-head" style="margin:10px 0">${run}</div>
+        <div class="bc-manual">
+            <div class="cfg-hint">${esc(t('rev.manualWhy'))}</div>
+            ${manualCallControls(variants)}
+        </div>
+    </div>`;
 }
 
 /**
@@ -429,6 +463,34 @@ function manualCallBox(kind, { variants = false, open = false } = {}) {
  * have moved.
  */
 function wireBookCalls(prefix, onDone) {
+    // The API route, where the card carries it. On the monitor this button does
+    // not exist — there the pipeline's Start is the same door.
+    document.querySelectorAll('.bookcall-card [data-bc="run"]').forEach(btn => {
+        if (btn.dataset.wired) return;
+        btn.dataset.wired = '1';
+        const card = btn.closest('.bookcall');
+        const stage = BOOK_STAGE_OF[card.dataset.kind];
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+                const res = await api('/api/run', { method: 'POST', body: { prefix, stage } });
+                if (res && res.tooLarge) {
+                    // The other door is in this very card, so it is pointed at
+                    // rather than explained.
+                    toast(t('mon.tooLargeForApi', {
+                        stage: t(STAGE_LABEL[stage]), tokens: fmtNum(res.tokens), budget: fmtNum(res.budget),
+                    }), 'error');
+                    card.querySelector('[data-bc="build"]')?.focus();
+                } else {
+                    toast(t('bc.started'), 'ok');
+                }
+            } catch (e) {
+                toast(e.message, 'error');
+            }
+            btn.disabled = false;
+        });
+    });
+
     document.querySelectorAll('.bookcall').forEach(box => {
         if (box.dataset.wired) return;
         box.dataset.wired = '1';
@@ -547,8 +609,6 @@ async function renderGlossary(prefix) {
         <div class="toolbar">
             <input id="g-search" type="search" placeholder="${esc(t('gloss.search'))}" style="width:220px">
             <button id="g-add">${esc(t('gloss.addTerm'))}</button>
-            ${bookModel.enabled === false ? '' : `<button id="g-ask">${esc(t('gloss.ask'))}</button>
-            <span id="g-ask-note" class="ask-note"></span>`}
             <span id="g-count" class="badge"></span>
             <span class="badge" title="${esc(t('gloss.junkHintTitle'))}">${esc(t('gloss.junkHint'))}</span>
             <select id="g-issues" class="issues-select" title="${esc(t('gloss.issuesTitle'))}"></select>
@@ -562,7 +622,7 @@ async function renderGlossary(prefix) {
             <button id="g-save" class="primary">${esc(t('common.save'))}</button>
         </div>
         <div id="g-review"></div>
-        <div id="g-bookcall">${manualCallBox('glossary')}</div>
+        <div id="g-bookcall">${bookCallCard('glossary', { runId: 'g-ask' })}</div>
         <table class="glossary">
             <thead><tr>
                 <th style="width:22%">${esc(t('gloss.colOriginal'))}</th>
@@ -614,6 +674,11 @@ async function renderGlossary(prefix) {
         btn.textContent = asking ? t('gloss.askRunning') : t('gloss.ask');
         const note = document.getElementById('g-ask-note');
         if (note) note.textContent = ok || asking ? '' : why;
+        // Over budget the API route is not the only one left: the manual button
+        // is in the same card, and saying "too big" without pointing at it would
+        // be a dead end where there is a door.
+        const manual = btn.closest('.bookcall')?.querySelector('[data-bc="build"]');
+        if (manual) manual.classList.toggle('primary', !ok && !asking);
     }
 
     // The filter is rebuilt rather than written once: after a save the server
@@ -1941,7 +2006,7 @@ async function renderPassport(prefix) {
         ${strip}
         <div class="cfg-hint">${esc(t('pass.mapHint', { n: (p.povMap || []).length, total }))}</div>
         ${p.source?.model ? `<div class="cfg-hint" style="margin-top:12px">${esc(t('pass.source', { model: p.source.model, date: fmtDate(p.source.generatedAt) }))}${p.source.povMapFrom ? ` · ${esc(t('pass.mapFrom.' + p.source.povMapFrom))}` : ''}</div>` : ''}
-        ${manualCallBox('passport')}
+        ${bookCallCard('passport')}
     `;
 
     wireBookCalls(prefix, () => renderPassport(prefix));
