@@ -12,6 +12,11 @@ a link in the interface, an argument to `git show 5bba425` in a terminal. The
 Everything in this section is about one thing: an interface that answers the
 question a person opened the page with.
 
+**2026-08-24**
+
+- `ba6cb17` — The book's name is a link in the glossary trail again. Four pages
+  made it one and this one did not, so the way back was the browser's button.
+
 **2026-08-23**
 
 - `292eb91` — Running a whole-book stage by hand is a choice on the screen, not a
