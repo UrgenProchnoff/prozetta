@@ -18,7 +18,8 @@ import { extractJson } from '../utils/parsers.js';
 import { detectNarrativePerson, characterCandidates, wholeWordRegex } from '../core/text_stats.js';
 import { buildPovMap, describePovMap } from '../core/pov_map.js';
 import { spansFromQuotes } from '../core/quoted_spans.js';
-import { splitTextIntoChunks, chunkTokens } from '../core/tokenizer.js';
+import { splitTextIntoChunks, chunkTokens, countTokens } from '../core/tokenizer.js';
+import { fingerprint, fingerprintMismatch } from '../core/book_call.js';
 import { carryExtraction } from '../core/rechunk.js';
 import { loadPassport, savePassport, handEdited } from '../core/passport.js';
 import { profileForText, reloadLearnedProfiles } from '../core/language.js';
@@ -72,6 +73,83 @@ function normalizeAddressForm(raw) {
     return { form: m[1], note: rest || null };
 }
 
+/**
+ * What the model is to be asked, and what it adds up to.
+ *
+ * Split from applying the answer so the call between them can be made by hand
+ * when a provider refuses one this size — see core/book_call.js. Both routes
+ * share the halves, so an answer carried from a web console is normalised and
+ * checked exactly as an API one is.
+ *
+ * Learning an unknown language is NOT here: it is a second model call, and the
+ * manual route has no client to make it with. A book in a language the measuring
+ * layer does not know still gets a passport, only without the pronoun evidence.
+ *
+ * @throws {Error} when there is nothing to build a passport from
+ */
+export function buildPassportPrompt(state) {
+    const chunks = state.getChunks();
+    if (!chunks.length) throw new Error('Project has no chunks yet — run Stage 1 first.');
+
+    const bookText = chunks.map(c => c.original).join('\n');
+    const glossary = readGlossary(state);
+    const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
+    const prompts = getPrompts(config.translation.promptLang);
+
+    const person = detectNarrativePerson(bookText);
+    const candidates = characterCandidates(bookText, glossary, 25);
+
+    // What the owner typed for the export is worth more than what the model can
+    // infer from a text that may never name its author. Passed as evidence rather
+    // than substituted afterwards, so the gender it returns is about the right
+    // person.
+    const knownAuthor = String(state.data.metadata?.book?.author || '').trim() || undefined;
+
+    const evidence = {
+        knownAuthor,
+        narrativePerson: { detected: person.person, share: Number(person.share.toFixed(2)), counts: person.counts },
+        characterCandidates: candidates.map(c => ({
+            name: c.name,
+            mentions: c.count,
+            shareInSpeech: Number(c.speechShare.toFixed(2)),
+            genderByPronouns: c.gender,
+            pronouns: c.pronouns,
+            glossaryNote: c.notes || undefined,
+        })),
+    };
+
+    const system = prompts.passport.system(targetLang);
+    const user = prompts.passport.user(bookText, evidence);
+    const tokens = {
+        book: chunkTokens(chunks),
+        evidence: countTokens(JSON.stringify(evidence, null, 1)),
+        instructions: countTokens(system),
+    };
+    tokens.total = tokens.book + tokens.evidence + tokens.instructions;
+
+    return {
+        system, user, tokens, person, candidates, knownAuthor,
+        budget: LARGE_BOOK_TOKENS,
+        // Over the source text: the quoted point-of-view boundaries are located in
+        // it, and an answer made from a different version would place them wrongly.
+        fingerprint: fingerprint(bookText),
+        warnings: [],
+    };
+}
+
+/** The glossary as a plain array, or empty when there is none to read. */
+function readGlossary(state) {
+    const path = state.getGlossaryPath();
+    if (!fs.existsSync(path)) return [];
+    try {
+        const glossary = JSON.parse(fs.readFileSync(path, 'utf-8'));
+        return Array.isArray(glossary) ? glossary : [];
+    } catch (e) {
+        console.warn(`[Passport] Could not read the glossary: ${e.message}`);
+        return [];
+    }
+}
+
 export async function runPassportStage(state) {
     console.log('--- SYSTEM: Building book passport ---');
     usageTracker.setStage('passport');
@@ -83,34 +161,25 @@ export async function runPassportStage(state) {
         return;
     }
 
-    let chunks = state.getChunks();
-    if (!chunks.length) {
-        console.error('[Passport] Project has no chunks yet — run Stage 1 first.');
+    let built;
+    try {
+        built = buildPassportPrompt(state);
+    } catch (e) {
+        console.error(`[Passport] ${e.message}`);
         process.exitCode = 1;
         return;
     }
 
+    const chunks = state.getChunks();
     const bookText = chunks.map(c => c.original).join('\n');
-    // Counted, not divided by four. The old estimate read Morphotrophic 8.6%
-    // high, which is more than the margin this threshold now leaves: it would
-    // have warned about a call that has succeeded twice.
-    const bookTokens = chunkTokens(chunks);
-    console.log(`[Passport] Book: ${chunks.length} chunks, ~${bookTokens.toLocaleString('en-US')} tokens.`);
-    if (bookTokens > LARGE_BOOK_TOKENS) {
+    const prompts = getPrompts(config.translation.promptLang);
+    console.log(`[Passport] Book: ${chunks.length} chunks, ~${built.tokens.total.toLocaleString('en-US')} tokens.`);
+    if (built.tokens.total > LARGE_BOOK_TOKENS) {
         console.warn(`[Passport] WARNING: this is a large prompt. Free tiers cap INPUT tokens per minute ` +
             `below the documented total, and the call may be refused even though the model's context ` +
-            `window fits it (pipeline.bookCallTokenBudget is ${LARGE_BOOK_TOKENS.toLocaleString('en-US')}).`);
+            `window fits it (pipeline.bookCallTokenBudget is ${LARGE_BOOK_TOKENS.toLocaleString('en-US')}). ` +
+            `The passport page can hand you this prompt to run in a web console instead.`);
     }
-
-    const glossaryPath = state.getGlossaryPath();
-    let glossary = [];
-    if (fs.existsSync(glossaryPath)) {
-        try { glossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf-8')); }
-        catch (e) { console.warn(`[Passport] Could not read the glossary: ${e.message}`); }
-    }
-
-    const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
-    const prompts = getPrompts(config.translation.promptLang);
 
     // --- an unknown language is learned once, before anything is measured ---
     // Without a profile the measuring layer is blind (and, before it learned to
@@ -147,40 +216,18 @@ export async function runPassportStage(state) {
         }
     }
 
-    // --- what we can measure, measured before anything is asked ---
-    const person = detectNarrativePerson(bookText);
-    const candidates = characterCandidates(bookText, glossary, 25);
-    console.log(`[Passport] Narrative person by pronoun counts: ${person.person || 'unclear'} ` +
-        `(${Math.round(person.share * 100)}% of counted pronouns).`);
-    console.log(`[Passport] ${candidates.length} character candidate(s) prepared as evidence.`);
-
-    // What the owner typed for the export is worth more than what the model can
-    // infer from a text that may never name its author. Passed as evidence
-    // rather than substituted afterwards, so the gender the model returns is
-    // about the right person.
-    const knownAuthor = String(state.data.metadata?.book?.author || '').trim() || undefined;
-    if (knownAuthor) console.log(`[Passport] Book metadata names the author as "${knownAuthor}" — passing it as evidence.`);
-
-    const evidence = {
-        knownAuthor,
-        narrativePerson: { detected: person.person, share: Number(person.share.toFixed(2)), counts: person.counts },
-        characterCandidates: candidates.map(c => ({
-            name: c.name,
-            mentions: c.count,
-            shareInSpeech: Number(c.speechShare.toFixed(2)),
-            genderByPronouns: c.gender,
-            pronouns: c.pronouns,
-            glossaryNote: c.notes || undefined,
-        })),
-    };
+    console.log(`[Passport] Narrative person by pronoun counts: ${built.person.person || 'unclear'} ` +
+        `(${Math.round(built.person.share * 100)}% of counted pronouns).`);
+    console.log(`[Passport] ${built.candidates.length} character candidate(s) prepared as evidence.`);
+    if (built.knownAuthor) console.log(`[Passport] Book metadata names the author as "${built.knownAuthor}" — passing it as evidence.`);
 
     console.log(`[Passport] Asking ${conf.modelName} for the point-of-view cast and dossiers...`);
 
     let answer;
     try {
         const response = await client.invoke([
-            new HumanMessage(prompts.passport.system(targetLang)),
-            new HumanMessage(prompts.passport.user(bookText, evidence)),
+            new HumanMessage(built.system),
+            new HumanMessage(built.user),
         ]);
         answer = extractJson(response.content || '');
     } catch (e) {
@@ -191,6 +238,39 @@ export async function runPassportStage(state) {
         process.exitCode = 1;
         return;
     }
+
+    let passport;
+    try {
+        ({ passport } = applyPassportAnswer(state, answer, { model: conf.modelName, fingerprint: built.fingerprint }));
+    } catch (e) {
+        console.error(`[Passport] ${e.message}`);
+        process.exitCode = 1;
+        return;
+    }
+}
+
+/**
+ * Take the answer, normalise it, and record the passport.
+ *
+ * Everything the model returns passes through here whoever obtained it: the
+ * fields are normalised, the point-of-view map is computed rather than trusted,
+ * and a hand-edited passport is backed up before being replaced.
+ *
+ * @throws {Error} when the answer does not belong to this text
+ */
+export function applyPassportAnswer(state, answer, meta) {
+    let chunks = state.getChunks();
+    const bookText = chunks.map(c => c.original).join('\n');
+    const glossary = readGlossary(state);
+    const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
+    const prompts = getPrompts(config.translation.promptLang);
+    const person = detectNarrativePerson(bookText);
+    const candidates = characterCandidates(bookText, glossary, 25);
+    const knownAuthor = String(state.data.metadata?.book?.author || '').trim() || undefined;
+    const conf = { modelName: meta.model || null };
+
+    const stale = fingerprintMismatch(fingerprint(bookText), meta.fingerprint);
+    if (stale) throw new Error(stale);
 
     // --- merge: the model's answer, then the map computed from it ---
     const passportPath = state.getPassportPath();
@@ -210,9 +290,7 @@ export async function runPassportStage(state) {
                 `The model's answer replaces narration, the cast and the map; your copy is kept as ` +
                 `${backup.split(/[\\/]/).pop()}.`);
         } catch (e) {
-            console.error(`[Passport] Could not back up the hand-edited passport (${e.message}) — nothing was overwritten.`);
-            process.exitCode = 1;
-            return;
+            throw new Error(`Could not back up the hand-edited passport (${e.message}) — nothing was overwritten.`);
         }
     }
 
@@ -406,4 +484,6 @@ export async function runPassportStage(state) {
 
     console.log(`[Passport] Saved to ${state.getPassportPath().split(/[\\/]/).pop()}`);
     console.log('--- SYSTEM: Book passport completed ---');
+    return { passport, chunks };
 }
+

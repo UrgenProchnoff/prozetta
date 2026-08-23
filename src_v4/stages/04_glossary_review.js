@@ -18,6 +18,7 @@ import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
 import { countTokens, chunkTokens } from '../core/tokenizer.js';
 import { glossaryEvidence, verifyFindings } from '../core/glossary_review.js';
+import { fingerprint, fingerprintMismatch } from '../core/book_call.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
@@ -26,6 +27,109 @@ import { getPrompts } from '../prompts.js';
 // tier, tokens per minute is, and it refuses the call outright rather than
 // truncating.
 const TOKEN_BUDGET = config.pipeline.bookCallTokenBudget || 250000;
+
+/**
+ * Everything the reviewer is to be given, and what it adds up to.
+ *
+ * Split out so the call between building and applying can be made by hand when a
+ * provider refuses one this size — see core/book_call.js. Both routes share the
+ * halves, so an answer carried from a web console is verified exactly as an API
+ * one is.
+ *
+ * @throws {Error} when there is no glossary to review
+ */
+export function buildGlossaryReviewPrompt(state) {
+    const chunks = state.getChunks();
+    if (!chunks.length) throw new Error('Project has no chunks yet — run Stage 1 first.');
+
+    const glossaryPath = state.getGlossaryPath();
+    if (!fs.existsSync(glossaryPath)) throw new Error(`No glossary to review: ${glossaryPath}`);
+    let glossary;
+    try {
+        glossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf-8'));
+    } catch (e) {
+        throw new Error(`Could not read the glossary: ${e.message}`);
+    }
+    if (!Array.isArray(glossary) || !glossary.length) throw new Error('The glossary is empty — nothing to review.');
+
+    const bookText = chunks.map(c => c.original).join('\n');
+    const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
+    const prompts = getPrompts(config.translation.promptLang);
+    const evidence = glossaryEvidence(glossary, bookText);
+
+    const system = prompts.glossaryReview.system(targetLang);
+    const user = prompts.glossaryReview.user(bookText, evidence);
+
+    // Both halves have to be sent whole — a review of half a glossary cannot see
+    // that one person occupies two entries, which is the point of the exercise.
+    const tokens = {
+        book: chunkTokens(chunks),
+        glossary: countTokens(JSON.stringify(evidence, null, 0)),
+        instructions: countTokens(system),
+    };
+    tokens.total = tokens.book + tokens.glossary + tokens.instructions;
+
+    return {
+        system, user, tokens,
+        budget: TOKEN_BUDGET,
+        entries: glossary.length,
+        // Over the glossary: the findings name its entries, and an answer made
+        // from a different version of it would point at rows that have moved.
+        fingerprint: fingerprint(JSON.stringify(glossary)),
+        warnings: [],
+    };
+}
+
+/**
+ * Verify an answer and record it, whoever obtained it.
+ *
+ * @throws {Error} when the answer does not belong to this glossary
+ */
+export function applyGlossaryReview(state, raw, meta) {
+    const notes = [];
+    const glossary = JSON.parse(fs.readFileSync(state.getGlossaryPath(), 'utf-8'));
+    const bookText = state.getChunks().map(c => c.original).join('\n');
+
+    const stale = fingerprintMismatch(fingerprint(JSON.stringify(glossary)), meta.fingerprint);
+    if (stale) throw new Error(stale);
+
+    const reviewPath = state.getGlossaryReviewPath();
+    let carriedDismissals = [];
+    if (fs.existsSync(reviewPath)) {
+        try {
+            const previous = JSON.parse(fs.readFileSync(reviewPath, 'utf-8'));
+            carriedDismissals = Array.isArray(previous.dismissed) ? previous.dismissed : [];
+            if (carriedDismissals.length) notes.push(`Carrying over ${carriedDismissals.length} finding(s) you had dismissed.`);
+        } catch { /* an unreadable previous review must not block a new one */ }
+    }
+
+    // Some models wrap the array in an object however firmly the format is stated.
+    const list = Array.isArray(raw) ? raw : (raw?.findings || raw?.results || []);
+    const { findings, rejected, rejectedFindings } = verifyFindings(list, glossary, bookText);
+
+    if (list.length && !findings.length) {
+        throw new Error(`All ${list.length} finding(s) in this answer failed verification ` +
+            `(${JSON.stringify(rejected)}). Nothing was saved — the previous review is untouched.`);
+    }
+
+    const review = {
+        generatedAt: new Date().toISOString(),
+        model: meta.model || null,
+        source: meta.source || 'api',
+        glossarySize: glossary.length,
+        returned: list.length,
+        dismissed: carriedDismissals,
+        rejected,
+        findings,
+        // Deliberately last, and deliberately under a name nothing else reads:
+        // these failed verification and must not be one careless join away from
+        // the editor.
+        rejectedFindings,
+        rawAnswer: meta.answerText ? String(meta.answerText).slice(0, 400000) : undefined,
+    };
+    fs.writeFileSync(reviewPath, JSON.stringify(review, null, 2));
+    return { review, findings, rejected, notes };
+}
 
 export async function runGlossaryReviewStage(state) {
     console.log('--- SYSTEM: Reviewing the glossary against the book ---');
@@ -38,75 +142,28 @@ export async function runGlossaryReviewStage(state) {
         return;
     }
 
-    const chunks = state.getChunks();
-    if (!chunks.length) {
-        console.error('[Review] Project has no chunks yet — run Stage 1 first.');
-        process.exitCode = 1;
-        return;
-    }
-
-    const glossaryPath = state.getGlossaryPath();
-    if (!fs.existsSync(glossaryPath)) {
-        console.error(`[Review] No glossary to review: ${glossaryPath}`);
-        process.exitCode = 1;
-        return;
-    }
-    let glossary;
+    let built;
     try {
-        glossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf-8'));
+        console.log('[Review] Counting occurrences for the glossary...');
+        built = buildGlossaryReviewPrompt(state);
     } catch (e) {
-        console.error(`[Review] Could not read the glossary: ${e.message}`);
-        process.exitCode = 1;
-        return;
-    }
-    if (!Array.isArray(glossary) || !glossary.length) {
-        console.error('[Review] The glossary is empty — nothing to review.');
+        console.error(`[Review] ${e.message}`);
         process.exitCode = 1;
         return;
     }
 
-    // A rerun overwrites the review file, so anything a person decided about the
-    // previous one has to be carried across first. Dismissals are keyed by what
-    // the finding says rather than where it sat, so a model that repeats itself
-    // stays dismissed.
-    const reviewPath = state.getGlossaryReviewPath();
-    let carriedDismissals = [];
-    if (fs.existsSync(reviewPath)) {
-        try {
-            const previous = JSON.parse(fs.readFileSync(reviewPath, 'utf-8'));
-            carriedDismissals = Array.isArray(previous.dismissed) ? previous.dismissed : [];
-            if (carriedDismissals.length) {
-                console.log(`[Review] Carrying over ${carriedDismissals.length} finding(s) you had dismissed.`);
-            }
-        } catch { /* an unreadable previous review must not block a new one */ }
-    }
-
-    const bookText = chunks.map(c => c.original).join('\n');
-    const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
-    const prompts = getPrompts(config.translation.promptLang);
-
-    console.log(`[Review] Counting occurrences for ${glossary.length} entries...`);
-    const evidence = glossaryEvidence(glossary, bookText);
-
-    // --- does it fit? ---
-    // Chunks carry real token counts from the splitter; the glossary block is
-    // measured with the same tokenizer. Both halves have to be sent whole — a
-    // review of half a glossary cannot see that one person occupies two entries,
-    // which is the point of the exercise.
-    const bookTokens = chunkTokens(chunks);
-    const glossaryTokens = countTokens(JSON.stringify(evidence, null, 0));
-    // The instructions count against the same quota as the data.
-    const promptTokens = countTokens(prompts.glossaryReview.system(targetLang));
-    const total = bookTokens + glossaryTokens + promptTokens;
+    const t = built.tokens;
     const fmt = n => n.toLocaleString('en-US');
-    console.log(`[Review] Prompt: ~${fmt(bookTokens)} tokens of book + ~${fmt(glossaryTokens)} of glossary + ~${fmt(promptTokens)} of instructions = ~${fmt(total)}.`);
+    console.log(`[Review] Prompt: ~${fmt(t.book)} tokens of book + ~${fmt(t.glossary)} of glossary + ` +
+        `~${fmt(t.instructions)} of instructions = ~${fmt(t.total)}.`);
 
-    if (total > TOKEN_BUDGET) {
-        console.error(`\n[Review] TOO LARGE: ~${fmt(total)} tokens against a budget of ${fmt(TOKEN_BUDGET)}.`);
-        console.error(`[Review] The book (${fmt(bookTokens)}) and the glossary (${fmt(glossaryTokens)}) both have to be sent whole:`);
+    if (t.total > TOKEN_BUDGET) {
+        console.error(`\n[Review] TOO LARGE: ~${fmt(t.total)} tokens against a budget of ${fmt(TOKEN_BUDGET)}.`);
+        console.error(`[Review] The book (${fmt(t.book)}) and the glossary (${fmt(t.glossary)}) both have to be sent whole:`);
         console.error(`[Review] half a glossary cannot show that one character occupies two entries, and`);
         console.error(`[Review] half a book cannot show how a term is actually used. Splitting would not review, it would guess.`);
-        console.error(`[Review] Either raise the limit for a paid tier, or review this book's glossary by hand.\n`);
+        console.error(`[Review] Either raise the limit for a paid tier, or take the prompt to a web console by hand —`);
+        console.error(`[Review] the glossary editor offers that.\n`);
         process.exitCode = 1;
         return;
     }
@@ -125,8 +182,8 @@ export async function runGlossaryReviewStage(state) {
     let raw;
     try {
         const response = await client.invoke([
-            new HumanMessage(prompts.glossaryReview.system(targetLang)),
-            new HumanMessage(prompts.glossaryReview.user(bookText, evidence)),
+            new HumanMessage(built.system),
+            new HumanMessage(built.user),
         ]);
         raw = extractJson(response.content || '');
     } catch (e) {
@@ -134,16 +191,28 @@ export async function runGlossaryReviewStage(state) {
         if (e.contentBlocked) {
             console.error('[Review] The provider refused the text. Retrying will not help — switch the book_model provider.');
         }
+        if (e.oversizedPrompt) {
+            console.error('[Review] The glossary editor can hand you this prompt to run in a web console instead.');
+        }
         process.exitCode = 1;
         return;
     }
 
-    // Some models wrap the array in an object however firmly the format is stated.
-    const list = Array.isArray(raw) ? raw : (raw?.findings || raw?.results || []);
-    const { findings, rejected, rejectedFindings } = verifyFindings(list, glossary, bookText);
+    let applied;
+    try {
+        applied = applyGlossaryReview(state, raw, {
+            model: conf.modelName, source: 'api', fingerprint: built.fingerprint,
+        });
+    } catch (e) {
+        console.error(`[Review] ${e.message}`);
+        process.exitCode = 1;
+        return;
+    }
+    for (const n of applied.notes) console.log(`[Review] ${n}`);
 
+    const { findings, rejected, review } = applied;
     const dropped = Object.values(rejected).reduce((a, b) => a + b, 0);
-    console.log(`[Review] ${list.length} finding(s) returned, ${findings.length} passed verification` +
+    console.log(`[Review] ${review.returned} finding(s) returned, ${findings.length} passed verification` +
         `${dropped ? `, ${dropped} dropped` : ''}.`);
     if (dropped) {
         const names = {
@@ -165,28 +234,7 @@ export async function runGlossaryReviewStage(state) {
             `trusted can be answered from accumulated runs rather than guessed at.`);
     }
 
-    const review = {
-        generatedAt: new Date().toISOString(),
-        model: conf.modelName,
-        glossarySize: glossary.length,
-        returned: list.length,
-        // Findings a person has judged wrong, by findingKey. The editor writes
-        // here, and a rerun carries the list over — an entry defended once should
-        // not have to be defended again just because the review was repeated.
-        dismissed: carriedDismissals,
-        rejected,
-        findings,
-        // Deliberately last, and deliberately under a name nothing else reads:
-        // these failed verification and must not be one careless join away from
-        // the editor. Should they ever be shown, it has to be as a separate,
-        // marked thing — never mixed into the verified list.
-        rejectedFindings,
-    };
-    fs.writeFileSync(reviewPath, JSON.stringify(review, null, 2));
-
-    // --- report ---
-    const byAction = {};
-    const byIssue = {};
+    const byAction = {}, byIssue = {};
     for (const f of findings) {
         byAction[f.action] = (byAction[f.action] || 0) + 1;
         byIssue[f.issue] = (byIssue[f.issue] || 0) + 1;
@@ -206,6 +254,7 @@ export async function runGlossaryReviewStage(state) {
         if (findings.length > 15) console.log(`  … and ${findings.length - 15} more.`);
     }
 
-    console.log(`\n[Review] Saved to ${reviewPath.split(/[\\/]/).pop()}. Nothing was applied — open the glossary editor to decide.`);
+    console.log(`\n[Review] Saved to ${state.getGlossaryReviewPath().split(/[\\/]/).pop()}. ` +
+        `Nothing was applied — open the glossary editor to decide.`);
     console.log('--- SYSTEM: Glossary review completed ---');
 }

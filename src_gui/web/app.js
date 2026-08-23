@@ -359,6 +359,108 @@ async function renderDashboard() {
 // Glossary editor
 // ============================================================
 
+// ============================================================
+// Carrying a whole-book call by hand
+// ============================================================
+
+/**
+ * The box that hands a prompt over and takes an answer back.
+ *
+ * One component for all three calls — the passport, the glossary review and the
+ * review of the finished translation — because what differs between them is
+ * which halves run, not how a person carries the middle.
+ */
+function manualCallBox(kind, { variants = false } = {}) {
+    return `<details class="usage-details bookcall" data-kind="${kind}">
+        <summary>${esc(t('rev.manualHeading'))}</summary>
+        <div class="cfg-hint">${esc(t('rev.manualWhy'))}</div>
+        <div class="rev-head" style="margin:10px 0">
+            ${variants ? `<label class="cfg-freeonly"><input type="checkbox" data-bc="bilingual"> ${esc(t('rev.withOriginal'))}</label>` : ''}
+            <button data-bc="build">${esc(t('rev.build'))}</button>
+            <span data-bc="built" class="cfg-hint"></span>
+        </div>
+        <div data-bc="answer" hidden>
+            <div class="cfg-hint">${esc(t('rev.pasteHint'))}</div>
+            <input type="text" data-bc="model" placeholder="${esc(t('rev.modelPlaceholder'))}" style="margin:8px 0;max-width:280px">
+            <textarea data-bc="text" rows="6" style="width:100%" placeholder="${esc(t('rev.pastePlaceholder'))}"></textarea>
+            <button data-bc="accept" class="primary" style="margin-top:8px">${esc(t('rev.acceptAnswer'))}</button>
+        </div>
+    </details>`;
+}
+
+/**
+ * Wire every box on the page. Called after each render, so the listeners belong
+ * to the elements now on screen.
+ *
+ * The fingerprint lives on the box for as long as the page does. Without it the
+ * answer is still taken — a person who reloaded has already spent the call — but
+ * nothing then notices that they edited three chunks in between and the quotes
+ * have moved.
+ */
+function wireBookCalls(prefix, onDone) {
+    document.querySelectorAll('.bookcall').forEach(box => {
+        if (box.dataset.wired) return;
+        box.dataset.wired = '1';
+        const kind = box.dataset.kind;
+        const q = (name) => box.querySelector(`[data-bc="${name}"]`);
+        const url = (extra = '') =>
+            `/api/projects/${encodeURIComponent(prefix)}/book-call/${kind}/prompt?original=${box.dataset.bilingual === '1' ? 1 : 0}${extra}`;
+
+        q('build').addEventListener('click', async () => {
+            box.dataset.bilingual = q('bilingual')?.checked ? '1' : '0';
+            const built = q('built');
+            q('build').disabled = true;
+            built.textContent = t('rev.building');
+            try {
+                const res = await api(url());
+                box.dataset.fingerprint = res.fingerprint;
+                const mb = (res.chars / 1048576).toFixed(2);
+                built.innerHTML = esc(t('rev.builtInfo', { tokens: fmtNum(res.tokens.total), mb }))
+                    + ` <a class="btn" href="${url('&download=1')}">${esc(t('rev.download'))}</a>`
+                    + ` <button data-bc="copy">${esc(t('rev.copy'))}</button>`;
+                q('copy').addEventListener('click', async (e) => {
+                    try {
+                        await navigator.clipboard.writeText(res.text);
+                        e.target.textContent = t('rev.copied');
+                    } catch { toast(t('rev.copyFailed'), 'error'); }
+                });
+                q('answer').hidden = false;
+                (res.warnings || []).forEach(w => toast(w, 'error'));
+            } catch (e) {
+                built.textContent = '';
+                toast(t('common.error', { msg: e.message }), 'error');
+            }
+            q('build').disabled = false;
+        });
+
+        q('accept').addEventListener('click', async (e) => {
+            const text = q('text').value;
+            if (!text.trim()) return;
+            e.target.disabled = true;
+            try {
+                const res = await api(`/api/projects/${encodeURIComponent(prefix)}/book-call/${kind}/answer`, {
+                    method: 'POST',
+                    body: {
+                        answer: text,
+                        model: q('model').value,
+                        fingerprint: box.dataset.fingerprint,
+                        withOriginal: box.dataset.bilingual === '1',
+                    },
+                });
+                toast(res.findings != null
+                    ? t('rev.answerTaken', { n: res.findings, returned: res.returned })
+                    : t('rev.answerTakenPlain'), 'ok');
+                q('text').value = '';
+                if (onDone) onDone();
+            } catch (err) {
+                toast(t('common.error', { msg: err.message }), 'error');
+            }
+            e.target.disabled = false;
+        });
+    });
+}
+
+
 async function renderGlossary(prefix) {
     setCrumbs(`${crumbHome()} / ${esc(prefix)} / ${esc(t('gloss.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
@@ -429,6 +531,7 @@ async function renderGlossary(prefix) {
             <button id="g-save" class="primary">${esc(t('common.save'))}</button>
         </div>
         <div id="g-review"></div>
+        <div id="g-bookcall">${manualCallBox('glossary')}</div>
         <table class="glossary">
             <thead><tr>
                 <th style="width:22%">${esc(t('gloss.colOriginal'))}</th>
@@ -683,6 +786,8 @@ async function renderGlossary(prefix) {
             updateAsk();
         } catch { /* leave the screen as it is rather than blanking it */ }
     }
+
+    wireBookCalls(prefix, () => renderGlossary(prefix));
 
     const issuesBox = document.getElementById('g-issues');
     if (issuesBox) issuesBox.addEventListener('change', () => { rowFilter = issuesBox.value; renderRows(); });
@@ -1287,27 +1392,13 @@ async function renderMonitor(prefix) {
     function manualRunBox() {
         const done = summary ? summary.statuses.success + summary.statuses.best_effort : 0;
         if (!done) return '';
-        return `<details class="usage-details" id="m-manual">
-            <summary>${esc(t('rev.manualHeading'))}</summary>
-            <div class="cfg-hint">${esc(t('rev.manualWhy'))}</div>
-            <div class="rev-head" style="margin:10px 0">
-                <label class="cfg-freeonly"><input type="checkbox" id="rv-bilingual"> ${esc(t('rev.withOriginal'))}</label>
-                <button id="rv-build">${esc(t('rev.build'))}</button>
-                <span id="rv-built" class="cfg-hint"></span>
-            </div>
-            <div id="rv-answer" hidden>
-                <div class="cfg-hint">${esc(t('rev.pasteHint'))}</div>
-                <input type="text" id="rv-model" placeholder="${esc(t('rev.modelPlaceholder'))}" style="margin:8px 0;max-width:280px">
-                <textarea id="rv-text" rows="6" style="width:100%" placeholder="${esc(t('rev.pastePlaceholder'))}"></textarea>
-                <button id="rv-accept" class="primary" style="margin-top:8px">${esc(t('rev.acceptAnswer'))}</button>
-            </div>
-        </details>`;
+        return manualCallBox('translation', { variants: true });
     }
 
     function drawReview() {
         if (!summary) { reviewEl.innerHTML = ''; return; }
         const r = summary.translationReview;
-        if (!r || r.broken) { reviewEl.innerHTML = manualRunBox(); wireManual(); return; }
+        if (!r || r.broken) { reviewEl.innerHTML = manualRunBox(); wireBookCalls(prefix, refreshGrid); return; }
 
         const verdict = [
             r.score != null ? t('rev.score', { score: r.score }) : null,
@@ -1366,71 +1457,7 @@ async function renderMonitor(prefix) {
             ${r.summary ? `<div class="rev-summary">${esc(r.summary)}</div>` : ''}
             ${rows || `<div class="cfg-hint">${esc(t('rev.allHandled'))}</div>`}
         </details>` + manualRunBox();
-        wireManual();
-    }
-
-    // The fingerprint of the text the prompt was built from, kept for as long as
-    // the page lives. Without it the answer is still accepted — a person who
-    // reloaded the page has already spent the call — but nothing then notices
-    // that they fixed three chunks in between and the quotes have moved.
-    let promptFingerprint = null;
-    let promptBilingual = false;
-
-    function wireManual() {
-        const build = document.getElementById('rv-build');
-        if (!build) return;
-        const built = document.getElementById('rv-built');
-        const answer = document.getElementById('rv-answer');
-
-        build.addEventListener('click', async () => {
-            promptBilingual = document.getElementById('rv-bilingual').checked;
-            build.disabled = true;
-            built.textContent = t('rev.building');
-            try {
-                const q = `?original=${promptBilingual ? 1 : 0}`;
-                const res = await api(`/api/projects/${encodeURIComponent(prefix)}/translation-review/prompt${q}`);
-                promptFingerprint = res.fingerprint;
-                const mb = (res.chars / 1048576).toFixed(2);
-                built.innerHTML = esc(t('rev.builtInfo', { tokens: fmtNum(res.tokens.total), mb }))
-                    + ` <a class="btn" href="/api/projects/${encodeURIComponent(prefix)}/translation-review/prompt${q}&download=1">${esc(t('rev.download'))}</a>`
-                    + ` <button id="rv-copy">${esc(t('rev.copy'))}</button>`;
-                document.getElementById('rv-copy').addEventListener('click', async (e) => {
-                    try {
-                        await navigator.clipboard.writeText(res.text);
-                        e.target.textContent = t('rev.copied');
-                    } catch { toast(t('rev.copyFailed'), 'error'); }
-                });
-                answer.hidden = false;
-                (res.warnings || []).forEach(w => toast(w, 'error'));
-            } catch (e) {
-                built.textContent = '';
-                toast(t('common.error', { msg: e.message }), 'error');
-            }
-            build.disabled = false;
-        });
-
-        document.getElementById('rv-accept').addEventListener('click', async (e) => {
-            const text = document.getElementById('rv-text').value;
-            if (!text.trim()) return;
-            e.target.disabled = true;
-            try {
-                const res = await api(`/api/projects/${encodeURIComponent(prefix)}/translation-review/answer`, {
-                    method: 'POST',
-                    body: {
-                        answer: text,
-                        model: document.getElementById('rv-model').value,
-                        fingerprint: promptFingerprint,
-                        withOriginal: promptBilingual,
-                    },
-                });
-                toast(t('rev.answerTaken', { n: res.findings, returned: res.returned }), 'ok');
-                document.getElementById('rv-text').value = '';
-                refreshGrid();
-            } catch (err) {
-                toast(t('common.error', { msg: err.message }), 'error');
-            }
-            e.target.disabled = false;
-        });
+        wireBookCalls(prefix, refreshGrid);
     }
 
     reviewEl.addEventListener('click', async (e) => {
@@ -1787,7 +1814,10 @@ async function renderPassport(prefix) {
         ${strip}
         <div class="cfg-hint">${esc(t('pass.mapHint', { n: (p.povMap || []).length, total }))}</div>
         ${p.source?.model ? `<div class="cfg-hint" style="margin-top:12px">${esc(t('pass.source', { model: p.source.model, date: fmtDate(p.source.generatedAt) }))}${p.source.povMapFrom ? ` · ${esc(t('pass.mapFrom.' + p.source.povMapFrom))}` : ''}</div>` : ''}
+        ${manualCallBox('passport')}
     `;
+
+    wireBookCalls(prefix, () => renderPassport(prefix));
 
     const dirtyEl = document.getElementById('p-dirty');
     const markDirty = () => { dirty = true; dirtyEl.hidden = false; };

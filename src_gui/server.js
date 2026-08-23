@@ -14,6 +14,8 @@ import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
 import { withoutTranslation, ProjectState } from '../src_v4/core/state_manager.js';
 import { wholeWordRegex } from '../src_v4/core/text_stats.js';
 import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/stages/05_translation_review.js';
+import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages/04_glossary_review.js';
+import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_passport.js';
 import { extractJson } from '../src_v4/utils/parsers.js';
 import { outstandingFindings as reviewOutstanding, findingKey } from '../src_v4/core/translation_review.js';
 import config from '../src_v4/config.js';
@@ -946,54 +948,93 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
 });
 
 /**
- * Hand the whole-book prompt over so it can be run somewhere else.
+ * The three whole-book calls, each split into building a prompt and applying an
+ * answer, so either half can be done by hand — see src_v4/core/book_call.js.
+ *
+ * One table rather than three endpoints: the halves differ, the carrying does
+ * not, and three copies of "hand this over, take that back" would drift the way
+ * the delete list once did.
+ */
+const BOOK_CALLS = {
+    translation: {
+        build: (state, opts) => buildTranslationReviewPrompt(state, opts),
+        apply: (state, raw, meta) => applyTranslationReview(state, raw, meta),
+        // Only this one has anything to add when the window is bigger: the
+        // original, which doubles the prompt and lets it judge meaning.
+        variants: true,
+    },
+    glossary: {
+        build: (state) => buildGlossaryReviewPrompt(state),
+        apply: (state, raw, meta) => applyGlossaryReview(state, raw, meta),
+    },
+    passport: {
+        build: (state) => buildPassportPrompt(state),
+        apply: (state, raw, meta) => { applyPassportAnswer(state, raw, meta); return { notes: [] }; },
+    },
+};
+
+function bookCall(req, res) {
+    const kind = String(req.params.kind || '');
+    const call = BOOK_CALLS[kind];
+    if (!call) { res.status(404).json({ error: `Unknown book call: ${kind}` }); return null; }
+    return call;
+}
+
+/**
+ * Hand a whole-book prompt over so it can be run somewhere else.
  *
  * The per-minute input quota, not the context window, is what refuses these
  * calls; a web console is a different quota surface with a far bigger window.
- * `original=1` pairs each chunk with its source, which no free tier would take
- * and a million-token window will — that is the manual route's own advantage,
- * not merely a way around a limit.
+ * `original=1` (translation review only) pairs each chunk with its source, which
+ * no free tier would take and a million-token window will.
  */
-app.get('/api/projects/:prefix/translation-review/prompt', (req, res) => {
+app.get('/api/projects/:prefix/book-call/:kind/prompt', (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
-    const withOriginal = req.query.original === '1';
+    const call = bookCall(req, res);
+    if (!call) return;
+
     let state;
     try { state = new ProjectState(ROOT, prefix); state.load(); }
     catch (e) { return res.status(500).json({ error: e.message }); }
 
+    const withOriginal = call.variants && req.query.original === '1';
     let built;
-    try { built = buildTranslationReviewPrompt(state, { withOriginal }); }
+    try { built = call.build(state, { withOriginal }); }
     catch (e) { return res.status(400).json({ error: e.message }); }
 
     // The fingerprint travels inside the text, because it has to come back with
     // an answer a person carried by hand and there is nowhere else to put it.
     const text = `${built.system}\n\n${built.user}\n\n` +
-        `<!-- prozetta: ${prefix} · fingerprint ${built.fingerprint} · ` +
-        `${built.withOriginal ? 'bilingual' : 'translation only'} · ~${built.tokens.total} tokens -->\n`;
+        `<!-- prozetta: ${prefix} · ${req.params.kind} · fingerprint ${built.fingerprint} · ` +
+        `${withOriginal ? 'bilingual' : 'single'} · ~${built.tokens.total} tokens -->\n`;
 
     if (req.query.download === '1') {
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Content-Disposition',
-            `attachment; filename="review-prompt-${encodeURIComponent(prefix)}${withOriginal ? '-bilingual' : ''}.txt"`);
+            `attachment; filename="${req.params.kind}-prompt-${encodeURIComponent(prefix)}${withOriginal ? '-bilingual' : ''}.txt"`);
         return res.send(text);
     }
     res.json({
         ok: true,
+        kind: req.params.kind,
         fingerprint: built.fingerprint,
         tokens: built.tokens,
-        withOriginal: built.withOriginal,
+        withOriginal: !!withOriginal,
+        variants: !!call.variants,
         budget: built.budget,
-        warnings: built.warnings,
+        warnings: built.warnings || [],
         chars: text.length,
         text,
     });
 });
 
 /** Take an answer obtained elsewhere through exactly the checks an API one gets. */
-app.post('/api/projects/:prefix/translation-review/answer', (req, res) => {
+app.post('/api/projects/:prefix/book-call/:kind/answer', (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
+    const call = bookCall(req, res);
+    if (!call) return;
     if (jobManager.isRunning(prefix)) {
         return res.status(409).json({ error: 'Этап выполняется — приём ответа заблокирован' });
     }
@@ -1014,14 +1055,20 @@ app.post('/api/projects/:prefix/translation-review/answer', (req, res) => {
     }
 
     try {
-        const { review, findings, rejected, notes } = applyTranslationReview(state, raw, {
+        const result = call.apply(state, raw, {
             model: String(model || '').trim() || 'unnamed (run by hand)',
             source: 'manual',
             fingerprint: fp,
             withOriginal: !!withOriginal,
             answerText: answer,
+        }) || {};
+        res.json({
+            ok: true,
+            returned: result.review?.returned ?? null,
+            findings: result.findings?.length ?? null,
+            rejected: result.rejected ?? null,
+            notes: result.notes || [],
         });
-        res.json({ ok: true, returned: review.returned, findings: findings.length, rejected, notes });
     } catch (e) {
         res.status(400).json({ error: e.message });
     }
