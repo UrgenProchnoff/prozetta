@@ -42,6 +42,7 @@ function statusLabel(s) { return t(`status.${s}`); }
 // The runnable stage each whole-book call belongs to, so the box can name itself
 // after the step a person pressed rather than after an internal kind.
 const BOOK_STAGE_OF = { passport: 'passport', glossary: 'glossary', translation: 'review' };
+const STAGE_BOOK_CALL = { passport: 'passport', glossary: 'glossary', review: 'translation' };
 
 const STAGE_LABEL = {
     '1': 'mon.stepExtract',
@@ -1035,6 +1036,12 @@ async function renderMonitor(prefix) {
                 <div id="m-hint" class="pipe-hint" hidden></div>
                 <span class="spacer"></span>
                 <button id="m-start" class="primary">${esc(t('mon.start'))}</button>
+                <!-- The second route, and for many people the only one: a
+                     subscription to a frontier model is common, an API key is
+                     not. Shown beside Start rather than deduced from a token
+                     count, because which door a person can walk through is not
+                     something the token count knows. -->
+                <button id="m-manual" hidden title="${esc(t('mon.buildPromptTitle'))}">${esc(t('mon.buildPrompt'))}</button>
                 <button id="m-stop" class="danger" disabled>${esc(t('mon.stop'))}</button>
             </div>
         </div>
@@ -1086,6 +1093,7 @@ async function renderMonitor(prefix) {
     const logPane = document.getElementById('m-log');
     const statusEl = document.getElementById('m-status');
     const startBtn = document.getElementById('m-start');
+    const manualBtn = document.getElementById('m-manual');
     const stopBtn = document.getElementById('m-stop');
     const stepsEl = document.getElementById('m-steps');
     const hintEl = document.getElementById('m-hint');
@@ -1281,6 +1289,7 @@ async function renderMonitor(prefix) {
         selectedStage = step.dataset.stage;
         recommendApplied = true; // explicit user choice — stop auto-preselecting
         drawSteps();
+        syncManual();
     });
 
     function applyRecommendation() {
@@ -1290,6 +1299,7 @@ async function renderMonitor(prefix) {
             recommendApplied = true;
         }
         drawSteps();
+        syncManual();
         hintEl.hidden = false;
         hintEl.textContent = t('mon.recommendPrefix', { text: rec.text });
         syncLangControls();
@@ -1442,9 +1452,25 @@ async function renderMonitor(prefix) {
     let manualKind = 'translation';
     let manualOpen = false;
 
+    /** Keep the manual route pointed at whatever step is selected. */
+    function syncManual() {
+        const kind = STAGE_BOOK_CALL[selectedStage];
+        if (kind && kind !== manualKind) { manualKind = kind; drawReview(); }
+        if (manualBtn) manualBtn.hidden = !kind;
+    }
+
     function manualRunBox() {
-        const done = summary ? summary.statuses.success + summary.statuses.best_effort : 0;
-        if (!done) return '';
+        // Each call needs its own thing to exist first, and they are not the same
+        // thing: the passport reads the source, the glossary review reads the
+        // glossary, and only the review of the translation needs a translation.
+        // Gating all three on the last of those hid the box on exactly the
+        // projects where the other two are what you want.
+        const ready = {
+            translation: (summary?.statuses.success || 0) + (summary?.statuses.best_effort || 0) > 0,
+            glossary: !!summary?.glossaryCount,
+            passport: (summary?.total || 0) > 0,
+        };
+        if (!ready[manualKind]) return '';
         return manualCallBox(manualKind, { variants: manualKind === 'translation', open: manualOpen });
     }
 
@@ -1615,6 +1641,18 @@ async function renderMonitor(prefix) {
         } catch (e) {
             toast(e.message, 'error');
         }
+    });
+
+    manualBtn.addEventListener('click', () => {
+        manualKind = STAGE_BOOK_CALL[selectedStage] || manualKind;
+        manualOpen = true;
+        drawReview();
+        const box = document.querySelector('#m-review .bookcall');
+        box?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        // Straight to building: the person pressed a button that says so, and
+        // making them press a second one inside the box that also says so would
+        // be a door behind a door.
+        box?.querySelector('[data-bc="build"]')?.click();
     });
 
     stopBtn.addEventListener('click', async () => {
