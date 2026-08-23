@@ -14,6 +14,11 @@ question a person opened the page with.
 
 **2026-08-23**
 
+- `ca803c8` — A whole-book stage has one door. Start checks the size first: under
+  the budget it runs through the API, over it the job is never spawned and the
+  box for carrying that prompt elsewhere opens with the numbers in it. Chunks
+  carry their own translation token counts now, so the check costs 1.2 seconds
+  instead of 20.
 - `d46a2fa` — Keys built at run time all have one shape now: a prefix ending in a
   dot. Four used an underscore, which forced the checker to accept either — a
   rule loose enough to keep a dead key alive behind a live prefix, which is what
