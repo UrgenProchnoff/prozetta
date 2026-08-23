@@ -14,6 +14,10 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `e9c0136` — An accepted finding now looks accepted. It stays in the list until
+  the fix is made, so thirteen queued ones were indistinguishable from eight
+  undecided; they are marked, dimmed, and their button takes them back out. The
+  list is ordered by chunk, undecided first within each.
 - `f5bb704` — The score and the summary of a review were being thrown away. With
   no ```json fence, the parser looked for an array before an object, so in
   {"score": …, "findings": [ … ]} it matched the findings and discarded what
