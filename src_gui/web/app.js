@@ -1335,6 +1335,14 @@ async function renderMonitor(prefix) {
                     ? `<button data-rev="undo" data-key="${esc(f.key)}">${esc(t('rev.unqueue'))}</button>`
                     : (f.advice ? `<button class="primary" data-rev="accept" data-key="${esc(f.key)}">${esc(t('rev.accept'))}</button>` : ''),
                 f.scope !== 'chunk' ? `<a class="btn" href="${where[f.scope]}">${esc(t('rev.goTo.' + f.scope))}</a>` : '',
+                // Fixing the glossary changes nothing already translated, so the
+                // finding also offers the work that would: the chunks using the
+                // term. The count is on the button because it is the bill.
+                f.affects ? `<button data-rev="queueTerm" data-key="${esc(f.key)}">${esc(t('rev.queueTerm', { n: f.affects }))}</button>` : '',
+                // Dealt with, as opposed to wrong. A glossary or passport finding
+                // has no other way to close: what it asks for never shows up in
+                // the text it quoted.
+                f.queued ? '' : `<button data-rev="handled" data-key="${esc(f.key)}">${esc(t('rev.handled'))}</button>`,
             ].filter(Boolean).join(' ');
             return `<div class="rev-item${f.queued ? ' rev-done' : ''}${lastOfChunk.has(f.key) ? ' rev-chunk-end' : ''}">
                 <div class="rev-head">
@@ -1346,6 +1354,7 @@ async function renderMonitor(prefix) {
                     ${act}
                     ${f.queued ? '' : `<button data-rev="dismiss" data-key="${esc(f.key)}">${esc(t('rev.dismiss'))}</button>`}
                 </div>
+                ${f.term ? `<div class="rev-term">${esc(t('rev.term', { term: f.term }))}</div>` : ''}
                 <div class="rev-quote">«${esc(f.quote)}»</div>
                 <div class="rev-problem">${esc(f.problem)}</div>
                 ${f.advice ? `<div class="rev-advice">→ ${esc(f.advice)}</div>` : ''}
@@ -1435,6 +1444,8 @@ async function renderMonitor(prefix) {
                 accept: () => t('rev.accepted', { chunk: res.chunk + 1 }),
                 undo: () => t('rev.unqueued'),
                 dismiss: () => t('rev.dismissed'),
+                handled: () => t('rev.markedDone'),
+                queueTerm: () => t('rev.termQueued', { n: res.queued }),
             }[btn.dataset.rev](), 'ok');
             refreshGrid();
         } catch (err) {

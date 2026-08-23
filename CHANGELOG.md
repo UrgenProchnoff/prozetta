@@ -14,6 +14,14 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `PLACEHOLDER` — Glossary and passport findings can be closed at last. "Done" sits
+  beside "Dismiss", because acting on a finding is not the same as calling it
+  wrong and the dismissal list is evidence about the review's trustworthiness. A
+  glossary finding also names its entry and offers to queue the chunks that use
+  the term — fixing the entry alone changes nothing already translated, and one
+  of Morphotrophic's sits in 21 chunks. The grouping learned to strip a leading
+  article and to compare translations as written, which is how "exchange" →
+  «обмен» beside "the exchange" → «Обмен» had been hiding.
 - `205e9f4` — A finding that had been fixed stopped coming back as undecided. It
   left the list when its quoted text vanished, and a typographic fix changes the
   marks around the quoted words rather than the words — so chunk 51 was

@@ -1042,3 +1042,4 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 .rev-item.rev-done .rev-quote { border-left-color: var(--green); }
 /* Findings on one chunk are adjacent; a rule closes each chunk's block. */
 .rev-item.rev-chunk-end { border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+.rev-term { margin-top: 4px; font-size: 12px; color: var(--violet); font-family: ui-monospace, monospace; }

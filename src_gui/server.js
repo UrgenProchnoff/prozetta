@@ -12,6 +12,7 @@ import { handEdited } from '../src_v4/core/passport.js';
 import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
 import { withoutTranslation, ProjectState } from '../src_v4/core/state_manager.js';
+import { wholeWordRegex } from '../src_v4/core/text_stats.js';
 import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/stages/05_translation_review.js';
 import { extractJson } from '../src_v4/utils/parsers.js';
 import { outstandingFindings as reviewOutstanding, findingKey } from '../src_v4/core/translation_review.js';
@@ -228,6 +229,20 @@ function validPrefix(req, res) {
  * against its own majority, and `expected: null` says so — that only answers
  * whether the book agrees with itself, never whether it agrees with the language.
  */
+
+/**
+ * Chunks whose source text uses a term, by index.
+ *
+ * Whole words through the shared matcher, which knows that a boundary cannot be
+ * required in Chinese, Japanese, Korean or Thai.
+ */
+function chunksUsingTerm(chunks, term) {
+    const re = wholeWordRegex(String(term), 'giu');
+    const out = [];
+    (chunks || []).forEach((c, i) => { if (c?.original && re.test(c.original)) out.push(i); });
+    return out;
+}
+
 function speechAdherence(chunks, expected) {
     const translated = chunks.map(c => c.translation || '').filter(Boolean).join('\n');
     if (!translated) return null;
@@ -383,6 +398,14 @@ function projectSummary(prefix) {
         try {
             const r = readJson(transReviewPath(prefix));
             const { open, done, hidden } = reviewOutstanding(r, chunks);
+            // For a glossary finding that names its entry: how many chunks use
+            // that term. Fixing the glossary changes nothing already translated,
+            // so this is the size of the work the finding actually implies, and
+            // it has to be on screen before the button is pressed.
+            for (const f of open) {
+                if (f.scope !== 'glossary' || !f.term) continue;
+                f.affects = chunksUsingTerm(chunks, f.term).length;
+            }
             translationReview = {
                 generatedAt: r.generatedAt || null,
                 model: r.model || null,
@@ -841,8 +864,8 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
         return res.status(409).json({ error: 'Этап выполняется — решения заблокированы' });
     }
     const { key, action } = req.body || {};
-    if (!key || !['accept', 'dismiss', 'undo'].includes(action)) {
-        return res.status(400).json({ error: 'Expected { key, action: accept|dismiss|undo }' });
+    if (!key || !['accept', 'dismiss', 'undo', 'handled', 'queueTerm'].includes(action)) {
+        return res.status(400).json({ error: 'Expected { key, action: accept|dismiss|undo|handled|queueTerm }' });
     }
     const file = transReviewPath(prefix);
     if (!fs.existsSync(file)) return res.status(404).json({ error: 'No review for this project' });
@@ -860,6 +883,38 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
         review.dismissed = [...new Set([...(review.dismissed || []), String(key).toLowerCase()])];
         writeJsonAtomic(file, review);
         return res.json({ ok: true, dismissed: review.dismissed.length });
+    }
+
+    // Dealt with, as opposed to wrong. Kept in its own list so the dismissals
+    // stay usable as evidence about how far a finding can be trusted.
+    if (action === 'handled') {
+        review.handled = [...new Set([...(review.handled || []), String(key).toLowerCase()])];
+        writeJsonAtomic(file, review);
+        return res.json({ ok: true, handled: review.handled.length });
+    }
+
+    // Fixing a glossary entry changes nothing already translated. This queues the
+    // chunks that use the term, so the correction reaches the book — offered
+    // rather than done automatically, because on Morphotrophic one of these terms
+    // sits in 21 chunks of 169 and that is a real bill.
+    if (action === 'queueTerm') {
+        if (finding.scope !== 'glossary' || !finding.term) {
+            return res.status(400).json({ error: 'This finding names no glossary entry, so there is nothing to look for' });
+        }
+        const k = String(key).toLowerCase();
+        const affected = chunksUsingTerm(state.chunks || [], finding.term);
+        for (const i of affected) {
+            const chunk = state.chunks[i];
+            chunk.advice = (chunk.advice || []).filter(a => a.key !== k);
+            chunk.advice.push({ key: k, issue: finding.issue, advice: finding.problem, quote: finding.quote, term: finding.term });
+        }
+        state.metadata = state.metadata || {};
+        state.metadata.updatedAt = new Date().toISOString();
+        writeJsonAtomic(statePath(prefix), state);
+        // Acted on: the work it asked for is queued, so it should not keep asking.
+        review.handled = [...new Set([...(review.handled || []), k])];
+        writeJsonAtomic(file, review);
+        return res.json({ ok: true, queued: affected.length, chunks: affected.map(i => i + 1) });
     }
 
     // Scope is the model's routing hint, and it gets it wrong: the bilingual
