@@ -706,7 +706,7 @@ async function renderGlossary(prefix) {
         buttons.push(`<button data-dismiss="${idx}:${mi}" data-key="${esc(m.key || '')}" title="${esc(t('gloss.rvDismissTitle'))}">${esc(t('gloss.rvDismiss'))}</button>`);
 
         return `<tr class="rv-row"><td colspan="7">
-            <div class="rv-head"><span class="rv-action rv-${esc(m.action)}">${esc(t('gloss.rv_' + m.action))}</span>
+            <div class="rv-head"><span class="rv-action rv-${esc(m.action)}">${esc(t('gloss.rv.' + m.action))}</span>
                 ${esc(m.detail)}${m.mergeInto ? ` → <b>${esc(m.mergeInto)}</b>` : ''}</div>
             <div class="rv-quote">${esc(m.quote)}</div>
             ${fix ? `<div class="rv-fix">${fix}</div>` : ''}
@@ -730,7 +730,7 @@ async function renderGlossary(prefix) {
             n: countOutstanding(), total: review.total, model: review.model || '—', when }))}${hidden}</div>`;
         const adds = (review.additions || []).map((a, i) => `
             <div class="rv-add">
-                <div class="rv-head"><span class="rv-action rv-add-tag">${esc(t('gloss.rv_add'))}</span>
+                <div class="rv-head"><span class="rv-action rv-add-tag">${esc(t('gloss.rv.add'))}</span>
                     <b>${esc(a.fix?.original || '')}</b> → ${esc(a.fix?.translation || '')} — ${esc(a.problem)}</div>
                 <div class="rv-quote">${esc(a.quote)}</div>
                 <div class="rv-acts"><button data-add="${i}">${esc(t('gloss.rvAdd'))}</button>

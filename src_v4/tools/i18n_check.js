@@ -11,12 +11,17 @@
  * the dictionary carried it along.
  *
  * A key is live when it is named outright, or when something builds it at run
- * time. Three forms of building are in use, and all three have to be recognised
- * or the tool reports live strings as dead:
+ * time. Two forms of building are in use, and both have to be recognised or the
+ * tool reports live strings as dead:
  *
  *   t('status.' + s)              — a prefix and a variable
  *   t(`usage.stage.${stage}`)     — a template, sometimes assigned first
- *   t('gloss.rv_' + action)       — a prefix that is not a dotted path
+ *
+ * Both are the same thing written twice, and that is fine. What is not fine is a
+ * prefix that does not end in a dot: `gloss.rv_` used to exist, and allowing it
+ * meant the tool treated any trailing punctuation as a prefix — a rule loose
+ * enough to keep dead keys alive by accident. One family was renamed and the
+ * rule tightened to the dot.
  *
  * Run: npm run i18n
  */
@@ -71,8 +76,8 @@ function main() {
 
     // --- 3. every key in the dictionary must be asked for ---
     const built = [
-        ...[...code.matchAll(/\b(?:t|tr)\(\s*['"`]([\w.]*[._])['"`]\s*(?:\+|,)/g)].map(m => m[1]),
-        ...[...code.matchAll(/[`']([\w.]*[._])\$\{/g)].map(m => m[1]),
+        ...[...code.matchAll(/\b(?:t|tr)\(\s*['"`]([\w.]*\.)['"`]\s*(?:\+|,)/g)].map(m => m[1]),
+        ...[...code.matchAll(/[`']([\w.]*\.)\$\{/g)].map(m => m[1]),
     ];
     const prefixes = [...new Set(built)].filter(Boolean);
     const dead = ru.filter(k => !literal.has(k) && !prefixes.some(p => k.startsWith(p)));
