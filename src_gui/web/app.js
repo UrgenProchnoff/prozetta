@@ -942,6 +942,7 @@ async function renderMonitor(prefix) {
                     <span><span class="dot ext-dot"></span>${esc(t('legend.extracted'))}</span>
                     <span><span class="dot blocked-dot"></span>${esc(t('legend.blocked'))}</span>
                     <span><span class="dot advice-dot"></span>${esc(t('legend.advice'))}</span>
+                    <span><span class="dot fixed-dot"></span>${esc(t('legend.fixed'))}</span>
                     <span><span class="legend-scores"><span class="cell-score" data-score="7">7</span>/<span class="cell-score" data-score="8.5">8.5</span>/<span class="cell-score" data-score="9.5">9.5</span></span> ${esc(t('legend.score'))}</span>
                 </div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
@@ -1243,6 +1244,7 @@ async function renderMonitor(prefix) {
                 + (c.status === 'blocked' ? '\n' + t('mon.chunkTransBlocked') + (c.translationBlockedBy ? ' ' + t('mon.chunkTransBlockedBy', { model: c.translationBlockedBy }) : '') : '')
                 + (c.disputed ? '\n' + t('mon.chunkDisputed') : '')
                 + (c.advice ? '\n' + t('mon.chunkAdvice', { n: c.advice }) : '')
+                + (c.fixed ? '\n' + t('mon.chunkFixed') : '')
                 + (c.score != null ? t('mon.chunkScore', { score: c.score }) : '')
                 + (c.attempts ? t('mon.chunkSteps', { n: c.attempts }) : '')
                 + `\n${c.preview}`;
@@ -1256,9 +1258,11 @@ async function renderMonitor(prefix) {
             // approved, and painted that 10 it looked finished. The status wins
             // there; the score is still on the cell as a number.
             const tinted = c.score != null && c.status !== 'blocked';
-            return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.blocked ? 'blocked' : ''} ${c.disputed ? 'disputed' : ''} ${c.advice ? 'advice' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
+            const corners = (c.fixed ? '<span class="c-fixed"></span>' : '')
+                + (c.disputed ? '<span class="c-disputed"></span>' : '');
+            return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.blocked ? 'blocked' : ''} ${c.advice ? 'advice' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
                 ${tinted ? `style="${cellTint(c.score)}"` : ''}
-                href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}${scoreHtml}</a>`;
+                href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}${scoreHtml}${corners}</a>`;
         }).join('');
         drawReview();
     }

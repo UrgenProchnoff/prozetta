@@ -324,6 +324,10 @@ function projectSummary(prefix) {
             // Stage 2 run. Work outstanding on a chunk that otherwise looks done,
             // so the map has to say so or 35 queued fixes are invisible.
             advice: c.advice?.length || 0,
+            // Already corrected on advice at some point. The advice itself is
+            // cleared once the fix is approved, so history is the only lasting
+            // record that this chunk is not the one the reviewer read.
+            fixed: (c.history || []).some(h => h.step === 'advice_fix'),
             nTerms: Array.isArray(c.extracted_terms) ? c.extracted_terms.length : null,
             score: lastScore(c),
             attempts: c.history ? c.history.length : 0,

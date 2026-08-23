@@ -538,18 +538,45 @@ table.glossary .del { text-align: center; }
     border-style: solid;
     border-color: var(--red) transparent transparent transparent;
 }
-/* Corner marker: translator and reviewer could not agree — the loop stopped
-   and a human should settle it. Bottom-left, orange, so it can coexist with
-   the blocked (top-left, red) and extracted (top-right, blue) markers. */
-.chunk-cell.disputed::after {
+/* The two bottom corners are real elements rather than pseudo-elements: ::after
+   already belongs to the "terms extracted" marker, and sharing it meant a
+   disputed chunk silently lost its blue corner. Nearly every chunk is extracted,
+   so that was a marker quietly disappearing wherever the other one appeared.
+
+   Bottom-left, violet: corrected on advice from the whole-book review — the same
+   colour as the ring that says a fix is waiting, because it closes that story.
+   Bottom-right, yellow: translator and reviewer could not agree. */
+.chunk-cell .c-fixed,
+.chunk-cell .c-disputed {
+    position: absolute;
+    bottom: 0;
+    border-style: solid;
+}
+.chunk-cell .c-fixed {
+    left: 0;
+    border-width: 0 0 7px 7px;
+    border-color: transparent transparent var(--violet) transparent;
+    border-bottom-left-radius: 4px;
+}
+.chunk-cell .c-disputed {
+    right: 0;
+    border-width: 0 7px 7px 0;
+    border-color: transparent var(--yellow) transparent transparent;
+    border-bottom-right-radius: 4px;
+}
+.dot.fixed-dot {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    position: relative;
+}
+.dot.fixed-dot::after {
     content: "";
     position: absolute;
     bottom: 0;
     left: 0;
-    border-width: 0 0 7px 7px;
+    border-width: 0 0 6px 6px;
     border-style: solid;
-    border-color: transparent transparent var(--yellow) transparent;
-    border-bottom-left-radius: 4px;
+    border-color: transparent transparent var(--violet) transparent;
 }
 .badge.b-disputed { color: var(--yellow); border-color: var(--yellow); }
 .badge.b-blocked { color: var(--red); border-color: var(--red); }
