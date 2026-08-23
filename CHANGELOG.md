@@ -7,6 +7,18 @@ Entries written from this wave onward open with the fingerprint of their commit:
 a link in the interface, an argument to `git show 5bba425` in a terminal. The
 1.0.0 section predates the practice and carries none.
 
+## Unreleased — clarity wave
+
+Everything in this section is about one thing: an interface that answers the
+question a person opened the page with.
+
+**2026-08-23**
+
+- `3d8b8a1` — Nothing on the chunk map said it could be clicked. The cells have
+  always been links, with no hover and no focus ring — a grid of coloured squares
+  reads as a status board. They lift under the pointer now, and a line says what
+  a click is for.
+
 ## Unreleased — quality wave
 
 Everything in this section is about one thing: a translation that stays
