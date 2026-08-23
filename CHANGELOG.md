@@ -14,6 +14,10 @@ question a person opened the page with.
 
 **2026-08-23**
 
+- `d46a2fa` — Keys built at run time all have one shape now: a prefix ending in a
+  dot. Four used an underscore, which forced the checker to accept either — a
+  rule loose enough to keep a dead key alive behind a live prefix, which is what
+  the checker is for.
 - `8c5fc97` — `npm run i18n` checks the interface dictionary: both languages in
   step, nothing named that is missing, nothing present that nobody asks for. The
   last question had never been asked, and 18 of the 468 keys belonged to screens
