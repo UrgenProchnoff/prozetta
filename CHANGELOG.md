@@ -14,6 +14,10 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `d35c82b` — On a second attempt the fixer no longer loses the advice it is
+  meant to satisfy. Only the first fix received it; a retry was prompted by the
+  reviewer's objection and got that alone, working from a paraphrase of the
+  requirement while the reviewer judged against the requirement.
 - `84ed857` — Chunks already corrected on advice are marked on the map with a
   violet bottom-left corner — forty of Morphotrophic's, which until now looked
   like the text the reviewer had read. Both bottom corners became real elements
