@@ -380,6 +380,33 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .pipe-name { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .pipe-star { color: var(--accent); }
 .pipe-sub { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; min-height: 13px; }
+
+/* Which of the seven a book cannot exist without, and which merely make it
+   better. Seven identical circles read as seven obligations; a dashed ring says
+   "you may skip this" without a word of explanation. */
+.pipe-step.optional .pipe-dot { border-style: dashed; }
+.pipe-step.optional .pipe-name { opacity: 0.85; }
+
+/* The stage running right now. The pipeline showed seven steps and none of them
+   said "you are here" — that was elsewhere on the page, in a status line. */
+.pipe-step.now .pipe-dot {
+    border-color: var(--accent);
+    border-style: solid;
+    background: rgba(79, 140, 255, 0.18);
+    animation: pipe-pulse 1.4s ease-in-out infinite;
+}
+.pipe-step.now .pipe-dot::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+.pipe-step.now .pipe-name { color: var(--accent); font-weight: 600; }
+@keyframes pipe-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(79, 140, 255, 0.45); }
+    50%      { box-shadow: 0 0 0 6px rgba(79, 140, 255, 0); }
+}
 .pipe-line { flex: 1; height: 2px; background: var(--border); margin-top: 15px; min-width: 18px; }
 .pipe-line.done { background: var(--green); }
 .pipe-actions {

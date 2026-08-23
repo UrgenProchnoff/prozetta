@@ -444,8 +444,38 @@ function projectSummary(prefix) {
         passport,
         dialogue,
         running: jobManager.isRunning(prefix),
+        // Which stage, not merely that one is going. The pipeline showed seven
+        // identical steps and none of them said "you are here".
+        runningStage: runningStage(prefix),
+        // The assembled book, if there is one, and whether the translation has
+        // moved since. The export step used to be permanently unfinished, which
+        // read as "you are never done".
+        exported: exportedState(prefix, state),
         chunks: chunkList
     };
+}
+
+/** The `--stage=` of the job running for a project, or null. */
+function runningStage(prefix) {
+    if (!jobManager.isRunning(prefix)) return null;
+    const args = jobManager.getJob(prefix)?.args || [];
+    const arg = args.find(a => String(a).startsWith('--stage='));
+    return arg ? String(arg).slice('--stage='.length) : null;
+}
+
+/**
+ * The exported book: when it was written, and whether the translation has
+ * changed since. `stale` is what a person actually wants to know — the file
+ * exists, but does it still match what is on screen?
+ */
+function exportedState(prefix, state) {
+    const file = path.join(TXT_DIR, outputFileName(prefix, state.metadata?.langSuffix));
+    if (!fs.existsSync(file)) return null;
+    try {
+        const at = fs.statSync(file).mtime.toISOString();
+        const changed = state.metadata?.updatedAt || null;
+        return { at, stale: !!(changed && changed > at) };
+    } catch { return null; }
 }
 
 // Resolve the --file argument for a project. On an existing project the file

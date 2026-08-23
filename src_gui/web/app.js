@@ -1204,8 +1204,12 @@ async function renderMonitor(prefix) {
         // would look like stages the project has failed to complete.
         const withBook = s?.bookModel ? s.bookModel.enabled !== false : true;
         const steps = [
-            { stage: '1', name: t('mon.stepExtract'), sub: total ? `${s.extracted}/${total}` : '—', done: total > 0 && s.extracted >= total },
-            { stage: null, name: t('mon.stepGlossary'), sub: s?.glossaryCount ? t('mon.stepTermsCount', { n: s.glossaryCount }) : '—', done: !!s?.glossaryCount },
+            // `spine` marks what a translated book cannot exist without. The rest
+            // make it better and can be skipped, and seven identical circles gave
+            // no way to tell which was which — a person reading them saw seven
+            // obligations.
+            { stage: '1', spine: true, name: t('mon.stepExtract'), sub: total ? `${s.extracted}/${total}` : '—', done: total > 0 && s.extracted >= total },
+            { stage: null, spine: true, name: t('mon.stepGlossary'), sub: s?.glossaryCount ? t('mon.stepTermsCount', { n: s.glossaryCount }) : '—', done: !!s?.glossaryCount },
             // The review is optional but sits before translation on purpose: its
             // whole value is fixing the cheat sheet before it has been used on
             // 150 chunks.
@@ -1218,7 +1222,7 @@ async function renderMonitor(prefix) {
                     : t('mon.passportSub', { n: s.passport.characters, person: t('mon.person.' + (s.passport.person || 'unknown')) }))
                   : '—',
               done: !!(s?.passport && !s.passport.broken) },
-            { stage: '2', name: t('mon.stepTranslate'), sub: total ? `${done}/${total}` : '—', done: total > 0 && done >= total },
+            { stage: '2', spine: true, name: t('mon.stepTranslate'), sub: total ? `${done}/${total}` : '—', done: total > 0 && done >= total },
             // After translation, because it reads the finished text. The count
             // shown is what is still open, not what was returned: a finding acted
             // on disappears by itself when its quote is no longer in the book.
@@ -1226,19 +1230,29 @@ async function renderMonitor(prefix) {
               sub: s?.translationReview ? (s.translationReview.broken ? t('mon.assessBroken')
                     : t('mon.assessSub', { n: s.translationReview.open.length, score: s.translationReview.score ?? '—' })) : '—',
               done: !!(s?.translationReview && !s.translationReview.broken) },
-            { stage: 'export', name: t('mon.stepExport'), sub: '', done: false },
+            // Was permanently unfinished, which read as "you are never done". The
+            // file on disk is the state, and whether the translation has moved
+            // since it was written is the part worth saying.
+            { stage: 'export', spine: true, name: t('mon.stepExport'),
+              sub: s?.exported ? (s.exported.stale ? t('mon.exportStale') : t('mon.exportFresh')) : '—',
+              done: !!(s?.exported && !s.exported.stale) },
         ].filter(st => withBook || !['passport', 'glossary', 'review'].includes(st.stage));
         stepsEl.innerHTML = steps.map((st, i) => {
+            const active = !!(summary?.runningStage && st.stage === summary.runningStage);
             const cls = ['pipe-step',
                 st.done ? 'done' : '',
+                st.spine ? 'spine' : 'optional',
+                active ? 'now' : '',
                 st.stage ? 'clickable' : '',
                 st.stage && st.stage === selectedStage ? 'sel' : '',
             ].filter(Boolean).join(' ');
-            const title = st.stage === rec ? t('mon.recommendedTag', { base: st.name }) : st.name;
-            const star = st.stage === rec ? ' <span class="pipe-star">★</span>' : '';
+            const title = active ? t('mon.stepRunning', { base: st.name })
+                : st.stage === rec ? t('mon.recommendedTag', { base: st.name })
+                : st.spine ? st.name : t('mon.stepOptional', { base: st.name });
+            const star = st.stage === rec && !active ? ' <span class="pipe-star">★</span>' : '';
             const line = i < steps.length - 1 ? `<div class="pipe-line ${st.done ? 'done' : ''}"></div>` : '';
             return `<div class="${cls}" ${st.stage ? `data-stage="${st.stage}"` : ''} title="${esc(title)}">
-                <span class="pipe-dot">${st.done ? '✓' : ''}</span>
+                <span class="pipe-dot">${active ? '' : st.done ? '✓' : ''}</span>
                 <span class="pipe-name">${esc(st.name)}${star}</span>
                 <span class="pipe-sub">${esc(st.sub)}</span>
             </div>${line}`;
