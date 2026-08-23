@@ -219,10 +219,16 @@ export async function runGlossaryReviewStage(state) {
             malformed: 'malformed', unknownEntry: 'no such glossary entry', badQuote: 'quote not in the book',
             absentOriginal: 'proposed a form the book never uses', unknownTarget: 'merge target does not exist',
             emptyFix: 'nothing would change',
+            lossyMerge: 'the surviving entry does not reach where the deleted one does',
         };
         for (const [key, n] of Object.entries(rejected)) {
             if (n) console.log(`[Review]   ${n} × ${names[key]}`);
         }
+    }
+    if (rejected.lossyMerge) {
+        console.log(`[Review] Note: those merges would have tidied the glossary and cost the book. Entries are ` +
+            `matched as whole words, so "Flourisher" does not match "Flourishers" — merging a plural away leaves ` +
+            `every passage that uses only the plural with no note at all.`);
     }
     if (rejected.badQuote) {
         console.log(`[Review] Note: a quote that cannot be found means the model wrote from memory rather than ` +

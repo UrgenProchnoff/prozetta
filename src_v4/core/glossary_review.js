@@ -68,6 +68,29 @@ export function glossaryEvidence(glossary, bookText) {
 }
 
 /**
+ * Would deleting `entry` in favour of `survivor` leave text uncovered?
+ *
+ * Both are matched the way the cheat sheet matches them, and the question is
+ * whether the survivor reaches everywhere the doomed entry does.
+ */
+function losesCoverage(entry, survivor, bookText) {
+    const text = String(bookText || '');
+    if (!text) return false;
+    const doomed = wholeWordRegex(entry, 'giu');
+    const kept = wholeWordRegex(survivor, 'giu');
+    let match;
+    while ((match = doomed.exec(text)) !== null) {
+        // Around the hit, wide enough for the survivor to be a longer form of it.
+        const from = Math.max(0, match.index - survivor.length);
+        const window = text.slice(from, match.index + match[0].length + survivor.length);
+        if (!kept.test(window)) return true;
+        kept.lastIndex = 0;
+        if (match.index === doomed.lastIndex) doomed.lastIndex++;
+    }
+    return false;
+}
+
+/**
  * Check every finding before it is shown to anyone.
  *
  * A finding survives only if it names an entry that exists, carries a quote that
@@ -95,6 +118,7 @@ export function verifyFindings(raw, glossary, bookText) {
         absentOriginal: 0,   // proposes a surface form the book never uses
         unknownTarget: 0,    // merge into an entry that does not exist
         emptyFix: 0,         // nothing actually changes
+        lossyMerge: 0,       // merging away an entry the survivor does not match
     };
     const rejectedFindings = [];
     // Kept verbatim except for length: what the model actually wrote is the
@@ -149,6 +173,21 @@ export function verifyFindings(raw, glossary, bookText) {
             const intoKey = String(item.mergeInto || '').trim().toLowerCase();
             const into = byOriginal.get(intoKey);
             if (!into || into.index === target.index) { drop('unknownTarget', item); continue; }
+            // A merge deletes an entry, and the cheat sheet matches entries as
+            // whole words. "Flourisher" therefore does not match "Flourishers",
+            // so merging the plural away leaves every passage that only uses the
+            // plural with no note at all — measured on Morphotrophic, 4 chunks for
+            // Flourishers and 72 for cytes, out of 169.
+            //
+            // The model cannot know this: it reasons as a lexicographer, where
+            // listing a word twice is untidy, and it is right about tidiness and
+            // wrong about consequences. What it proposes is checkable, so it is
+            // checked. The article case passes the same test and survives it —
+            // "exchange" does match inside "the exchange", so deleting the longer
+            // entry costs nothing.
+            if (losesCoverage(target.term.original, into.term.original, bookText)) {
+                drop('lossyMerge', item); continue;
+            }
             finding.mergeInto = into.term.original;
             findings.push(finding);
             continue;
