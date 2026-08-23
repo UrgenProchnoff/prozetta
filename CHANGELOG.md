@@ -14,6 +14,11 @@ question a person opened the page with.
 
 **2026-08-23**
 
+- `0d3d260` — The log no longer goes blank when a stage has almost nothing to
+  say. Starting one wiped the pane expecting the new run to refill it; export
+  prints five lines and takes half a second to start, so the pane sat empty and
+  the previous run was gone. A rule separates runs instead. And /job stopped
+  answering a just-started job with five hundred lines of an earlier one.
 - `ef27516` — The pipeline says where you are: the running stage pulses in it
   rather than in a status line beside it. Optional steps take a dashed ring, so
   seven circles stop reading as seven obligations. The export step gained a real
