@@ -18,17 +18,21 @@ export function extractJson(text) {
     if (jsonMatch) {
         jsonStr = jsonMatch[1];
     } else {
-        // 2. Try to find [...] (array)
+        // 2. No fence: take the OUTERMOST structure, whichever it is.
+        //
+        // Array-before-object was silently lossy. An answer shaped
+        // {"score": 7, "summary": "…", "findings": [ … ]} has its first "[" inside
+        // the object, so the array pattern matched the findings alone and
+        // everything wrapping them was thrown away — measured on a real review of
+        // Morphotrophic, which arrived with 63 findings, no score and no summary.
+        //
+        // Whichever candidate starts earlier is the one that contains the other,
+        // so this also keeps a bare array a bare array: in "[{…}]" the bracket is
+        // at 0 and the brace at 1.
         const arrayMatch = text.match(/\[[\s\S]*\]/);
-        if (arrayMatch) {
-            jsonStr = arrayMatch[0];
-        } else {
-            // 3. Try to find {...} (object)
-            const bracketMatch = text.match(/\{[\s\S]*\}/);
-            if (bracketMatch) {
-                jsonStr = bracketMatch[0];
-            }
-        }
+        const objectMatch = text.match(/\{[\s\S]*\}/);
+        const candidates = [arrayMatch, objectMatch].filter(Boolean).sort((a, b) => a.index - b.index);
+        if (candidates.length) jsonStr = candidates[0][0];
     }
 
     if (!jsonStr) {

@@ -960,6 +960,7 @@ app.post('/api/projects/:prefix/translation-review/answer', (req, res) => {
             source: 'manual',
             fingerprint: fp,
             withOriginal: !!withOriginal,
+            answerText: answer,
         });
         res.json({ ok: true, returned: review.returned, findings: findings.length, rejected, notes });
     } catch (e) {

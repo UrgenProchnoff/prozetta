@@ -133,7 +133,12 @@ export function buildTranslationReviewPrompt(state, { withOriginal = false } = {
  *
  * @param {ProjectState} state
  * @param {*} raw               the parsed answer
- * @param {{model: string, source: 'api'|'manual', fingerprint?: string, withOriginal?: boolean}} meta
+ * @param {{model: string, source: 'api'|'manual', fingerprint?: string,
+ *           withOriginal?: boolean, answerText?: string}} meta
+ *   `answerText` is the reply as it arrived. Kept so that a missing score or
+ *   summary can be told from a model that never sent one — the first real manual
+ *   review lost both to a parser that took the findings array out of the object
+ *   wrapping it, and nothing on disk could say which had happened.
  * @returns {{review: object, findings: Array, rejected: object, notes: string[]}}
  * @throws {Error} when the answer does not belong to this text, or nothing in it survives
  */
@@ -185,16 +190,40 @@ export function applyTranslationReview(state, raw, meta) {
         // so a number from a single call is not a metric and must not be shown as
         // though it were comparable between runs. The findings are.
         score: Number.isFinite(score) ? score : null,
-        summary: String(raw?.summary || '').trim() || null,
+        // The prose around the JSON, when the JSON carries none. A model asked
+        // for an overall verdict often writes it as text and puts only the
+        // findings in the block; that verdict is what was asked for, and throwing
+        // it away because of where it was written would be pedantry.
+        summary: String(raw?.summary || '').trim() || proseAround(meta.answerText) || null,
         dismissed: carriedDismissals,
         rejected,
         findings,
         // Deliberately last and under a name nothing else reads: these failed
         // verification and must not be one careless join away from the interface.
         rejectedFindings,
+        // The answer as it arrived, so what is missing here can be checked
+        // against what was actually sent. Capped: a reply is tens of kilobytes
+        // and a runaway one should not become the largest file in the project.
+        rawAnswer: meta.answerText ? String(meta.answerText).slice(0, 400000) : undefined,
     };
     fs.writeFileSync(reviewPath, JSON.stringify(review, null, 2));
     return { review, findings, rejected, notes };
+}
+
+
+/**
+ * The text a reply carries outside its JSON — an answer's own words about the
+ * book, when it wrote them as prose instead of putting them in the object.
+ */
+function proseAround(text) {
+    if (!text) return '';
+    const stripped = String(text)
+        .replace(/```json[\s\S]*?```/g, ' ')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/\{[\s\S]*\}/, ' ')
+        .replace(/\[[\s\S]*\]/, ' ')
+        .trim();
+    return stripped.length >= 40 ? stripped.slice(0, 4000) : '';
 }
 
 export async function runTranslationReviewStage(state) {
