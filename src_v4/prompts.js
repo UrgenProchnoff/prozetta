@@ -62,10 +62,14 @@ ${body}
         <original>${original}</original>
         <translate>${translation}</translate>
         <translator_comment>${translatorComment || "Нет комментариев"}</translator_comment>`,
-    fix: (original, context, badTranslation, comment, style) =>
+    // `advice` rides along on every attempt, not just the first. What prompts a
+    // second fix is the reviewer's complaint, and passing that alone leaves the
+    // fixer working from a paraphrase of the requirement instead of the
+    // requirement. Omitted on the first attempt, where the comment IS the advice.
+    fix: (original, context, badTranslation, comment, style, advice) =>
 `
       <txt>${original}</txt>
-      <ctx>${context}</ctx>${style ? `\n      <style>${style}</style>` : ''}
+      <ctx>${context}</ctx>${style ? `\n      <style>${style}</style>` : ''}${advice ? `\n      <must_fix>${advice}</must_fix>` : ''}
       <temptranslate>${badTranslation}</temptranslate>
       <comment>${comment}</comment>
       `,
@@ -513,6 +517,7 @@ ${withOriginal ? `
 СОХРАНЯЙ РАЗБИВКУ НА АБЗАЦЫ оригинала один в один: сколько абзацев в <txt>, столько же должно быть в переводе.
 Проверка вернула <temptranslate> перевод на доработку.
 ТВОЯ ЗАДАЧА - ДОРАБОТАТЬ перевод в соответствии с комментариями проверки <comment>.
+Если есть <must_fix> - это то, что обязательно должно быть исправлено в этом фрагменте.
 Окончательный ответ в формате:
 <translate>исправленный перевод</translate>
 <comment>Что и почему было исправлено (или не исправлено)</comment>`,
@@ -974,6 +979,7 @@ A cheat-sheet line reads: original -> translation (character's gender) — note.
 PRESERVE THE PARAGRAPH STRUCTURE of the original exactly: the translation must have the same number of paragraphs as <txt>.
 The review returned <temptranslate> — the translation to be refined.
 YOUR TASK is to REFINE the translation according to the review comments <comment>.
+If <must_fix> is present, it is what must be corrected in this fragment.
 Final answer in the format:
 <translate>corrected translation</translate>
 <comment>What was fixed and why (or why not)</comment>`,

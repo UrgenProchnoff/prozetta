@@ -237,7 +237,11 @@ export async function runTranslationLoopStage(state) {
                     // Checker likes the direction, score is acceptable → FIX (доработка)
                     console.log(`   -> REJECTED for fixing (Score: ${checkResult.score}, Errors: ${checkResult.error}) | Reason: "${checkResult.comment}". Fixing...`);
 
-                    const fixResult = await fixTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, checkResult.comment, styleBlock);
+                    // The advice travels with every attempt. On the first one the
+                    // comment already was the advice; from here the comment is
+                    // the reviewer's objection, and without the advice beside it
+                    // the fixer would be working from a paraphrase.
+                    const fixResult = await fixTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, checkResult.comment, styleBlock, advice);
                     currentTranslation = fixResult.translation;
                     currentComment = fixResult.comment;
                     console.log(`   [DEBUG] After fix: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
@@ -519,9 +523,9 @@ async function checkTranslation(client, prompts, targetLang, original, translati
     return extractCheckResult(response.content);
 }
 
-async function fixTranslation(client, prompts, targetLang, original, badTranslation, context, comment, style) {
+async function fixTranslation(client, prompts, targetLang, original, badTranslation, context, comment, style, advice) {
     usageTracker.setStage('fix');
-    const input = prompts.fix.user(original, context, badTranslation, comment, style);
+    const input = prompts.fix.user(original, context, badTranslation, comment, style, advice);
 
     const prompt = prompts.fix.system(targetLang);
 
