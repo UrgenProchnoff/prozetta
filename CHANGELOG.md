@@ -14,6 +14,10 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `849880e` — The two ways to make a whole-book call are a block of their own on
+  the glossary and passport pages: what the call is, the API button, and the
+  manual route below a rule. They used to be a toolbar button and a fold at the
+  bottom of the page — and on the passport, no API button at all.
 - `85d9098` — Merges that would cost the book are retired from reviews already on
   disk, not only refused in new ones — eight of Morphotrophic's fourteen open
   findings went without a fresh call. Not only plurals: `Miss Moss → Ada` would
