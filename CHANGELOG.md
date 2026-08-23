@@ -14,6 +14,11 @@ question a person opened the page with.
 
 **2026-08-23**
 
+- `292eb91` — Running a whole-book stage by hand is a choice on the screen, not a
+  consequence of a token count. A subscription to a frontier model is common and
+  an API key is not, so for many people the manual route is the only door — it
+  now sits beside Start for the three stages that have one, and builds the
+  prompt when pressed.
 - `ca803c8` — A whole-book stage has one door. Start checks the size first: under
   the budget it runs through the API, over it the job is never spawned and the
   box for carrying that prompt elsewhere opens with the numbers in it. Chunks
