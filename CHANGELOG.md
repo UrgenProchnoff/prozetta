@@ -14,6 +14,10 @@ question a person opened the page with.
 
 **2026-08-23**
 
+- `8c5fc97` — `npm run i18n` checks the interface dictionary: both languages in
+  step, nothing named that is missing, nothing present that nobody asks for. The
+  last question had never been asked, and 18 of the 468 keys belonged to screens
+  that no longer exist.
 - `0d3d260` — The log no longer goes blank when a stage has almost nothing to
   say. Starting one wiped the pane expecting the new run to refill it; export
   prints five lines and takes half a second to start, so the pane sat empty and
