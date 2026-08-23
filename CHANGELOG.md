@@ -14,6 +14,12 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `b32c025` — The passport and the glossary review can be carried to a web console
+  by hand as well. Morphotrophic's passport needs 159,522 tokens and its glossary
+  review 167,850, against a ceiling near 168,000 — both fit today by a few
+  thousand, and a longer book would not. All three whole-book stages are now in
+  two halves sharing one table, rather than three copies of "hand this over,
+  take that back".
 - `08049cf` — A glossary finding reaches the book. Fixing an entry changes nothing
   already translated, so the finding now offers to queue the chunks that use the
   term — with the count on the button, since one of Morphotrophic's sits in 21
