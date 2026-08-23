@@ -14,6 +14,11 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `84ed857` — Chunks already corrected on advice are marked on the map with a
+  violet bottom-left corner — forty of Morphotrophic's, which until now looked
+  like the text the reviewer had read. Both bottom corners became real elements
+  in the process: the disputed one shared ::after with "terms extracted" and was
+  deleting it.
 - `e9c0136` — An accepted finding now looks accepted. It stays in the list until
   the fix is made, so thirteen queued ones were indistinguishable from eight
   undecided; they are marked, dimmed, and their button takes them back out. The
