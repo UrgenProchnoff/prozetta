@@ -20,7 +20,7 @@ import { HumanMessage } from '@langchain/core/messages';
 import { llmManager, bookModelEnabled, explainCallFailure } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
-import { countTokens } from '../core/tokenizer.js';
+import { countTokens, chunkTokens } from '../core/tokenizer.js';
 import { verifyFindings } from '../core/translation_review.js';
 import { loadPassport, isEmptyPassport } from '../core/passport.js';
 import { fingerprint, fingerprintMismatch } from '../core/book_call.js';
@@ -119,7 +119,11 @@ export function buildTranslationReviewPrompt(state, { withOriginal = false } = {
     const user = prompts.translationReview.user(body, pairs, intent, withOriginal);
 
     const tokens = {
-        text: countTokens(body),
+        // From the counts the chunks carry, when they can be: tokenising this
+        // body takes nine seconds and the answer is wanted on a click. The join
+        // adds a newline between chunks that the sum does not count — 168 tokens
+        // on a 190,000-token book, and the budget is not decided in that margin.
+        text: withOriginal ? countTokens(body) : chunkTokens(chunks, 'translation'),
         glossary: pairs.length ? countTokens(JSON.stringify(pairs)) : 0,
         passport: intent ? countTokens(JSON.stringify(intent)) : 0,
         instructions: countTokens(system),

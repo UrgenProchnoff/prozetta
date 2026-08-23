@@ -13,6 +13,7 @@ import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialo
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
 import { withoutTranslation, ProjectState } from '../src_v4/core/state_manager.js';
 import { wholeWordRegex } from '../src_v4/core/text_stats.js';
+import { countTokens } from '../src_v4/core/tokenizer.js';
 import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/stages/05_translation_review.js';
 import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages/04_glossary_review.js';
 import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_passport.js';
@@ -866,6 +867,33 @@ app.post('/api/run', (req, res) => {
     }
     const cleanLang = typeof lang === 'string' ? lang.replace(/[\r\n]/g, ' ').trim().slice(0, 60) : '';
 
+    // A whole-book stage that will not fit is refused here rather than spawned to
+    // fail. The check costs nothing now that chunks carry their own token counts,
+    // and it answers the question a person is really asking by pressing Start:
+    // "do this" — to which "it does not fit, here is the prompt to carry" is a
+    // better answer than a process that starts and dies.
+    const call = BOOK_CALLS[BOOK_STAGE[stage]];
+    if (call) {
+        try {
+            const state = new ProjectState(ROOT, prefix);
+            state.load();
+            // Books translated before chunks carried their own token counts have
+            // to be counted once, and counting a whole translation takes nine
+            // seconds. Doing it here and keeping the result turns every later
+            // check into a sum.
+            if (fillTranslationTokens(state)) state.save();
+            const built = call.build(state, {});
+            if (built.tokens.total > built.budget) {
+                return res.json({
+                    ok: false, tooLarge: true, kind: BOOK_STAGE[stage],
+                    tokens: built.tokens.total, budget: built.budget,
+                });
+            }
+        } catch (e) {
+            return res.status(400).json({ error: e.message });
+        }
+    }
+
     const args = ['src_v4/main.js', `--stage=${stage}`, `--file=${sourceFile}`];
     if (model && model !== 'default') args.push(`--model=${model}`);
     // Language is set once at Stage 1; passing it on other stages just overrides.
@@ -985,6 +1013,26 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
  * not, and three copies of "hand this over, take that back" would drift the way
  * the delete list once did.
  */
+/**
+ * Give every translated chunk its own token count, if it has none.
+ *
+ * @returns {boolean} whether anything was added, and so whether to save
+ */
+function fillTranslationTokens(state) {
+    let added = 0;
+    for (const chunk of state.getChunks()) {
+        if (chunk.translation && !chunk.translationTokens) {
+            chunk.translationTokens = countTokens(chunk.translation);
+            added++;
+        }
+    }
+    if (added) console.log(`[GUI] Counted ${added} chunk translation(s) for "${state.filePrefix}" — done once.`);
+    return added > 0;
+}
+
+/** Which runnable stage is which whole-book call. */
+const BOOK_STAGE = { passport: 'passport', glossary: 'glossary', review: 'translation' };
+
 const BOOK_CALLS = {
     translation: {
         build: (state, opts) => buildTranslationReviewPrompt(state, opts),

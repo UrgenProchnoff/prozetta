@@ -39,6 +39,10 @@ function statusLabel(s) { return t(`status.${s}`); }
 
 // The runnable stages under the names the pipeline shows them by, so the log and
 // the roadmap call the same thing the same thing.
+// The runnable stage each whole-book call belongs to, so the box can name itself
+// after the step a person pressed rather than after an internal kind.
+const BOOK_STAGE_OF = { passport: 'passport', glossary: 'glossary', translation: 'review' };
+
 const STAGE_LABEL = {
     '1': 'mon.stepExtract',
     glossary: 'mon.stepReview',
@@ -382,9 +386,9 @@ async function renderDashboard() {
  * review of the finished translation — because what differs between them is
  * which halves run, not how a person carries the middle.
  */
-function manualCallBox(kind, { variants = false } = {}) {
-    return `<details class="usage-details bookcall" data-kind="${kind}">
-        <summary>${esc(t('rev.manualHeading'))}</summary>
+function manualCallBox(kind, { variants = false, open = false } = {}) {
+    return `<details class="usage-details bookcall" data-kind="${kind}"${open ? ' open' : ''}>
+        <summary>${esc(t('rev.manualHeadingFor', { stage: t(STAGE_LABEL[BOOK_STAGE_OF[kind]] || 'rev.heading') }))}</summary>
         <div class="cfg-hint">${esc(t('rev.manualWhy'))}</div>
         <div class="rev-head" style="margin:10px 0">
             ${variants ? `<label class="cfg-freeonly"><input type="checkbox" data-bc="bilingual"> ${esc(t('rev.withOriginal'))}</label>` : ''}
@@ -1431,10 +1435,17 @@ async function renderMonitor(prefix) {
      * no free tier will carry and which turns the pass from "is this good
      * Russian" into "does this say what the book said".
      */
+    // Which whole-book call the box on this page is for. It follows what the API
+    // route last refused, because that is the moment a person needs it; the
+    // translation review is the default, being the one the API cannot do at any
+    // size in its bilingual form.
+    let manualKind = 'translation';
+    let manualOpen = false;
+
     function manualRunBox() {
         const done = summary ? summary.statuses.success + summary.statuses.best_effort : 0;
         if (!done) return '';
-        return manualCallBox('translation', { variants: true });
+        return manualCallBox(manualKind, { variants: manualKind === 'translation', open: manualOpen });
     }
 
     function drawReview() {
@@ -1585,7 +1596,20 @@ async function renderMonitor(prefix) {
             // was already gone.
             //
             // Keeping it costs nothing: the pane caps itself at a thousand lines.
-            await api('/api/run', { method: 'POST', body });
+            const res = await api('/api/run', { method: 'POST', body });
+            // Too big for this provider's per-minute allowance. Not an error and
+            // not a dead end: the same call runs from a web console, and the box
+            // for it is on this page — so it is opened rather than described.
+            if (res && res.tooLarge) {
+                manualKind = res.kind;
+                manualOpen = true;
+                drawReview();
+                document.getElementById('m-review')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                toast(t('mon.tooLargeForApi', {
+                    stage: stageLabel(stage), tokens: fmtNum(res.tokens), budget: fmtNum(res.budget),
+                }), 'error');
+                return;
+            }
             appendSeparator(t('mon.logRunSeparator', { stage: stageLabel(stage) }));
             toast(t('mon.stageStarted', { stage }), 'ok');
         } catch (e) {

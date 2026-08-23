@@ -20,6 +20,7 @@ import { projectPaths, ensureProjectDir } from './paths.js';
  */
 export const TRANSLATION_FIELDS = [
     'translation',
+    'translationTokens',
     'translation_status',
     'translation_blocked_by',
     'history',

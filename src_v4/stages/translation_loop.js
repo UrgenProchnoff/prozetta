@@ -4,6 +4,7 @@ import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
 import { wholeWordRegex } from '../core/text_stats.js';
+import { countTokens } from '../core/tokenizer.js';
 import { loadPassport, buildStyleBlock, isEmptyPassport } from '../core/passport.js';
 import { adviceForChunk } from '../core/translation_review.js';
 import config from '../config.js';
@@ -194,6 +195,12 @@ export async function runTranslationLoopStage(state) {
                 success = true;
                 state.updateChunk(i, {
                     translation: currentTranslation,
+                    // Counted here, where one more tokenisation of four thousand
+                    // characters is nothing beside the model call that just
+                    // happened. Counted later, for the whole book at once, it is
+                    // nine seconds — and the question it answers ("does the
+                    // whole-book review fit?") is asked on a click.
+                    translationTokens: countTokens(currentTranslation),
                     translation_status: 'success',
                     history: history,
                     // This model got through where another was refused; leaving
@@ -313,6 +320,7 @@ export async function runTranslationLoopStage(state) {
 
             state.updateChunk(i, {
                 translation: bestText,
+                translationTokens: countTokens(bestText),
                 // The GUI knows this status; the dispute flag rides alongside so
                 // a conflict of rules is distinguishable from a genuinely weak
                 // translation.
