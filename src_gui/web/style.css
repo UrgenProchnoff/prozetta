@@ -1007,3 +1007,11 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
    and that claim is only being made there. */
 .glossary tr.form-group-0 td { background: rgba(160, 108, 255, 0.10); }
 .glossary tr.form-group-1 td { background: rgba(160, 108, 255, 0.04); }
+
+/* A finding already queued for fixing. It stays in the list until the fix is
+   made and its quote is gone, so it has to be legible as decided-and-waiting
+   rather than still-to-decide. */
+.rev-item.rev-done { opacity: 0.55; }
+.rev-item.rev-done .rev-quote { border-left-color: var(--green); }
+/* Findings on one chunk are adjacent; a rule closes each chunk's block. */
+.rev-item.rev-chunk-end { border-bottom: 1px solid var(--border); padding-bottom: 14px; }

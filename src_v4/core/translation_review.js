@@ -177,11 +177,24 @@ export function outstandingFindings(review, chunks) {
         const key = findingKey(f);
         if (dismissed.has(key)) { hidden++; continue; }
 
-        const text = chunks[f.chunk]?.translation;
+        const chunk = chunks[f.chunk];
+        const text = chunk?.translation;
         if (!text || locateQuote(text, f.quote).occurrences === 0) { done++; continue; }
 
-        open.push({ ...f, key });
+        // Already queued on its chunk. Accepting one does not make it disappear —
+        // it stays until the fix is made and its quote is gone — so without this
+        // the list gives no way to tell what has been decided from what has not.
+        const queued = (chunk.advice || []).some(a => a.key === key);
+        open.push({ ...f, key, queued });
     }
+
+    // By chunk, so findings that will be fixed together are read together and the
+    // order matches the map above the list. Within a chunk, queued last: what is
+    // still to decide belongs at the top of its group.
+    open.sort((a, b) => (a.chunk - b.chunk)
+        || (Number(a.queued) - Number(b.queued))
+        || String(a.issue).localeCompare(String(b.issue)));
+
     return { open, done, hidden };
 }
 

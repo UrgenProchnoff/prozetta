@@ -1312,24 +1312,35 @@ async function renderMonitor(prefix) {
         ].filter(Boolean).join(' · ');
 
         const where = { glossary: `#/glossary/${encodeURIComponent(prefix)}`, passport: `#/passport/${encodeURIComponent(prefix)}` };
+        // A rule under the last finding of each chunk, so a block of findings on
+        // one chunk reads as a block. The list is already ordered by chunk.
+        const lastOfChunk = new Set();
+        r.open.forEach((f, i) => { if (r.open[i + 1]?.chunk !== f.chunk) lastOfChunk.add(f.key); });
         const rows = r.open.map(f => {
             // Anything carrying advice can be queued on its chunk, whatever scope
             // the model filed it under — it gets that wrong, and a misrouted
             // finding should be one click from useful rather than a dead end. The
             // link to the page it names stays alongside for the ones that really
             // do belong there.
+            //
+            // A queued finding stays in the list — it only leaves once the fix is
+            // made and its quote is gone — so it has to look different, and its
+            // button has to be the way back out.
             const act = [
-                f.advice ? `<button class="primary" data-rev="accept" data-key="${esc(f.key)}">${esc(t('rev.accept'))}</button>` : '',
+                f.queued
+                    ? `<button data-rev="undo" data-key="${esc(f.key)}">${esc(t('rev.unqueue'))}</button>`
+                    : (f.advice ? `<button class="primary" data-rev="accept" data-key="${esc(f.key)}">${esc(t('rev.accept'))}</button>` : ''),
                 f.scope !== 'chunk' ? `<a class="btn" href="${where[f.scope]}">${esc(t('rev.goTo.' + f.scope))}</a>` : '',
             ].filter(Boolean).join(' ');
-            return `<div class="rev-item">
+            return `<div class="rev-item${f.queued ? ' rev-done' : ''}${lastOfChunk.has(f.key) ? ' rev-chunk-end' : ''}">
                 <div class="rev-head">
                     <span class="badge b-${f.scope === 'chunk' ? 'best_effort' : 'disputed'}">${esc(t('rev.scope.' + f.scope))}</span>
                     <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${f.chunk}">${f.chunk + 1}</a>
                     <span class="rev-issue">${esc(f.issue)}</span>
+                    ${f.queued ? `<span class="badge b-success">${esc(t('rev.queuedBadge'))}</span>` : ''}
                     <span class="spacer"></span>
                     ${act}
-                    <button data-rev="dismiss" data-key="${esc(f.key)}">${esc(t('rev.dismiss'))}</button>
+                    ${f.queued ? '' : `<button data-rev="dismiss" data-key="${esc(f.key)}">${esc(t('rev.dismiss'))}</button>`}
                 </div>
                 <div class="rev-quote">«${esc(f.quote)}»</div>
                 <div class="rev-problem">${esc(f.problem)}</div>
@@ -1416,9 +1427,11 @@ async function renderMonitor(prefix) {
         try {
             const res = await api(`/api/projects/${encodeURIComponent(prefix)}/translation-review/decide`,
                 { method: 'POST', body: { key: btn.dataset.key, action: btn.dataset.rev } });
-            toast(btn.dataset.rev === 'accept'
-                ? t('rev.accepted', { chunk: res.chunk + 1 })
-                : t('rev.dismissed'), 'ok');
+            toast({
+                accept: () => t('rev.accepted', { chunk: res.chunk + 1 }),
+                undo: () => t('rev.unqueued'),
+                dismiss: () => t('rev.dismissed'),
+            }[btn.dataset.rev](), 'ok');
             refreshGrid();
         } catch (err) {
             btn.disabled = false;
