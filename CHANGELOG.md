@@ -14,6 +14,12 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `f00360b` — A merge that would tidy the glossary and cost the book is refused.
+  The review proposed folding plurals into singulars; entries are matched as
+  whole words, so "Flourisher" never matches "Flourishers" and deleting the
+  plural would have stripped the note from 72 of Morphotrophic's 169 chunks for
+  `cytes` alone. An article-prefixed duplicate passes the same test, because
+  there the shorter entry does reach.
 - `ba6cb17` — The book's name is a link in the glossary trail again. Four pages
   made it one and this one did not, so the way back was the browser's button.
 
