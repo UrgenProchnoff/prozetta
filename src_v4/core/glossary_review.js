@@ -271,9 +271,11 @@ export function findingKey(f) {
  * itself: one that has been acted on disappears because the glossary now says
  * what it asked for, and one that has not stays until it is dealt with.
  *
+ * @param {string} [bookText] the source, for retiring merges that would delete
+ *   an entry the surviving one does not match — see losesCoverage.
  * @returns {{byRow: Array<Array<object>>, additions: Array, hidden: number}}
  */
-export function outstandingFindings(review, glossary) {
+export function outstandingFindings(review, glossary, bookText = '') {
     const byRow = glossary.map(() => []);
     const additions = [];
     const dismissed = new Set((review?.dismissed || []).map(k => String(k).toLowerCase()));
@@ -301,6 +303,14 @@ export function outstandingFindings(review, glossary) {
         // by someone who had the finding in front of them.
         const target = byOriginal.get(String(f.entry || '').trim().toLowerCase());
         if (!target) continue;
+
+        // A merge that would delete an entry the survivor cannot reach is refused
+        // when a review is recorded — but reviews recorded before that check
+        // existed are still on disk, and the advice in them is still on screen.
+        // Applying the test here as well retires it without paying for a fresh
+        // review, which is the only other way a person would ever be rid of it.
+        if (f.action === 'merge' && bookText && has(f.mergeInto)
+            && losesCoverage(f.entry, f.mergeInto, bookText)) continue;
 
         // A merge needs both halves; once one is gone there is nothing to merge.
         if (f.action === 'merge' && !has(f.mergeInto)) continue;

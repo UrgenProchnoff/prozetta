@@ -724,6 +724,9 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
     // chunk; the glossary half is estimated from its size rather than tokenised,
     // which would cost more than the answer is worth on every page load.
     let bookTokens = 0;
+    // The source itself, needed twice below and so read once here rather than
+    // hidden inside the branch that first wanted it.
+    let source = '';
     if (fs.existsSync(statePath(prefix))) {
         const chunks = readJson(statePath(prefix)).chunks || [];
         bookTokens = chunks.reduce((n, c) => n + (c.tokens || Math.round((c.original || '').length / 4)), 0);
@@ -733,8 +736,8 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
             if (!needle) return 0;
             return lower.reduce((n, text) => n + (text.includes(needle) ? 1 : 0), 0);
         });
+        source = chunks.map(c => c.original || '').join('\n');
         try {
-            const source = chunks.map(c => c.original || '').join('\n');
             findings = glossaryFindings(terms, source);
         } catch (e) {
             // A glossary must stay editable even if the analysis chokes on it.
@@ -749,7 +752,7 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
         // Resolved against the glossary as it stands, not as it stood: a finding
         // that has been acted on drops out by itself, so editing one entry never
         // costs the review of the others.
-        const { byRow, additions, hidden } = glossaryOutstanding(review, terms);
+        const { byRow, additions, hidden } = glossaryOutstanding(review, terms, source);
         if (findings.length === terms.length) byRow.forEach((list, i) => findings[i].push(...list));
         const outstanding = byRow.reduce((n, list) => n + list.length, 0) + additions.length;
 
