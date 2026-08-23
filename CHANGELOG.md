@@ -14,6 +14,12 @@ question a person opened the page with.
 
 **2026-08-23**
 
+- `ef27516` — The pipeline says where you are: the running stage pulses in it
+  rather than in a status line beside it. Optional steps take a dashed ring, so
+  seven circles stop reading as seven obligations. The export step gained a real
+  state — the file on disk and whether the translation has moved since — instead
+  of being permanently unfinished. And "Reset to stage 1" became "Reset the
+  translation", which is both plainer and, since the deny-list fix, true.
 - `eeecce5` — The chunk map stopped spending its ink on what every chunk has in
   common. The "terms extracted" corner fired on 96% of cells and 85% showed a
   score of exactly 10, so a finished book was a field of identical squares and
