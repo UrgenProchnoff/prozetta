@@ -133,6 +133,20 @@ function route() {
 window.addEventListener('hashchange', route);
 
 function setCrumbs(html) { breadcrumbs.innerHTML = html; }
+
+/**
+ * The book's name in a trail, as a way back to its monitor.
+ *
+ * Written out on four pages and forgotten on the fifth: the glossary had the
+ * name as plain text, so the way back from it was the browser's own button. A
+ * helper because five copies of a link is five chances to leave one flat.
+ *
+ * The monitor keeps its name unlinked on purpose — it is the page being pointed
+ * at, and a trail that leads to where you already are is furniture.
+ */
+function crumbBook(prefix) {
+    return `<a href="#/monitor/${encodeURIComponent(prefix)}">${esc(prefix)}</a>`;
+}
 function crumbHome() { return `<a href="#/">${esc(t('nav.projects'))}</a>`; }
 
 // ============================================================
@@ -479,7 +493,7 @@ function wireBookCalls(prefix, onDone) {
 
 
 async function renderGlossary(prefix) {
-    setCrumbs(`${crumbHome()} / ${esc(prefix)} / ${esc(t('gloss.heading'))}`);
+    setCrumbs(`${crumbHome()} / ${crumbBook(prefix)} / ${esc(t('gloss.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
     let terms, counts, findings, forms, review, estimate, running, bookModel;
@@ -1681,7 +1695,7 @@ async function renderMonitor(prefix) {
 // ============================================================
 
 async function renderBook(prefix) {
-    setCrumbs(`${crumbHome()} / <a href="#/monitor/${encodeURIComponent(prefix)}">${esc(prefix)}</a> / ${esc(t('book.crumb'))}`);
+    setCrumbs(`${crumbHome()} / ${crumbBook(prefix)} / ${esc(t('book.crumb'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
     let meta, summary = null;
@@ -1828,7 +1842,7 @@ function speechNote(speech) {
 }
 
 async function renderPassport(prefix) {
-    setCrumbs(`${crumbHome()} / <a href="#/monitor/${encodeURIComponent(prefix)}">${esc(prefix)}</a> / ${esc(t('pass.heading'))}`);
+    setCrumbs(`${crumbHome()} / ${crumbBook(prefix)} / ${esc(t('pass.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
     let data;
@@ -1983,7 +1997,7 @@ async function renderPassport(prefix) {
 // ============================================================
 
 async function renderChunk(prefix, i) {
-    setCrumbs(`${crumbHome()} / <a href="#/monitor/${encodeURIComponent(prefix)}">${esc(prefix)}</a> / ${esc(t('chunk.crumb', { n: i + 1 }))}`);
+    setCrumbs(`${crumbHome()} / ${crumbBook(prefix)} / ${esc(t('chunk.crumb', { n: i + 1 }))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
     let data;
