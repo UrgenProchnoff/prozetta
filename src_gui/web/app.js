@@ -37,6 +37,18 @@ function fmtDate(iso) {
 
 function statusLabel(s) { return t(`status.${s}`); }
 
+// The runnable stages under the names the pipeline shows them by, so the log and
+// the roadmap call the same thing the same thing.
+const STAGE_LABEL = {
+    '1': 'mon.stepExtract',
+    glossary: 'mon.stepReview',
+    passport: 'mon.stepPassport',
+    '2': 'mon.stepTranslate',
+    review: 'mon.stepAssess',
+    export: 'mon.stepExport',
+};
+function stageLabel(stage) { return STAGE_LABEL[stage] ? t(STAGE_LABEL[stage]) : String(stage); }
+
 // Compact token/number formatting: 1234 → "1.2k", 3_400_000 → "3.4M".
 function fmtNum(n) {
     n = Number(n) || 0;
@@ -1289,6 +1301,15 @@ async function renderMonitor(prefix) {
         if (!v) { activeChunk = null; }
     }
 
+    /** A rule across the log, so one run is visibly not the previous one. */
+    function appendSeparator(text) {
+        const div = document.createElement('div');
+        div.className = 'log-sep';
+        div.textContent = text;
+        logPane.appendChild(div);
+        logPane.scrollTop = logPane.scrollHeight;
+    }
+
     function appendLog(line) {
         const div = document.createElement('div');
         let cls = '';
@@ -1555,8 +1576,17 @@ async function renderMonitor(prefix) {
         }
 
         try {
+            // A separator rather than wiping the pane. Wiping assumed the new
+            // run would refill it, which holds for a stage that talks. Export
+            // says five lines and takes about half a second to say them:
+            // measured, the request returns in 43 ms and the first line arrives
+            // somewhere past 300, so the pane sat empty long enough to look
+            // broken — and the previous run, the one that had something in it,
+            // was already gone.
+            //
+            // Keeping it costs nothing: the pane caps itself at a thousand lines.
             await api('/api/run', { method: 'POST', body });
-            logPane.innerHTML = '';
+            appendSeparator(t('mon.logRunSeparator', { stage: stageLabel(stage) }));
             toast(t('mon.stageStarted', { stage }), 'ok');
         } catch (e) {
             toast(e.message, 'error');

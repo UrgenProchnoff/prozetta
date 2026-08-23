@@ -1115,9 +1115,12 @@ app.get('/api/projects/:prefix/job', (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
     const job = jobManager.getJob(prefix);
-    // After a GUI restart the in-memory log is empty — restore history from
-    // the persistent <prefix>_run.log instead.
-    if (job.log.length === 0) {
+    // After a GUI restart the in-memory log is empty — restore history from the
+    // persistent <prefix>_run.log instead. Only for a job that is not running:
+    // a job that has just started is also empty, and answering it with five
+    // hundred lines of a previous run presents old history as the current one.
+    // Measured on the export stage, which prints nothing for its first 300 ms.
+    if (job.log.length === 0 && !job.running) {
         const tail = runLogTail(prefix);
         if (tail.length > 0) return res.json({ ...job, log: tail, fromFile: true });
     }
