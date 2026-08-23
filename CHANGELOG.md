@@ -14,14 +14,18 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
-- `08049cf` — Glossary and passport findings can be closed at last. "Done" sits
-  beside "Dismiss", because acting on a finding is not the same as calling it
-  wrong and the dismissal list is evidence about the review's trustworthiness. A
-  glossary finding also names its entry and offers to queue the chunks that use
-  the term — fixing the entry alone changes nothing already translated, and one
-  of Morphotrophic's sits in 21 chunks. The grouping learned to strip a leading
-  article and to compare translations as written, which is how "exchange" →
-  «обмен» beside "the exchange" → «Обмен» had been hiding.
+- `08049cf` — A glossary finding reaches the book. Fixing an entry changes nothing
+  already translated, so the finding now offers to queue the chunks that use the
+  term — with the count on the button, since one of Morphotrophic's sits in 21
+  of its 169. "Done" sits beside "Dismiss" for everything that has no other way
+  to close.
+- `1dcdfbf` — Findings acted on are recorded apart from findings called wrong: the
+  dismissal list is evidence about how far the review can be trusted, and folding
+  the two together spoils it. Glossary findings name the entry they are about,
+  checked against the glossary. The grouping learned to strip a leading article
+  and to compare translations as written — which is how "exchange" → «обмен»
+  beside "the exchange" → «Обмен» had been hiding, and Scavenger/The Scavenger →
+  «падальщик»/«Падальщица» with it.
 - `205e9f4` — A finding that had been fixed stopped coming back as undecided. It
   left the list when its quoted text vanished, and a typographic fix changes the
   marks around the quoted words rather than the words — so chunk 51 was
