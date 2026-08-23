@@ -14,6 +14,11 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
+- `205e9f4` — A finding that had been fixed stopped coming back as undecided. It
+  left the list when its quoted text vanished, and a typographic fix changes the
+  marks around the quoted words rather than the words — so chunk 51 was
+  corrected, approved, and reappeared untouched. A fix now records which
+  findings it was made for.
 - `d35c82b` — On a second attempt the fixer no longer loses the advice it is
   meant to satisfy. Only the first fix received it; a retry was prompted by the
   reviewer's objection and got that alone, working from a paraphrase of the
