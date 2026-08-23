@@ -14,7 +14,7 @@ consistent about who is speaking, who they are, and what they are called.
 
 **2026-08-23**
 
-- `PLACEHOLDER` — Glossary and passport findings can be closed at last. "Done" sits
+- `08049cf` — Glossary and passport findings can be closed at last. "Done" sits
   beside "Dismiss", because acting on a finding is not the same as calling it
   wrong and the dismissal list is evidence about the review's trustworthiness. A
   glossary finding also names its entry and offers to queue the chunks that use
