@@ -14,6 +14,10 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `85d9098` — Merges that would cost the book are retired from reviews already on
+  disk, not only refused in new ones — eight of Morphotrophic's fourteen open
+  findings went without a fresh call. Not only plurals: `Miss Moss → Ada` would
+  have stripped the honorific from every passage that uses it alone.
 - `f00360b` — A merge that would tidy the glossary and cost the book is refused.
   The review proposed folding plurals into singulars; entries are matched as
   whole words, so "Flourisher" never matches "Flourishers" and deleting the
