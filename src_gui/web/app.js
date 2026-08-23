@@ -1044,7 +1044,7 @@ async function renderMonitor(prefix) {
                     <span><span class="dot" style="background:#29456e"></span>${esc(t('status.in_progress'))}</span>
                     <span><span class="dot" style="background:#5e2020"></span>${esc(t('status.blocked'))}</span>
                     <span><span class="dot" style="background:#1f242e"></span>${esc(t('status.pending'))}</span>
-                    <span><span class="dot ext-dot"></span>${esc(t('legend.extracted'))}</span>
+                    <span><span class="dot noterms-dot"></span>${esc(t('legend.noTerms'))}</span>
                     <span><span class="dot blocked-dot"></span>${esc(t('legend.blocked'))}</span>
                     <span><span class="dot advice-dot"></span>${esc(t('legend.advice'))}</span>
                     <span><span class="dot fixed-dot"></span>${esc(t('legend.fixed'))}</span>
@@ -1354,20 +1354,26 @@ async function renderMonitor(prefix) {
                 + (c.score != null ? t('mon.chunkScore', { score: c.score }) : '')
                 + (c.attempts ? t('mon.chunkSteps', { n: c.attempts }) : '')
                 + `\n${c.preview}`;
-            const scoreHtml = c.score != null
+            // A perfect score is not news. Measured over 337 chunks of five
+            // finished books, 274 of the 324 scored ones read exactly 10 and
+            // another 46 sit above 9.5 — so a number on every cell was the same
+            // number on every cell, and the four that scored 9.0 hid among them.
+            // Shown only below 10, it means something again.
+            //
+            // The tint follows the same reasoning. It is an inline background and
+            // beats the status class, which is right while it says something and
+            // noise while it does not; a cell that earns its plain status colour
+            // is easier to read than 274 shades of the same green. A chunk the
+            // content filter refused keeps the 10 it earned before anyone
+            // objected to it, and painting that would make it look finished.
+            const scored = c.score != null && c.score < 10 && c.status !== 'blocked';
+            const scoreHtml = scored
                 ? `<span class="cell-score">${Math.round(c.score * 10) / 10}</span>`
                 : '';
-            // The tint is an inline background, so it beats the status class. That
-            // is right while the score describes the translation being shown, and
-            // wrong once the status is about something else: a chunk refused by
-            // the content filter during a fix keeps the 10 it earned when it was
-            // approved, and painted that 10 it looked finished. The status wins
-            // there; the score is still on the cell as a number.
-            const tinted = c.score != null && c.status !== 'blocked';
             const corners = (c.fixed ? '<span class="c-fixed"></span>' : '')
                 + (c.disputed ? '<span class="c-disputed"></span>' : '');
-            return `<a class="chunk-cell s-${c.status} ${c.extracted ? 'extracted' : ''} ${c.blocked ? 'blocked' : ''} ${c.advice ? 'advice' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
-                ${tinted ? `style="${cellTint(c.score)}"` : ''}
+            return `<a class="chunk-cell s-${c.status} ${c.extracted ? '' : 'no-terms'} ${c.blocked ? 'blocked' : ''} ${c.advice ? 'advice' : ''} ${c.i === activeChunk && running ? 'active' : ''}"
+                ${scored ? `style="${cellTint(c.score)}"` : ''}
                 href="#/chunk/${encodeURIComponent(prefix)}/${c.i}" title="${esc(title)}">${c.i + 1}${scoreHtml}${corners}</a>`;
         }).join('');
         drawReview();

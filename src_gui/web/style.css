@@ -488,29 +488,35 @@ table.glossary .del { text-align: center; }
 .legend-scores { font-family: ui-monospace, Consolas, monospace; }
 .legend-scores .cell-score { font-size: 11px; }
 /* Corner marker: terms extracted (Stage 1). Composes with status colour. */
-.chunk-cell.extracted::after {
+/* Inverted on purpose. This marked "terms extracted" and fired on 96% of cells
+   across five books — a mark that nearly everything carries says nothing by being
+   there, only by being absent, and nobody notices an absence in four per cent.
+   It now marks the chunk that has NO terms, which translates without a cheat
+   sheet. Red, like the top-left marker, because both are Stage 1 not having done
+   its work here: refused there, never run here. */
+.chunk-cell.no-terms::after {
     content: "";
     position: absolute;
     top: 0;
     right: 0;
     border-width: 0 7px 7px 0;
     border-style: solid;
-    border-color: transparent #6cc0ff transparent transparent;
+    border-color: transparent var(--red) transparent transparent;
     border-top-right-radius: 4px;
 }
-.dot.ext-dot {
+.dot.noterms-dot {
     background: var(--panel2);
     border: 1px solid var(--border);
     position: relative;
 }
-.dot.ext-dot::after {
+.dot.noterms-dot::after {
     content: "";
     position: absolute;
     top: 0;
     right: 0;
     border-width: 0 6px 6px 0;
     border-style: solid;
-    border-color: transparent #6cc0ff transparent transparent;
+    border-color: transparent var(--red) transparent transparent;
 }
 /* Corner marker: the provider's content filter refused this chunk at Stage 1.
    Mirrors the "extracted" marker but sits top-left and is red. */
