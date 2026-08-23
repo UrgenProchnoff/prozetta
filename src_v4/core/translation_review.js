@@ -158,6 +158,24 @@ export function findingKey(f) {
     return [f.scope, f.issue, String(f.quote || '').slice(0, 120)].join('|').toLowerCase();
 }
 
+
+/**
+ * Was this finding among those a fix was made for?
+ *
+ * Keys are the record, written by the fix itself. Older steps predate them, so
+ * the advice text is matched too — a fix stores the combined instruction it was
+ * given, and a finding whose own advice is inside it was part of that fix.
+ */
+function appliedInHistory(chunk, key, advice) {
+    const text = String(advice || '').trim();
+    for (const step of chunk?.history || []) {
+        if (step?.step !== 'advice_fix') continue;
+        if (Array.isArray(step.keys) && step.keys.includes(key)) return true;
+        if (text && String(step.advice || '').includes(text)) return true;
+    }
+    return false;
+}
+
 /**
  * The findings still worth showing, resolved against the translation as it is.
  *
@@ -179,12 +197,22 @@ export function outstandingFindings(review, chunks) {
 
         const chunk = chunks[f.chunk];
         const text = chunk?.translation;
-        if (!text || locateQuote(text, f.quote).occurrences === 0) { done++; continue; }
+        if (!text) { done++; continue; }
 
-        // Already queued on its chunk. Accepting one does not make it disappear —
-        // it stays until the fix is made and its quote is gone — so without this
-        // the list gives no way to tell what has been decided from what has not.
+        // Still queued on its chunk: accepted, waiting for the next run.
         const queued = (chunk.advice || []).some(a => a.key === key);
+
+        // Acted on. Two ways of knowing, because the obvious one is not enough:
+        // a finding whose quote has gone was clearly fixed, but a fix can leave
+        // the quote untouched — typography changes the marks around the words and
+        // not the words — and such a finding used to reappear looking undecided
+        // after it had been done. So the history is asked as well: a fix records
+        // which findings it was for, and one that has been applied and approved
+        // (queued no longer, since approval clears it) is finished whatever the
+        // text now reads like.
+        if (!queued && appliedInHistory(chunk, key, f.advice)) { done++; continue; }
+        if (!queued && locateQuote(text, f.quote).occurrences === 0) { done++; continue; }
+
         open.push({ ...f, key, queued });
     }
 

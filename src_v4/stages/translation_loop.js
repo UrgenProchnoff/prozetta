@@ -113,6 +113,13 @@ export async function runTranslationLoopStage(state) {
                 text: currentTranslation,
                 translator_comment: currentComment,
                 advice,
+                // Which findings this fix was for. A finding leaves the review
+                // list when the text it quoted is gone, and that is not the same
+                // as being dealt with: a typography fix changes the punctuation
+                // around the quoted words and leaves the words alone, so the
+                // finding came back looking undecided after being done. The keys
+                // say what was acted on regardless of what the text now looks like.
+                keys: (chunk.advice || []).map(a => a.key).filter(Boolean),
                 timestamp: new Date().toISOString(),
             });
         } else if (history.length === 0) {
