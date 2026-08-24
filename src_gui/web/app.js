@@ -1914,10 +1914,15 @@ async function renderPassport(prefix) {
     try { data = await api(`/api/projects/${encodeURIComponent(prefix)}/passport`); }
     catch (e) { app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`; return; }
 
+    // No passport yet is exactly when a person wants to build one, and this page
+    // used to answer that by sending them to the monitor. The card that builds it
+    // is on this page; it is the only thing that belongs on it while there is
+    // nothing to edit.
     if (!data.exists) {
         app.innerHTML = `<h2>${esc(t('pass.heading'))}: ${esc(prefix)}</h2>
-            <div class="empty-note">${esc(t('pass.missing'))}
-            <a class="btn" href="#/monitor/${encodeURIComponent(prefix)}">${esc(t('pass.toMonitor'))}</a></div>`;
+            <div class="empty-note">${esc(t('pass.missing'))}</div>
+            ${bookCallCard('passport')}`;
+        wireBookCalls(prefix, () => renderPassport(prefix));
         return;
     }
 
