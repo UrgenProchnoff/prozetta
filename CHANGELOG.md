@@ -14,6 +14,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `f04762b` — The passport page can build a passport when there is none. It used
+  to send you to the monitor at exactly the moment it could have helped: the card
+  that builds one sat three lines below an early return.
 - `849880e` — The two ways to make a whole-book call are a block of their own on
   the glossary and passport pages: what the call is, the API button, and the
   manual route below a rule. They used to be a toolbar button and a fold at the
