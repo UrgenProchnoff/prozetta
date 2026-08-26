@@ -208,7 +208,15 @@ export async function runTranslationLoopStage(state) {
                     ...(chunk.translation_blocked_by ? { translation_blocked_by: null } : {}),
                     // The advice has been acted on and approved. Left in place it
                     // would re-fix this chunk on every run from here on.
-                    ...(advice ? { advice: null } : {})
+                    ...(advice ? { advice: null } : {}),
+                    // A dispute is a standing request for a human to settle
+                    // something, and this chunk has just been settled without
+                    // one. Over five or ten rounds of fixing, a chunk that
+                    // deadlocked once and agreed later would keep the mark for
+                    // the rest of the book's life — the map would show a quarrel
+                    // that ended rounds ago, and the marks that mean something
+                    // would be read past.
+                    ...(chunk.dispute ? { dispute: null } : {})
                 });
             } else {
                 // Break if max retries reached to avoid wasted fix/redraft

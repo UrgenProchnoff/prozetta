@@ -181,11 +181,30 @@ export function findingKey(f) {
  * Keys are the record, written by the fix itself. Older steps predate them, so
  * the advice text is matched too — a fix stores the combined instruction it was
  * given, and a finding whose own advice is inside it was part of that fix.
+ *
+ * Only fixes made after `since` count, and that is what makes a second round
+ * possible. A book can be reviewed and fixed five or ten times, and a fix
+ * carries the key of the finding it answered forever after. Without the date, a
+ * defect that survived its fix would be silently closed by that record every
+ * time a later review raised it again — measured on Ryuker, a second review of
+ * the same text would have hidden three findings the model had just re-read the
+ * text and re-raised, their quotes still in place. The fix demonstrably did not
+ * remove what was complained about, and its own receipt was what buried the
+ * complaint. A fix answers the review it came after and no later one.
+ *
+ * A step with no timestamp is not counted. It cannot be placed against the
+ * review, and between showing a finding that was dealt with and hiding one that
+ * was not, only the second loses anything.
  */
-function appliedInHistory(chunk, key, advice) {
+function appliedInHistory(chunk, key, advice, since) {
     const text = String(advice || '').trim();
+    const after = since ? Date.parse(since) : NaN;
     for (const step of chunk?.history || []) {
         if (step?.step !== 'advice_fix') continue;
+        if (Number.isFinite(after)) {
+            const at = Date.parse(step.timestamp || '');
+            if (!Number.isFinite(at) || at < after) continue;
+        }
         if (Array.isArray(step.keys) && step.keys.includes(key)) return true;
         if (text && String(step.advice || '').includes(text)) return true;
     }
@@ -234,7 +253,7 @@ export function outstandingFindings(review, chunks) {
         // which findings it was for, and one that has been applied and approved
         // (queued no longer, since approval clears it) is finished whatever the
         // text now reads like.
-        if (!queued && appliedInHistory(chunk, key, f.advice)) { done++; continue; }
+        if (!queued && appliedInHistory(chunk, key, f.advice, review?.generatedAt)) { done++; continue; }
         if (!queued && locateQuote(text, f.quote).occurrences === 0) { done++; continue; }
 
         open.push({ ...f, key, queued });
