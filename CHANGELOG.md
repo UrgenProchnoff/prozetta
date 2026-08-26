@@ -14,6 +14,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `51d2d4b` — Multi-round fixing holds up past the first round: a fix no longer
+  closes findings from reviews that came after it, so a defect that survives its
+  fix stays visible, and a dispute is cleared when the chunk is later approved.
 - `b33eb29` — A chunk whose advice fix was never approved could fall back to its
   pre-review translation, restoring the defect while the finding still counted as
   handled. The best-of-history scan now stops at the last advice fix.
