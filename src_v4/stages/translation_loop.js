@@ -303,11 +303,31 @@ export async function runTranslationLoopStage(state) {
         }
 
         if (!success) {
-            // Find best version in history
+            // Find best version in history.
+            //
+            // Not the whole of it when this run fixed on advice. The attempts
+            // before that fix scored a text the whole-book review has since
+            // found wrong, and it found it on evidence the per-chunk checker
+            // never had — the rest of the book. Those scores are honest and
+            // stale: chunk 7 of Morphotrophic scored 10 before the review and
+            // 9.5 after, and a scan of the whole history would have restored the
+            // 10 — putting back the very sentence the review complained about,
+            // while the fix stayed in the history to mark the finding handled.
+            // The defect returns and the finding reports itself dealt with.
+            //
+            // So the fix is the floor: past it lies a decision already made. The
+            // last fix, not the first — a chunk can be sent back by a second
+            // review, and the round before that one is just as stale.
+            let fixedAt = -1;
+            for (let k = history.length - 1; k >= 0; k--) {
+                if (history[k]?.step === 'advice_fix') { fixedAt = k; break; }
+            }
+            const considered = advice && fixedAt >= 0 ? history.slice(fixedAt) : history;
+
             let bestScore = -1;
             let bestText = currentTranslation; // Default to the last attempted translation
 
-            history.forEach(h => {
+            considered.forEach(h => {
                 if (h.result && h.result.score > bestScore && h.text) {
                     bestScore = h.result.score;
                     bestText = h.text;
