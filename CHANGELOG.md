@@ -14,6 +14,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `6f7de59` — A finding's chunk button now opens the chunk with the quote
+  selected in the editable text, and the chunk page lists what the review said
+  about it, each finding able to show its own quote.
 - `51d2d4b` — Multi-round fixing holds up past the first round: a fix no longer
   closes findings from reviews that came after it, so a defect that survives its
   fix stays visible, and a dispute is cleared when the chunk is later approved.
