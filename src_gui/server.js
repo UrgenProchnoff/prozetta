@@ -19,6 +19,7 @@ import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages
 import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_passport.js';
 import { extractJson } from '../src_v4/utils/parsers.js';
 import { outstandingFindings as reviewOutstanding, findingKey } from '../src_v4/core/translation_review.js';
+import { locateQuote } from '../src_v4/core/quoted_spans.js';
 import config from '../src_v4/config.js';
 
 import { execFileSync } from 'child_process';
@@ -609,8 +610,41 @@ app.get('/api/projects/:prefix/chunks/:i', (req, res) => {
     const i = parseInt(req.params.i, 10);
     const chunk = state.chunks?.[i];
     if (!chunk) return res.status(404).json({ error: 'Chunk not found' });
-    res.json({ i, total: state.chunks.length, chunk });
+    res.json({ i, total: state.chunks.length, chunk, findings: chunkFindings(prefix, state.chunks, i) });
 });
+
+/**
+ * What the whole-book review has to say about one chunk, with each quote's place
+ * in the translation.
+ *
+ * The review list could send a reader to the right chunk and no further: four
+ * thousand characters, and somewhere in them the sentence being complained
+ * about. The offsets come from the same locateQuote the findings were verified
+ * with, so a quote that is here at all is here exactly where it was found.
+ *
+ * Only the findings still outstanding — one already dealt with is not something
+ * to go looking for, and a dismissed one is a judgement the reader has already
+ * made.
+ */
+function chunkFindings(prefix, chunks, i) {
+    if (!fs.existsSync(transReviewPath(prefix))) return [];
+    try {
+        const { open } = reviewOutstanding(readJson(transReviewPath(prefix)), chunks);
+        const text = chunks[i]?.translation || '';
+        return open.filter(f => f.chunk === i).map(f => {
+            const { offset, end, occurrences } = locateQuote(text, f.quote);
+            return {
+                key: f.key, scope: f.scope, issue: f.issue, quote: f.quote,
+                problem: f.problem, advice: f.advice, queued: !!f.queued,
+                // Absent when the quote cannot be pointed at: a fix may have
+                // changed the words while leaving the finding open, and offering
+                // to jump to a place that is no longer there is worse than not
+                // offering. The finding still shows — it is still outstanding.
+                ...(occurrences === 1 ? { start: offset, end } : {}),
+            };
+        });
+    } catch { return []; }
+}
 
 app.put('/api/projects/:prefix/chunks/:i', (req, res) => {
     const prefix = validPrefix(req, res);

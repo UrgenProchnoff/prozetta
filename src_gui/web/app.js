@@ -115,7 +115,13 @@ let cleanup = null; // page teardown (close SSE etc.)
 
 function route() {
     if (cleanup) { cleanup(); cleanup = null; }
-    const hash = location.hash.replace(/^#/, '') || '/';
+    const raw = location.hash.replace(/^#/, '') || '/';
+    // A finding sends the reader to a chunk and says which quote it meant. The
+    // key rides in the URL rather than in a variable so that a reload lands in
+    // the same place — the point of arriving at a quote is to work on it, and
+    // work involves refreshing the page.
+    const [hash, query = ''] = raw.split('?');
+    const focus = new URLSearchParams(query).get('q') || '';
     const parts = hash.split('/').filter(Boolean);
 
     if (parts.length === 0) return renderDashboard();
@@ -126,7 +132,7 @@ function route() {
     if (parts[0] === 'monitor' && parts[1]) return renderMonitor(decodeURIComponent(parts[1]));
     if (parts[0] === 'book' && parts[1]) return renderBook(decodeURIComponent(parts[1]));
     if (parts[0] === 'chunk' && parts[1] && parts[2] !== undefined)
-        return renderChunk(decodeURIComponent(parts[1]), parseInt(parts[2], 10));
+        return renderChunk(decodeURIComponent(parts[1]), parseInt(parts[2], 10), focus);
     renderDashboard();
 }
 
@@ -1596,7 +1602,8 @@ async function renderMonitor(prefix) {
             return `<div class="rev-item${f.queued ? ' rev-done' : ''}${lastOfChunk.has(f.key) ? ' rev-chunk-end' : ''}">
                 <div class="rev-head">
                     <span class="badge b-${f.scope === 'chunk' ? 'best_effort' : 'disputed'}">${esc(t('rev.scope.' + f.scope))}</span>
-                    <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${f.chunk}">${f.chunk + 1}</a>
+                    <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${f.chunk}?q=${encodeURIComponent(f.key)}"
+                       title="${esc(t('rev.goToQuote'))}">${f.chunk + 1}</a>
                     <span class="rev-issue">${esc(f.issue)}</span>
                     ${f.queued ? `<span class="badge b-success">${esc(t('rev.queuedBadge'))}</span>` : ''}
                     <span class="spacer"></span>
@@ -2066,7 +2073,7 @@ async function renderPassport(prefix) {
 // Chunk view
 // ============================================================
 
-async function renderChunk(prefix, i) {
+async function renderChunk(prefix, i, focusKey = '') {
     setCrumbs(`${crumbHome()} / ${crumbBook(prefix)} / ${esc(t('chunk.crumb', { n: i + 1 }))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
@@ -2108,6 +2115,27 @@ async function renderChunk(prefix, i) {
         </details>`;
     }).join('');
 
+    // What the whole-book review said about this chunk. It used to say it only on
+    // the monitor, which meant reading the complaint on one page and looking for
+    // the sentence on another.
+    const findings = data.findings || [];
+    const findingsHtml = findings.length ? `<div class="chunk-findings">
+        <div class="cfg-hint">${esc(t('chunk.findings', { n: findings.length }))}</div>
+        ${findings.map(f => `<div class="cf-item${f.key === focusKey ? ' cf-focus' : ''}" data-key="${esc(f.key)}">
+            <div class="rev-head">
+                <span class="badge b-${f.scope === 'chunk' ? 'best_effort' : 'disputed'}">${esc(t('rev.scope.' + f.scope))}</span>
+                <span class="rev-issue">${esc(f.issue)}</span>
+                ${f.queued ? `<span class="badge b-success">${esc(t('rev.queuedBadge'))}</span>` : ''}
+                <span class="spacer"></span>
+                ${f.start === undefined ? `<span class="cfg-hint">${esc(t('chunk.quoteGone'))}</span>`
+                    : `<button data-cf="show" data-start="${f.start}" data-end="${f.end}">${esc(t('chunk.showQuote'))}</button>`}
+            </div>
+            <div class="rev-quote">«${esc(f.quote)}»</div>
+            <div class="rev-problem">${esc(f.problem)}</div>
+            ${f.advice ? `<div class="rev-advice">→ ${esc(f.advice)}</div>` : ''}
+        </div>`).join('')}
+    </div>` : '';
+
     app.innerHTML = `
         <div class="toolbar">
             <a class="btn" href="${i <= 0 ? `#/monitor/${encodeURIComponent(prefix)}` : `#/chunk/${encodeURIComponent(prefix)}/${i - 1}`}">${i <= 0 ? `← ${esc(t('mon.heading'))}` : `← ${i}`}</a>
@@ -2128,6 +2156,7 @@ async function renderChunk(prefix, i) {
             <button id="c-approve" class="primary">${esc(t('chunk.approve'))}</button>
             <button id="c-reset" class="danger">${esc(t('chunk.reset'))}</button>
         </div>
+        ${findingsHtml}
         ${chunk.dispute ? `<div class="dispute-note">${esc(t('chunk.disputeExplain', { reason: chunk.dispute.reason || '?' }))}</div>` : ''}
         ${status === 'blocked' ? `<div class="blocked-note">${esc(t('chunk.blockedExplain', { model: chunk.translation_blocked_by || '?' }))}</div>` : ''}
         <div class="panes" id="c-panes">
@@ -2145,6 +2174,59 @@ async function renderChunk(prefix, i) {
     `;
 
     const ta = document.getElementById('c-translation');
+
+    /**
+     * Put the quote under the reader's eye and the cursor.
+     *
+     * A selection rather than a highlight, because the translation lives in a
+     * textarea: markup cannot go inside one, and a selection is the better
+     * answer anyway — it leaves the cursor on the words being complained about,
+     * ready to be typed over.
+     *
+     * The scroll is measured, not guessed. A mirror div with the textarea's own
+     * font and width is filled with the text up to the quote, and its height is
+     * where the quote begins; line counting would be wrong wherever a line
+     * wraps, which in prose is nearly everywhere. The mirror is read and thrown
+     * away without the textarea being touched — the trick of assigning .value to
+     * force a scroll would take the editor's undo history with it.
+     */
+    function showQuote(start, end) {
+        const style = getComputedStyle(ta);
+        const mirror = document.createElement('div');
+        for (const prop of ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
+            'padding', 'border', 'whiteSpace', 'wordBreak', 'boxSizing']) {
+            mirror.style[prop] = style[prop];
+        }
+        mirror.style.cssText += ';position:absolute;visibility:hidden;top:0;left:-9999px;height:auto;';
+        mirror.style.width = style.width;
+        mirror.style.whiteSpace = 'pre-wrap';
+        mirror.textContent = ta.value.slice(0, start);
+        document.body.appendChild(mirror);
+        const above = mirror.offsetHeight;
+        mirror.remove();
+
+        ta.focus();
+        ta.setSelectionRange(start, end);
+        // A third of the way down rather than at the very top: a sentence with
+        // nothing above it reads as the start of something, and the reason it
+        // was flagged is usually in what came before.
+        ta.scrollTop = Math.max(0, above - ta.clientHeight / 3);
+    }
+
+    app.querySelector('.chunk-findings')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-cf="show"]');
+        if (!btn) return;
+        app.querySelectorAll('.cf-item').forEach(el => el.classList.toggle('cf-focus', el.contains(btn)));
+        showQuote(Number(btn.dataset.start), Number(btn.dataset.end));
+    });
+
+    // Arriving from the review list: the finding named a quote, so land on it
+    // rather than at the top of four thousand characters.
+    const focused = focusKey && findings.find(f => f.key === focusKey && f.start !== undefined);
+    if (focused) {
+        app.querySelector('.cf-focus')?.scrollIntoView({ block: 'nearest' });
+        showQuote(focused.start, focused.end);
+    }
 
     // Toggle original pane — persisted so it stays hidden while navigating chunks
     const panes = document.getElementById('c-panes');

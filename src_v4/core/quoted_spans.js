@@ -41,17 +41,28 @@ function flatten(text) {
  * though they are perfectly faithful. Measured: 3 of 36 quotes failed a strict
  * search and all 3 were verbatim once whitespace was normalized.
  *
- * @returns {{offset: number, occurrences: number}} offset -1 when not found
+ * @returns {{offset: number, end: number, occurrences: number}}
+ *   `offset` is -1 and `end` -1 when not found. `end` is one past the last
+ *   character, so the pair can be handed straight to a text selection — the
+ *   quote is what the reader is being sent to look at, and telling them the
+ *   chunk without telling them the place leaves the finding half delivered.
+ *   It comes from the same origin map as the offset, so a quote that was
+ *   matched across a line break still ends where it really ends.
  */
 export function locateQuote(haystack, quote, prepared = null) {
     const { flat, origin } = prepared || flatten(haystack);
     const needle = String(quote || '').replace(/\s+/g, ' ').trim();
-    if (needle.length < 8) return { offset: -1, occurrences: 0 };   // too short to be unique
+    if (needle.length < 8) return { offset: -1, end: -1, occurrences: 0 };   // too short to be unique
 
     const first = flat.indexOf(needle);
-    if (first < 0) return { offset: -1, occurrences: 0 };
+    if (first < 0) return { offset: -1, end: -1, occurrences: 0 };
     const second = flat.indexOf(needle, first + 1);
-    return { offset: origin[first] ?? first, occurrences: second >= 0 ? 2 : 1 };
+    const last = origin[first + needle.length - 1];
+    return {
+        offset: origin[first] ?? first,
+        end: Number.isInteger(last) ? last + 1 : first + needle.length,
+        occurrences: second >= 0 ? 2 : 1,
+    };
 }
 
 /**

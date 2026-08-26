@@ -1133,3 +1133,17 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
     padding-top: 12px;
     border-top: 1px solid var(--border);
 }
+
+/* What the whole-book review said about this chunk, above the text it is about.
+   Quiet by default: on most chunks there is nothing here, and on the rest it is
+   a note in the margin, not the subject of the page. */
+.chunk-findings { margin: 12px 0; }
+.cf-item {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 8px;
+}
+/* The one that was clicked, and the one a finding's link arrived at. */
+.cf-item.cf-focus { border-left-color: var(--accent); background: var(--panel2); }
