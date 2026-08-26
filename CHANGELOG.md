@@ -14,6 +14,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `b33eb29` — A chunk whose advice fix was never approved could fall back to its
+  pre-review translation, restoring the defect while the finding still counted as
+  handled. The best-of-history scan now stops at the last advice fix.
 - `f04762b` — The passport page can build a passport when there is none. It used
   to send you to the monitor at exactly the moment it could have helped: the card
   that builds one sat three lines below an early return.
