@@ -14,6 +14,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `7fb6190` — Replace, beside the search: all at once or one hit at a time, in
+  translations only, with an Undo offered in the toast that puts every touched
+  chunk back.
 - `2b0643a` — Cross-chunk search in the editor (Ctrl+Shift+F): translation,
   original or both, whole words or not, and clicking a hit opens that chunk with
   the match selected — the search surviving the jump.
