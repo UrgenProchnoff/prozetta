@@ -121,7 +121,7 @@ function route() {
     // the same place — the point of arriving at a quote is to work on it, and
     // work involves refreshing the page.
     const [hash, query = ''] = raw.split('?');
-    const focus = new URLSearchParams(query).get('q') || '';
+    const params = new URLSearchParams(query);
     const parts = hash.split('/').filter(Boolean);
 
     if (parts.length === 0) return renderDashboard();
@@ -132,7 +132,7 @@ function route() {
     if (parts[0] === 'monitor' && parts[1]) return renderMonitor(decodeURIComponent(parts[1]));
     if (parts[0] === 'book' && parts[1]) return renderBook(decodeURIComponent(parts[1]));
     if (parts[0] === 'chunk' && parts[1] && parts[2] !== undefined)
-        return renderChunk(decodeURIComponent(parts[1]), parseInt(parts[2], 10), focus);
+        return renderChunk(decodeURIComponent(parts[1]), parseInt(parts[2], 10), params);
     renderDashboard();
 }
 
@@ -1602,7 +1602,7 @@ async function renderMonitor(prefix) {
             return `<div class="rev-item${f.queued ? ' rev-done' : ''}${lastOfChunk.has(f.key) ? ' rev-chunk-end' : ''}">
                 <div class="rev-head">
                     <span class="badge b-${f.scope === 'chunk' ? 'best_effort' : 'disputed'}">${esc(t('rev.scope.' + f.scope))}</span>
-                    <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${f.chunk}?q=${encodeURIComponent(f.key)}"
+                    <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${f.chunk}?finding=${encodeURIComponent(f.key)}"
                        title="${esc(t('rev.goToQuote'))}">${f.chunk + 1}</a>
                     <span class="rev-issue">${esc(f.issue)}</span>
                     ${f.queued ? `<span class="badge b-success">${esc(t('rev.queuedBadge'))}</span>` : ''}
@@ -2073,7 +2073,8 @@ async function renderPassport(prefix) {
 // Chunk view
 // ============================================================
 
-async function renderChunk(prefix, i, focusKey = '') {
+async function renderChunk(prefix, i, params = new URLSearchParams()) {
+    const focusKey = params.get('finding') || '';
     setCrumbs(`${crumbHome()} / ${crumbBook(prefix)} / ${esc(t('chunk.crumb', { n: i + 1 }))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
@@ -2145,6 +2146,7 @@ async function renderChunk(prefix, i, focusKey = '') {
             ${chunk.dispute ? `<span class="badge b-disputed">${esc(t('chunk.disputedBadge'))}</span>` : ''}
             <span class="badge">${esc(t('chunk.tokens', { n: chunk.tokens ?? '?' }))}</span>
             <span class="badge" title="${esc(t('chunk.termsTitle'))}">${extracted ? esc(t('chunk.termsExtracted', { n: nTerms ?? '✓' })) : esc(t('chunk.termsNot'))}</span>
+            <button id="c-find" title="${esc(t('chunk.findTitle'))}">${esc(t('chunk.find'))}</button>
             <button id="c-toggle-orig" title="${esc(t('chunk.toggleTitle'))}"></button>
             <span class="font-ctl">
                 <button id="c-font-dec" title="${esc(t('chunk.fontSmaller'))}">A−</button>
@@ -2155,6 +2157,21 @@ async function renderChunk(prefix, i, focusKey = '') {
             <button id="c-save">${esc(t('common.save'))}</button>
             <button id="c-approve" class="primary">${esc(t('chunk.approve'))}</button>
             <button id="c-reset" class="danger">${esc(t('chunk.reset'))}</button>
+        </div>
+        <div class="chunk-search" id="c-search" hidden>
+            <div class="rev-head">
+                <input id="cs-q" type="search" placeholder="${esc(t('chunk.findPlaceholder'))}" value="${esc(params.get('q') || '')}">
+                <select id="cs-field">
+                    <option value="translation">${esc(t('chunk.findInTranslation'))}</option>
+                    <option value="original">${esc(t('chunk.findInOriginal'))}</option>
+                    <option value="both">${esc(t('chunk.findInBoth'))}</option>
+                </select>
+                <label class="cs-opt"><input type="checkbox" id="cs-whole"> ${esc(t('chunk.findWhole'))}</label>
+                <label class="cs-opt"><input type="checkbox" id="cs-case"> ${esc(t('chunk.findCase'))}</label>
+                <span class="spacer"></span>
+                <span class="cfg-hint" id="cs-count"></span>
+            </div>
+            <div id="cs-hits"></div>
         </div>
         ${findingsHtml}
         ${chunk.dispute ? `<div class="dispute-note">${esc(t('chunk.disputeExplain', { reason: chunk.dispute.reason || '?' }))}</div>` : ''}
@@ -2213,6 +2230,22 @@ async function renderChunk(prefix, i, focusKey = '') {
         ta.scrollTop = Math.max(0, above - ta.clientHeight / 3);
     }
 
+    /**
+     * The same, for the original — which is a div, so it really can be marked.
+     *
+     * Rebuilt rather than wrapped in place, because the pane holds one text node
+     * and a range inside it has no element to give a class to. Escaped in three
+     * pieces for the same reason it was escaped in one.
+     */
+    function markInOriginal(start, end) {
+        const pane = document.querySelector('.original-text');
+        if (!pane) return;
+        const text = chunk.original || '';
+        pane.innerHTML = esc(text.slice(0, start)) + '<mark>' + esc(text.slice(start, end)) + '</mark>' + esc(text.slice(end));
+        document.getElementById('c-panes')?.classList.remove('hide-original');
+        pane.querySelector('mark')?.scrollIntoView({ block: 'center' });
+    }
+
     app.querySelector('.chunk-findings')?.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-cf="show"]');
         if (!btn) return;
@@ -2220,12 +2253,99 @@ async function renderChunk(prefix, i, focusKey = '') {
         showQuote(Number(btn.dataset.start), Number(btn.dataset.end));
     });
 
-    // Arriving from the review list: the finding named a quote, so land on it
-    // rather than at the top of four thousand characters.
+    // --- Search across every chunk ---
+    //
+    // The whole search lives in the URL: the words, the options, and which hit
+    // is being looked at. Clicking a hit in chunk 84 is a navigation, and a
+    // navigation that forgot the search would leave the reader retyping it to
+    // see the next one — which is the whole of what this tool is for.
+    const panel = document.getElementById('c-search');
+    const qBox = document.getElementById('cs-q');
+    const fieldBox = document.getElementById('cs-field');
+    const wholeBox = document.getElementById('cs-whole');
+    const caseBox = document.getElementById('cs-case');
+    const hitsBox = document.getElementById('cs-hits');
+    const countBox = document.getElementById('cs-count');
+    fieldBox.value = params.get('fl') || 'translation';
+    wholeBox.checked = params.get('w') === '1';
+    caseBox.checked = params.get('cs') === '1';
+
+    const searchQuery = () => ({
+        q: qBox.value.trim(), fl: fieldBox.value,
+        ...(wholeBox.checked ? { w: '1' } : {}), ...(caseBox.checked ? { cs: '1' } : {}),
+    });
+
+    function openSearch(focusIt = true) {
+        panel.hidden = false;
+        if (focusIt) { qBox.focus(); qBox.select(); }
+    }
+    document.getElementById('c-find').addEventListener('click', () => {
+        if (panel.hidden) openSearch(); else panel.hidden = true;
+    });
+
+    let searchTimer = null;
+    async function runSearch() {
+        const state = searchQuery();
+        if (state.q.length < 2) { hitsBox.innerHTML = ''; countBox.textContent = ''; return; }
+        countBox.textContent = t('common.loading');
+        let r;
+        try {
+            r = await api(`/api/projects/${encodeURIComponent(prefix)}/search?`
+                + new URLSearchParams({ q: state.q, field: state.fl, whole: state.w || '', case: state.cs || '' }));
+        } catch (e) { countBox.textContent = t('common.error', { msg: e.message }); return; }
+
+        const counts = { n: fmtNum(r.total), chunks: fmtNum(r.chunks), shown: fmtNum(r.hits.length) };
+        countBox.textContent = !r.total ? t('chunk.findNone')
+            : r.capped ? t('chunk.findCountCapped', counts)
+            : t('chunk.findCount', counts);
+
+        const here = Number(params.get('at')?.split('-')[0]);
+        hitsBox.innerHTML = r.hits.map(h => {
+            const url = `#/chunk/${encodeURIComponent(prefix)}/${h.chunk}?`
+                + new URLSearchParams({ ...state, at: `${h.start}-${h.end}`, in: h.field });
+            // The hit being looked at right now, so a list of forty stays legible
+            // after the jump — you can see where you are in it.
+            const current = h.chunk === i && h.start === here && h.field === (params.get('in') || 'translation');
+            return `<a class="cs-hit${current ? ' cs-current' : ''}" href="${url}">
+                <span class="cs-n">${h.chunk + 1}</span>
+                ${h.field === 'original' ? `<span class="badge">${esc(t('chunk.findOrig'))}</span>` : ''}
+                <span class="cs-line">…${esc(h.before)}<mark>${esc(h.match)}</mark>${esc(h.after)}…</span>
+            </a>`;
+        }).join('');
+        app.querySelector('.cs-current')?.scrollIntoView({ block: 'nearest' });
+    }
+
+    qBox.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(runSearch, 250);
+    });
+    for (const el of [fieldBox, wholeBox, caseBox]) el.addEventListener('change', runSearch);
+
+    // Ctrl+Shift+F, the "find in files" of every editor. Ctrl+F is left to the
+    // browser: this page is longer than its text box, and taking away the way to
+    // search the rest of it would be a poor trade for one keystroke.
+    const onKey = (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+            e.preventDefault();
+            openSearch();
+        } else if (e.key === 'Escape' && !panel.hidden && document.activeElement !== ta) {
+            panel.hidden = true;
+        }
+    };
+    document.addEventListener('keydown', onKey);
+    cleanup = () => document.removeEventListener('keydown', onKey);
+
+    if (params.get('q')) { openSearch(false); runSearch(); }
+
+    // Arriving somewhere precise: a finding's quote, or a search hit.
     const focused = focusKey && findings.find(f => f.key === focusKey && f.start !== undefined);
+    const at = (params.get('at') || '').split('-').map(Number);
     if (focused) {
         app.querySelector('.cf-focus')?.scrollIntoView({ block: 'nearest' });
         showQuote(focused.start, focused.end);
+    } else if (at.length === 2 && Number.isFinite(at[0]) && Number.isFinite(at[1])) {
+        if ((params.get('in') || 'translation') === 'original') markInOriginal(at[0], at[1]);
+        else showQuote(at[0], at[1]);
     }
 
     // Toggle original pane — persisted so it stays hidden while navigating chunks

@@ -1147,3 +1147,30 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 }
 /* The one that was clicked, and the one a finding's link arrived at. */
 .cf-item.cf-focus { border-left-color: var(--accent); background: var(--panel2); }
+
+/* Cross-chunk search. Folded away until asked for: most visits to a chunk are
+   to read it, and a search box open on arrival would be a question nobody put. */
+.chunk-search {
+    margin: 12px 0;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel);
+}
+#cs-q { flex: 1; min-width: 220px; }
+.cs-opt { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); white-space: nowrap; }
+#cs-hits { max-height: 40vh; overflow-y: auto; margin-top: 8px; }
+.cs-hit {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    color: var(--text);
+    text-decoration: none;
+}
+.cs-hit:hover { background: var(--panel2); }
+.cs-current { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
+.cs-n { color: var(--muted); min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+.cs-line { font-size: 13px; line-height: 1.5; }
+.cs-hit mark, .original-text mark { background: var(--accent); color: #fff; border-radius: 2px; }

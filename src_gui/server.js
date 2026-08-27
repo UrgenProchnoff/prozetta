@@ -646,6 +646,69 @@ function chunkFindings(prefix, chunks, i) {
     } catch { return []; }
 }
 
+/**
+ * Find a string in every chunk at once.
+ *
+ * The editor could show one chunk and the glossary could count a term, and
+ * between them there was no way to ask the plain question a translator asks all
+ * day: where else does this occur, and what did I do with it there. The chunk
+ * page is where it belongs, because the answer is always followed by going and
+ * looking.
+ *
+ * Whole-word matching goes through wholeWordRegex, which drops the boundary on
+ * the side facing an unspaced script — a \b would find one occurrence in five of
+ * a Han name, and the search would quietly lie about a whole book.
+ *
+ * Hits are capped. A two-letter word matches tens of thousands of times, and the
+ * useful part of that answer is the count, which is reported in full either way.
+ */
+app.get('/api/projects/:prefix/search', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    const needle = String(req.query.q || '');
+    if (needle.length < 2) return res.json({ hits: [], total: 0, chunks: 0, capped: false });
+
+    const field = ['translation', 'original', 'both'].includes(req.query.field) ? req.query.field : 'translation';
+    const fields = field === 'both' ? ['original', 'translation'] : [field];
+    const whole = req.query.whole === '1';
+    const sensitive = req.query.case === '1';
+    const flags = sensitive ? 'gu' : 'giu';
+    const re = whole
+        ? wholeWordRegex(needle, flags)
+        : new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+
+    const CAP = 300, PAD = 60;
+    const chunks = readJson(statePath(prefix)).chunks || [];
+    const hits = [];
+    let total = 0;
+    const touched = new Set();
+
+    chunks.forEach((chunk, i) => {
+        for (const f of fields) {
+            const text = chunk?.[f];
+            if (!text) continue;
+            re.lastIndex = 0;
+            let m;
+            while ((m = re.exec(text)) !== null) {
+                // A pattern that can match nothing would spin here forever.
+                if (m[0] === '') { re.lastIndex++; continue; }
+                total++;
+                touched.add(i);
+                if (hits.length < CAP) {
+                    hits.push({
+                        chunk: i, field: f, start: m.index, end: m.index + m[0].length,
+                        before: text.slice(Math.max(0, m.index - PAD), m.index).replace(/\s+/g, ' '),
+                        match: m[0],
+                        after: text.slice(m.index + m[0].length, m.index + m[0].length + PAD).replace(/\s+/g, ' '),
+                    });
+                }
+            }
+        }
+    });
+
+    res.json({ hits, total, chunks: touched.size, capped: total > hits.length });
+});
+
 app.put('/api/projects/:prefix/chunks/:i', (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
