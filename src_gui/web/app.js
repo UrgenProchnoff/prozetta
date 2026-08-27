@@ -21,12 +21,31 @@ async function api(url, opts = {}) {
     return data;
 }
 
-function toast(msg, kind = '') {
+/**
+ * A passing message, optionally with a way to take back what caused it.
+ *
+ * An offer needs longer on screen than a notice does: four seconds is enough to
+ * read "done", and not enough to read "forty chunks changed", decide it was
+ * wrong, and reach for the button.
+ */
+function toast(msg, kind = '', offer = null) {
     const el = document.createElement('div');
     el.className = `t ${kind}`;
     el.textContent = msg;
+    if (offer) {
+        const btn = document.createElement('button');
+        btn.className = 't-undo';
+        btn.textContent = offer.label;
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            el.remove();
+            try { await offer.action(); }
+            catch (e) { toast(t('common.error', { msg: e.message }), 'error'); }
+        });
+        el.appendChild(btn);
+    }
     document.getElementById('toast').appendChild(el);
-    setTimeout(() => el.remove(), 4000);
+    setTimeout(() => el.remove(), offer ? 15000 : 4000);
 }
 
 function fmtDate(iso) {
@@ -2171,6 +2190,11 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
                 <span class="spacer"></span>
                 <span class="cfg-hint" id="cs-count"></span>
             </div>
+            <div class="rev-head" style="margin-top:8px">
+                <input id="cs-to" type="text" placeholder="${esc(t('chunk.replacePlaceholder'))}">
+                <button id="cs-all">${esc(t('chunk.replaceAll'))}</button>
+                <span class="cfg-hint">${esc(t('chunk.replaceScope'))}</span>
+            </div>
             <div id="cs-hits"></div>
         </div>
         ${findingsHtml}
@@ -2306,11 +2330,15 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
             // The hit being looked at right now, so a list of forty stays legible
             // after the jump — you can see where you are in it.
             const current = h.chunk === i && h.start === here && h.field === (params.get('in') || 'translation');
-            return `<a class="cs-hit${current ? ' cs-current' : ''}" href="${url}">
-                <span class="cs-n">${h.chunk + 1}</span>
-                ${h.field === 'original' ? `<span class="badge">${esc(t('chunk.findOrig'))}</span>` : ''}
-                <span class="cs-line">…${esc(h.before)}<mark>${esc(h.match)}</mark>${esc(h.after)}…</span>
-            </a>`;
+            return `<div class="cs-row${current ? ' cs-current' : ''}">
+                <a class="cs-hit" href="${url}">
+                    <span class="cs-n">${h.chunk + 1}</span>
+                    ${h.field === 'original' ? `<span class="badge">${esc(t('chunk.findOrig'))}</span>` : ''}
+                    <span class="cs-line">…${esc(h.before)}<mark>${esc(h.match)}</mark>${esc(h.after)}…</span>
+                </a>
+                ${h.field === 'original' ? '' : `<button class="cs-rep" data-chunk="${h.chunk}" data-start="${h.start}" data-end="${h.end}"
+                    title="${esc(t('chunk.replaceOneTitle'))}">${esc(t('chunk.replaceOne'))}</button>`}
+            </div>`;
         }).join('');
         app.querySelector('.cs-current')?.scrollIntoView({ block: 'nearest' });
     }
@@ -2320,6 +2348,76 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
         searchTimer = setTimeout(runSearch, 250);
     });
     for (const el of [fieldBox, wholeBox, caseBox]) el.addEventListener('change', runSearch);
+
+    /**
+     * Carry out a replace and offer to take it back.
+     *
+     * The offer is the point. A replace across forty chunks is not something a
+     * person can check by looking, and the moment they can tell it was wrong is
+     * the moment after it happened — so the way back is put in front of them
+     * then, rather than left to be reconstructed from forty histories.
+     */
+    const toBox = document.getElementById('cs-to');
+
+    /** The chunk on screen, after the store was changed underneath it. */
+    async function reloadText() {
+        try {
+            const fresh = await api(`/api/projects/${encodeURIComponent(prefix)}/chunks/${i}`);
+            chunk.translation = fresh.chunk.translation || '';
+            ta.value = chunk.translation;
+        } catch { /* the store is right either way; the next visit will show it */ }
+    }
+
+    async function replace(body, confirmText) {
+        // A replace writes the stored translation, and the box on screen may hold
+        // something the store has never seen. Going ahead would throw that away
+        // without a word — and the writing somebody has not saved yet is exactly
+        // the writing they would least like to lose.
+        if (ta.value !== (chunk.translation || '') && !confirm(t('chunk.replaceUnsaved'))) return;
+        if (confirmText && !confirm(confirmText)) return;
+        let r;
+        try {
+            r = await api(`/api/projects/${encodeURIComponent(prefix)}/replace`, { method: 'POST', body });
+        } catch (e) { toast(t('common.error', { msg: e.message }), 'error'); return; }
+
+        if (!r.replacements) { toast(t('chunk.replaceNone'), 'error'); return; }
+        // Refreshed in place rather than by redrawing the page: a redraw would
+        // empty the replacement box, and the next occurrence is usually replaced
+        // with the same word as the last.
+        await reloadText();
+        runSearch();
+        toast(t('chunk.replaced', { n: fmtNum(r.replacements), chunks: fmtNum(r.chunks) }), 'ok', {
+            label: t('chunk.replaceUndo'),
+            action: async () => {
+                await api(`/api/projects/${encodeURIComponent(prefix)}/replace/undo`, { method: 'POST', body: { batch: r.batch } });
+                toast(t('chunk.replaceUndone'), 'ok');
+                await reloadText();
+                runSearch();
+            },
+        });
+    }
+
+    document.getElementById('cs-all').addEventListener('click', () => {
+        const state = searchQuery();
+        if (state.q.length < 2) { qBox.focus(); return; }
+        const shown = hitsBox.querySelectorAll('.cs-rep').length;
+        const what = { from: state.q, to: toBox.value, n: fmtNum(shown) };
+        // Emptying the box is a legitimate way to delete a word everywhere, and
+        // it is also what an unfinished thought looks like. The question says
+        // which one is about to happen.
+        const ask = toBox.value ? t('chunk.replaceAllConfirm', what) : t('chunk.replaceAllDeleteConfirm', what);
+        replace({ q: state.q, to: toBox.value, whole: wholeBox.checked, case: caseBox.checked }, ask);
+    });
+
+    hitsBox.addEventListener('click', (e) => {
+        const btn = e.target.closest('.cs-rep');
+        if (!btn) return;
+        const state = searchQuery();
+        replace({
+            q: state.q, to: toBox.value, whole: wholeBox.checked, case: caseBox.checked,
+            at: { chunk: Number(btn.dataset.chunk), start: Number(btn.dataset.start), end: Number(btn.dataset.end) },
+        });
+    });
 
     // Ctrl+Shift+F, the "find in files" of every editor. Ctrl+F is left to the
     // browser: this page is longer than its text box, and taking away the way to

@@ -672,10 +672,7 @@ app.get('/api/projects/:prefix/search', (req, res) => {
     const fields = field === 'both' ? ['original', 'translation'] : [field];
     const whole = req.query.whole === '1';
     const sensitive = req.query.case === '1';
-    const flags = sensitive ? 'gu' : 'giu';
-    const re = whole
-        ? wholeWordRegex(needle, flags)
-        : new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+    const re = searchRegex(needle, { whole, sensitive });
 
     const CAP = 300, PAD = 60;
     const chunks = readJson(statePath(prefix)).chunks || [];
@@ -707,6 +704,132 @@ app.get('/api/projects/:prefix/search', (req, res) => {
     });
 
     res.json({ hits, total, chunks: touched.size, capped: total > hits.length });
+});
+
+/** The regex a search or a replace runs, built once so both agree. */
+function searchRegex(needle, { whole, sensitive }) {
+    const flags = sensitive ? 'gu' : 'giu';
+    return whole
+        ? wholeWordRegex(needle, flags)
+        : new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+}
+
+/**
+ * Replace across the book, or at one place in it.
+ *
+ * Only in translations. The original is what everything else is measured
+ * against — the review's quotes, the chunk offsets, the fingerprint a whole-book
+ * answer is checked with — and editing it would leave all of them describing a
+ * book that no longer exists. The search reads it; nothing writes it.
+ *
+ * Every touched chunk keeps the text it had, under a batch the whole operation
+ * shares, so one wrong replace across forty chunks is one undo and not forty
+ * repairs. A replace at one named place verifies the place first: the span comes
+ * from a search that may be a minute old, and a stale offset would put the new
+ * word in the middle of a different sentence.
+ */
+app.post('/api/projects/:prefix/replace', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — редактирование заблокировано' });
+    }
+
+    const { q, to, whole, at } = req.body || {};
+    const needle = String(q || '');
+    const replacement = String(to ?? '');
+    if (needle.length < 2) return res.status(400).json({ error: 'Nothing to search for.' });
+
+    const file = statePath(prefix);
+    const state = readJson(file);
+    const chunks = state.chunks || [];
+    const re = searchRegex(needle, { whole: !!whole, sensitive: !!req.body.case });
+    const batch = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const stamp = new Date().toISOString();
+    const touched = [];
+    let count = 0;
+
+    const record = (chunk, before, n) => {
+        chunk.history = chunk.history || [];
+        chunk.history.push({
+            step: 'replace', text: chunk.translation, before,
+            replaced: { from: needle, to: replacement, n }, batch, timestamp: stamp,
+        });
+        // The budget guard for whole-book calls reads this, and a replace can
+        // move it by thousands of tokens across a book.
+        chunk.translationTokens = countTokens(chunk.translation);
+    };
+
+    if (at && Number.isInteger(at.chunk)) {
+        const chunk = chunks[at.chunk];
+        const text = chunk?.translation;
+        if (!text) return res.status(404).json({ error: 'Chunk not found.' });
+        const found = text.slice(at.start, at.end);
+        // Compared the way the search matched it, so "Pat" can be replaced from a
+        // case-insensitive search without the check calling it a different word.
+        const same = req.body.case ? found === needle : found.toLowerCase() === needle.toLowerCase();
+        if (!same) {
+            return res.status(409).json({
+                error: `The text at that place now reads "${found.slice(0, 40)}" and not "${needle}". ` +
+                    `Search again — the chunk has changed since these results were found.`,
+            });
+        }
+        const before = text;
+        chunk.translation = text.slice(0, at.start) + replacement + text.slice(at.end);
+        record(chunk, before, 1);
+        touched.push(at.chunk);
+        count = 1;
+    } else {
+        chunks.forEach((chunk, i) => {
+            const text = chunk?.translation;
+            if (!text) return;
+            re.lastIndex = 0;
+            const n = (text.match(re) || []).length;
+            if (!n) return;
+            chunk.translation = text.replace(re, () => replacement);
+            record(chunk, text, n);
+            touched.push(i);
+            count += n;
+        });
+    }
+
+    if (!count) return res.json({ ok: true, chunks: 0, replacements: 0, batch: null });
+
+    state.metadata = state.metadata || {};
+    state.metadata.updatedAt = stamp;
+    writeJsonAtomic(file, state);
+    res.json({ ok: true, chunks: touched.length, replacements: count, batch, at: touched });
+});
+
+/** Put back what one replace changed, whichever chunks it reached. */
+app.post('/api/projects/:prefix/replace/undo', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — редактирование заблокировано' });
+    }
+    const batch = String(req.body?.batch || '');
+    if (!batch) return res.status(400).json({ error: 'Which replace?' });
+
+    const file = statePath(prefix);
+    const state = readJson(file);
+    let restored = 0;
+    for (const chunk of state.chunks || []) {
+        const step = (chunk.history || []).find(h => h.step === 'replace' && h.batch === batch);
+        if (!step) continue;
+        chunk.translation = step.before;
+        chunk.translationTokens = countTokens(step.before);
+        // The step goes with the text it described. Left behind it would offer to
+        // undo a replace that is already undone.
+        chunk.history = chunk.history.filter(h => !(h.step === 'replace' && h.batch === batch));
+        restored++;
+    }
+    if (!restored) return res.status(404).json({ error: 'That replace is no longer on record.' });
+
+    state.metadata = state.metadata || {};
+    state.metadata.updatedAt = new Date().toISOString();
+    writeJsonAtomic(file, state);
+    res.json({ ok: true, chunks: restored });
 });
 
 app.put('/api/projects/:prefix/chunks/:i', (req, res) => {

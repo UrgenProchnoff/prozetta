@@ -1169,8 +1169,18 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
     color: var(--text);
     text-decoration: none;
 }
-.cs-hit:hover { background: var(--panel2); }
-.cs-current { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
 .cs-n { color: var(--muted); min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
 .cs-line { font-size: 13px; line-height: 1.5; }
 .cs-hit mark, .original-text mark { background: var(--accent); color: #fff; border-radius: 2px; }
+
+/* A hit and the button that acts on it. The button is quiet: the list is read
+   far more often than it is acted on. */
+.cs-row { display: flex; align-items: center; gap: 6px; border-radius: 4px; }
+.cs-row:hover { background: var(--panel2); }
+.cs-current { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
+.cs-hit { flex: 1; min-width: 0; }
+.cs-line { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-rep { flex: none; opacity: 0; font-size: 12px; padding: 2px 8px; }
+.cs-row:hover .cs-rep, .cs-rep:focus { opacity: 1; }
+#cs-to { flex: 1; min-width: 220px; }
+.t-undo { margin-left: 12px; padding: 2px 10px; font-size: 12px; }
