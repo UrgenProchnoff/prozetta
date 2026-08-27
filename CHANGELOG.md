@@ -14,6 +14,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `2b0643a` — Cross-chunk search in the editor (Ctrl+Shift+F): translation,
+  original or both, whole words or not, and clicking a hit opens that chunk with
+  the match selected — the search surviving the jump.
 - `6f7de59` — A finding's chunk button now opens the chunk with the quote
   selected in the editable text, and the chunk page lists what the review said
   about it, each finding able to show its own quote.
