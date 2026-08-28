@@ -14,6 +14,8 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `8ca332d` — The monitor's folded sections read as sections: their own surface, a
+  border, a heading in the text colour and a chevron that turns.
 - `865815b` — A chunk's history shows why each step happened: the advice a fix was
   given, the words a replace exchanged, what an undo undid.
 - `1c47610` — Replacing with an empty box now needs an "allow an empty
