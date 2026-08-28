@@ -20,6 +20,7 @@ import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_pa
 import { extractJson } from '../src_v4/utils/parsers.js';
 import { outstandingFindings as reviewOutstanding, findingKey } from '../src_v4/core/translation_review.js';
 import { locateQuote } from '../src_v4/core/quoted_spans.js';
+import { wordDiff, condense, diffSize } from '../src_v4/core/text_diff.js';
 import config from '../src_v4/config.js';
 
 import { execFileSync } from 'child_process';
@@ -801,75 +802,186 @@ app.post('/api/projects/:prefix/replace', (req, res) => {
     res.json({ ok: true, chunks: touched.length, replacements: count, batch, at: touched });
 });
 
-/** Put back what one replace changed, whichever chunks it reached. */
-app.post('/api/projects/:prefix/replace/undo', (req, res) => {
+/**
+ * Take back one recorded change, or a whole batch of them.
+ *
+ * Always by appending. A page whose job is to show what happened cannot have a
+ * way of making things un-happen, and an undo that is itself in the list is an
+ * undo that can be undone in its turn.
+ *
+ * Each undo gets a batch of its own rather than borrowing the one it reverses.
+ * They looked interchangeable — the same four chunks, the same one action — and
+ * sharing the id meant an undo asked to reverse itself went looking for the
+ * replace instead and found it already dealt with. An action's identity is the
+ * action, not the text it happens to be about.
+ */
+function revertStep(chunk, at, batch, stamp) {
+    const step = chunk?.history?.[at];
+    if (!step || step.text === undefined) return { error: 'No such change.' };
+
+    let before = step.before;
+    if (before === undefined) {
+        before = null;
+        for (let k = at - 1; k >= 0; k--) {
+            if (chunk.history[k]?.text !== undefined) { before = chunk.history[k].text; break; }
+        }
+    }
+    if (before === null) return { error: 'first' };
+
+    chunk.translation = before;
+    chunk.translationTokens = countTokens(before);
+    chunk.history.push({
+        step: 'revert', text: before, before: step.text,
+        undid: { step: step.step, at: step.timestamp },
+        ...(batch ? { batch } : {}), timestamp: stamp,
+    });
+    return { ok: true };
+}
+
+/** The endpoint both the toast's Undo and the history page's use. */
+function handleRevert(req, res) {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
     if (jobManager.isRunning(prefix)) {
         return res.status(409).json({ error: 'Этап выполняется — редактирование заблокировано' });
     }
+    const file = statePath(prefix);
+    const state = readJson(file);
+    const stamp = new Date().toISOString();
     const batch = String(req.body?.batch || '');
-    if (!batch) return res.status(400).json({ error: 'Which replace?' });
+    const mine = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let done = 0;
 
-    const file = statePath(prefix);
-    const state = readJson(file);
-    let restored = 0;
-    for (const chunk of state.chunks || []) {
-        const step = (chunk.history || []).find(h => h.step === 'replace' && h.batch === batch);
-        if (!step) continue;
-        chunk.translation = step.before;
-        chunk.translationTokens = countTokens(step.before);
-        // The step goes with the text it described. Left behind it would offer to
-        // undo a replace that is already undone.
-        chunk.history = chunk.history.filter(h => !(h.step === 'replace' && h.batch === batch));
-        restored++;
+    if (batch) {
+        for (const chunk of state.chunks || []) {
+            // The last entry carrying that batch, so a batch already reverted and
+            // reverted again walks forward rather than back.
+            let at = -1;
+            (chunk.history || []).forEach((h, k) => { if (h?.batch === batch) at = k; });
+            if (at < 0) continue;
+            // Already taken back: its own undo carries a batch that says so.
+            if ((chunk.history || []).some(h => h.step === 'revert' && h.undidBatch === batch)) continue;
+            if (revertStep(chunk, at, mine, stamp).ok) {
+                chunk.history[chunk.history.length - 1].undidBatch = batch;
+                done++;
+            }
+        }
+        if (!done) return res.status(404).json({ error: 'That change is no longer on record, or is already taken back.' });
+    } else {
+        const i = parseInt(req.body?.chunk, 10);
+        const at = parseInt(req.body?.at, 10);
+        const chunk = state.chunks?.[i];
+        const r = revertStep(chunk, at, null, stamp);
+        if (r.error === 'first') {
+            return res.status(409).json({
+                error: `That is the first version of chunk ${i + 1} — there is nothing behind it to go back to. ` +
+                    `Use "reset the chunk" to leave it untranslated.`,
+            });
+        }
+        if (r.error) return res.status(404).json({ error: r.error });
+        done = 1;
     }
-    if (!restored) return res.status(404).json({ error: 'That replace is no longer on record.' });
 
     state.metadata = state.metadata || {};
-    state.metadata.updatedAt = new Date().toISOString();
+    state.metadata.updatedAt = stamp;
     writeJsonAtomic(file, state);
-    res.json({ ok: true, chunks: restored });
-});
+    res.json({ ok: true, chunks: done });
+}
 
-app.put('/api/projects/:prefix/chunks/:i', (req, res) => {
+app.post('/api/projects/:prefix/replace/undo', handleRevert);
+
+// --- API: history ---
+// Everything that has changed a chunk's text, in one list. The chunk pages have
+// held this all along, one chunk at a time, which answers "what happened here"
+// and never "what happened last night".
+
+/**
+ * The entries that actually changed something, newest first.
+ *
+ * A check is not a change. There are 711 of them across the projects here and
+ * they record a score against a text they left alone; listed as changes they
+ * would bury the 541 that are changes under twice their number of non-events.
+ *
+ * Size is reported as a length difference rather than a real diff: the diff of
+ * one pair costs up to 26ms, and five hundred of them would be a quarter-minute
+ * spent to fill a column. The diff is computed when a row is opened.
+ */
+function historyRows(chunks) {
+    const rows = [];
+    (chunks || []).forEach((chunk, index) => {
+        let previous = null;
+        (chunk.history || []).forEach((step, at) => {
+            if (step?.text === undefined) return;
+            const before = step.before !== undefined ? step.before : previous;
+            previous = step.text;
+            if (before === null || before === step.text) return;
+            rows.push({
+                chunk: index, at, step: step.step, timestamp: step.timestamp || null,
+                chars: step.text.length - before.length,
+                batch: step.batch || null,
+                replaced: step.replaced || null,
+                undid: step.undid || null,
+            });
+        });
+    });
+    rows.sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')) || b.chunk - a.chunk);
+    return rows;
+}
+
+/** One action, however many chunks it touched: a replace is undone as a whole. */
+function groupRows(rows) {
+    const out = [];
+    const byBatch = new Map();
+    for (const row of rows) {
+        // Each chunk keeps its own place in its own history: a batch that knew
+        // only the first would offer a preview of one chunk while claiming four.
+        const where = { chunk: row.chunk, at: row.at };
+        if (!row.batch) { out.push({ ...row, chunks: [where] }); continue; }
+        const key = `${row.step}:${row.batch}`;
+        if (!byBatch.has(key)) {
+            const group = { ...row, chunks: [], chars: 0 };
+            byBatch.set(key, group);
+            out.push(group);
+        }
+        const group = byBatch.get(key);
+        group.chunks.push(where);
+        group.chars += row.chars;
+    }
+    return out;
+}
+
+app.get('/api/projects/:prefix/history', (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
-    if (jobManager.isRunning(prefix)) {
-        return res.status(409).json({ error: 'Этап выполняется — редактирование заблокировано' });
-    }
-
-    const file = statePath(prefix);
-    const state = readJson(file);
-    const i = parseInt(req.params.i, 10);
-    const chunk = state.chunks?.[i];
-    if (!chunk) return res.status(404).json({ error: 'Chunk not found' });
-
-    const { translation, translation_status, reset } = req.body || {};
-
-    if (reset) {
-        delete chunk.translation;
-        delete chunk.translation_status;
-        delete chunk.history;
-        // Goes with the status it belongs to: left behind, it would claim a
-        // block that the reset just erased.
-        delete chunk.translation_blocked_by;
-    } else {
-        if (typeof translation === 'string') chunk.translation = translation;
-        if (typeof translation_status === 'string') chunk.translation_status = translation_status;
-        chunk.history = chunk.history || [];
-        chunk.history.push({
-            step: 'manual_edit',
-            text: chunk.translation,
-            timestamp: new Date().toISOString()
-        });
-    }
-
-    state.metadata = state.metadata || {};
-    state.metadata.updatedAt = new Date().toISOString();
-    writeJsonAtomic(file, state);
-    res.json({ ok: true });
+    const chunks = readJson(statePath(prefix)).chunks || [];
+    const all = groupRows(historyRows(chunks));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 60));
+    res.json({ total: all.length, offset, rows: all.slice(offset, offset + limit) });
 });
+
+app.get('/api/projects/:prefix/history/diff', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    const chunks = readJson(statePath(prefix)).chunks || [];
+    const i = parseInt(req.query.chunk, 10);
+    const at = parseInt(req.query.at, 10);
+    const history = chunks[i]?.history || [];
+    const step = history[at];
+    if (!step || step.text === undefined) return res.status(404).json({ error: 'No such change.' });
+
+    let before = step.before;
+    if (before === undefined) {
+        before = null;
+        for (let k = at - 1; k >= 0; k--) {
+            if (history[k]?.text !== undefined) { before = history[k].text; break; }
+        }
+    }
+    if (before === null) return res.json({ first: true, runs: [{ op: 'ins', text: step.text }] });
+    res.json({ runs: condense(wordDiff(before, step.text)), size: diffSize(wordDiff(before, step.text)) });
+});
+
+app.post('/api/projects/:prefix/history/revert', handleRevert);
 
 // --- API: passport ---
 // The book passport holds decisions that hold for the whole book — narration

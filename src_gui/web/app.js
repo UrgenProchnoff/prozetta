@@ -148,6 +148,7 @@ function route() {
     if (parts[0] === 'changelog') return renderChangelog();
     if (parts[0] === 'glossary' && parts[1]) return renderGlossary(decodeURIComponent(parts[1]));
     if (parts[0] === 'passport' && parts[1]) return renderPassport(decodeURIComponent(parts[1]));
+    if (parts[0] === 'history' && parts[1]) return renderHistory(decodeURIComponent(parts[1]));
     if (parts[0] === 'monitor' && parts[1]) return renderMonitor(decodeURIComponent(parts[1]));
     if (parts[0] === 'book' && parts[1]) return renderBook(decodeURIComponent(parts[1]));
     if (parts[0] === 'chunk' && parts[1] && parts[2] !== undefined)
@@ -1128,6 +1129,7 @@ async function renderMonitor(prefix) {
             <span class="spacer"></span>
             <a class="btn" href="#/glossary/${encodeURIComponent(prefix)}">${esc(t('dash.glossary'))}</a>
             <a class="btn" href="#/passport/${encodeURIComponent(prefix)}">${esc(t('dash.passport'))}</a>
+            <a class="btn" href="#/history/${encodeURIComponent(prefix)}">${esc(t('hist.link'))}</a>
             <a id="m-download" class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">${esc(t('dash.download'))}</a>
             <a class="btn" href="#/book/${encodeURIComponent(prefix)}">${esc(t('mon.book'))}</a>
         </div>
@@ -2091,6 +2093,125 @@ async function renderPassport(prefix) {
 // ============================================================
 // Chunk view
 // ============================================================
+
+/**
+ * Everything that has changed the book, newest first.
+ *
+ * The chunk pages have held this all along, one chunk at a time — which answers
+ * "what happened here" and never "what happened last night". A replace across
+ * four chunks was four separate records in four places nobody would think to
+ * open.
+ *
+ * Checks are left out. They record a score against a text they did not touch,
+ * and there are more of them than there are changes; listed together the changes
+ * would be the minority of their own list.
+ */
+async function renderHistory(prefix) {
+    setCrumbs(`${crumbHome()} / ${crumbBook(prefix)} / ${esc(t('hist.heading'))}`);
+    app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
+
+    let shown = [];
+    let total = 0;
+
+    /** A step's name, without the attempt number the loop appends to it. */
+    const stepName = (step) => t(`hist.step.${String(step).replace(/_\d+$/, '')}`);
+
+    function rowHtml(row) {
+        const many = row.chunks.length > 1;
+        const where = many
+            ? t('hist.chunks', { n: row.chunks.length })
+            : t('hist.chunk', { n: row.chunks[0].chunk + 1 });
+        const size = row.chars > 0 ? `+${fmtNum(row.chars)}` : row.chars < 0 ? `−${fmtNum(-row.chars)}` : '±0';
+        const what = row.replaced
+            ? t('hist.replaced', { from: row.replaced.from, to: row.replaced.to })
+            : row.undid ? t('hist.undid', { step: stepName(row.undid.step) }) : '';
+        return `<div class="hist-row" data-where="${esc(JSON.stringify(row.chunks))}" ${row.batch ? `data-batch="${esc(row.batch)}"` : ''}>
+            <div class="hist-line">
+                <span class="hist-when">${esc(fmtDate(row.timestamp))}</span>
+                <a class="hist-where" href="#/chunk/${encodeURIComponent(prefix)}/${row.chunks[0].chunk}">${esc(where)}</a>
+                <span class="badge">${esc(stepName(row.step))}</span>
+                <span class="hist-size">${esc(size)}</span>
+                ${what ? `<span class="hist-what">${esc(what)}</span>` : ''}
+                <span class="spacer"></span>
+                <button data-h="show">${esc(t('hist.preview'))}</button>
+                <button data-h="revert" class="danger">${esc(t('hist.revert'))}</button>
+            </div>
+            <div class="hist-diff" hidden></div>
+        </div>`;
+    }
+
+    function paint() {
+        app.innerHTML = `
+            <div class="toolbar">
+                <h2 style="margin:0">${esc(t('hist.heading'))}: ${esc(prefix)}</h2>
+                <span class="badge">${esc(t('hist.total', { n: fmtNum(total) }))}</span>
+            </div>
+            <div class="cfg-hint">${esc(t('hist.explain'))}</div>
+            <div id="h-rows">${shown.map(rowHtml).join('') || `<div class="cfg-hint">${esc(t('hist.empty'))}</div>`}</div>
+            ${shown.length < total ? `<button id="h-more">${esc(t('hist.more', { n: fmtNum(total - shown.length) }))}</button>` : ''}`;
+
+        document.getElementById('h-more')?.addEventListener('click', () => load(shown.length));
+    }
+
+    async function load(offset) {
+        try {
+            const r = await api(`/api/projects/${encodeURIComponent(prefix)}/history?offset=${offset}&limit=60`);
+            total = r.total;
+            shown = offset ? shown.concat(r.rows) : r.rows;
+            paint();
+        } catch (e) {
+            app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
+        }
+    }
+
+    await load(0);
+
+    app.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-h]');
+        if (!btn) return;
+        const row = btn.closest('.hist-row');
+        const where = JSON.parse(row.dataset.where);
+        const batch = row.dataset.batch;
+
+        if (btn.dataset.h === 'show') {
+            const box = row.querySelector('.hist-diff');
+            if (!box.hidden) { box.hidden = true; return; }
+            box.hidden = false;
+            box.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
+            const paintRuns = (runs) => runs.map(run => run.op === 'gap'
+                ? `<span class="d-gap">${esc(t('hist.gap', { n: fmtNum(run.chars) }))}</span>`
+                : `<span class="d-${run.op}">${esc(run.text)}</span>`).join('');
+            try {
+                // One action across four chunks is four diffs, each named. Shown
+                // as one, the reader would be looking at a quarter of what the
+                // Undo button beside it is about to change.
+                const parts = await Promise.all(where.map(w =>
+                    api(`/api/projects/${encodeURIComponent(prefix)}/history/diff?chunk=${w.chunk}&at=${w.at}`)));
+                box.innerHTML = parts.map((d, k) => (where.length > 1
+                    ? `<div class="d-head">${esc(t('hist.chunk', { n: where[k].chunk + 1 }))}</div>` : '')
+                    + paintRuns(d.runs)).join('');
+            } catch (err) { box.textContent = t('common.error', { msg: err.message }); }
+            return;
+        }
+
+        // A replace is one action however many chunks it reached, and taking it
+        // back one chunk at a time would be four confirmations for one mistake.
+        const many = row.querySelector('.hist-where').textContent;
+        if (!confirm(t('hist.revertConfirm', { what: many }))) return;
+        btn.disabled = true;
+        try {
+            await api(`/api/projects/${encodeURIComponent(prefix)}/history/revert`, {
+                method: 'POST',
+                body: batch ? { batch } : { chunk: where[0].chunk, at: where[0].at },
+            });
+            toast(t('hist.reverted'), 'ok');
+            await load(0);
+        } catch (err) {
+            btn.disabled = false;
+            toast(t('common.error', { msg: err.message }), 'error');
+        }
+    });
+}
 
 async function renderChunk(prefix, i, params = new URLSearchParams()) {
     const focusKey = params.get('finding') || '';

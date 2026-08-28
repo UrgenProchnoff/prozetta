@@ -1184,3 +1184,37 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 .cs-row:hover .cs-rep, .cs-rep:focus { opacity: 1; }
 #cs-to { flex: 1; min-width: 220px; }
 .t-undo { margin-left: 12px; padding: 2px 10px; font-size: 12px; }
+
+/* The book's edit history. A log, so the eye can run down one column at a time:
+   when, where, what kind, how much. */
+.hist-row { border-bottom: 1px solid var(--border); padding: 7px 2px; }
+.hist-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hist-when { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hist-where { min-width: 9ch; }
+.hist-size { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 6ch; }
+.hist-what { color: var(--muted); font-size: 13px; }
+.hist-row [data-h] { opacity: 0.35; }
+.hist-row:hover [data-h], .hist-row [data-h]:focus { opacity: 1; }
+
+/* The change itself. Whitespace is preserved because a diff that reflows the
+   paragraph is showing a different text than the one it claims to describe. */
+.hist-diff {
+    margin: 8px 0 4px;
+    padding: 10px;
+    background: var(--panel);
+    border-radius: 5px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
+    font-size: 14px;
+}
+.d-same { color: var(--muted); }
+/* Padded apart. A deletion and the insertion that replaces it sit flush against
+   each other, and «имущество»+«дом» read as one word before the colours were
+   noticed — the eye joins letters faster than it separates backgrounds. */
+.d-del, .d-ins { padding: 1px 3px; border-radius: 3px; margin: 0 1px; }
+.d-del { background: rgba(217, 87, 87, 0.22); color: var(--text); text-decoration: line-through; }
+.d-ins { background: rgba(46, 169, 111, 0.22); color: var(--text); }
+.d-gap { color: var(--muted); font-style: italic; opacity: 0.7; }
+.d-head { color: var(--muted); font-size: 12px; margin: 10px 0 3px; }
+.d-head:first-child { margin-top: 0; }
