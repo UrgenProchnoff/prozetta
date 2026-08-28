@@ -14,6 +14,8 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `1c47610` — Replacing with an empty box now needs an "allow an empty
+  replacement" tick, which clears when the search panel closes.
 - `54f5708` — The history filters by kind of change — buttons with counts that add
   up rather than replace one another, kept in the URL.
 - `7ef9682` — An edit history for the whole book, beside the glossary and the
