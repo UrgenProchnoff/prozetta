@@ -14,6 +14,8 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `54f5708` — The history filters by kind of change — buttons with counts that add
+  up rather than replace one another, kept in the URL.
 - `7ef9682` — An edit history for the whole book, beside the glossary and the
   passport: every change with its time, chunk and kind, a word-level diff on
   opening a row, and an undo that is itself recorded and can be undone.
