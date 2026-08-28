@@ -2344,6 +2344,7 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
             <div class="rev-head" style="margin-top:8px">
                 <input id="cs-to" type="text" placeholder="${esc(t('chunk.replacePlaceholder'))}">
                 <button id="cs-all">${esc(t('chunk.replaceAll'))}</button>
+                <label class="cs-opt"><input type="checkbox" id="cs-empty"> ${esc(t('chunk.replaceEmptyOk'))}</label>
                 <span class="cfg-hint">${esc(t('chunk.replaceScope'))}</span>
             </div>
             <div id="cs-hits"></div>
@@ -2450,13 +2451,38 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
         ...(wholeBox.checked ? { w: '1' } : {}), ...(caseBox.checked ? { cs: '1' } : {}),
     });
 
+    const toBox = document.getElementById('cs-to');
+    const emptyBox = document.getElementById('cs-empty');
     function openSearch(focusIt = true) {
         panel.hidden = false;
         if (focusIt) { qBox.focus(); qBox.select(); }
     }
+    /**
+     * Closing clears the permission to delete.
+     *
+     * Deliberately not in the URL with the other options, and deliberately not
+     * remembered: it is a permission for the thing being done now, and a
+     * permission that outlives the intention behind it is how an empty box
+     * becomes an accident three searches later.
+     */
+    function closeSearch() {
+        panel.hidden = true;
+        emptyBox.checked = false;
+        updateReplaceGate();
+    }
     document.getElementById('c-find').addEventListener('click', () => {
-        if (panel.hidden) openSearch(); else panel.hidden = true;
+        if (panel.hidden) openSearch(); else closeSearch();
     });
+
+    /** An empty replacement deletes; the button says so by being shut until asked. */
+    function updateReplaceGate() {
+        const blocked = !toBox.value && !emptyBox.checked;
+        for (const btn of [document.getElementById('cs-all'), ...hitsBox.querySelectorAll('.cs-rep')]) {
+            if (!btn) continue;
+            btn.disabled = blocked;
+            btn.title = blocked ? t('chunk.replaceEmptyBlocked') : '';
+        }
+    }
 
     let searchTimer = null;
     async function runSearch() {
@@ -2492,6 +2518,8 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
             </div>`;
         }).join('');
         app.querySelector('.cs-current')?.scrollIntoView({ block: 'nearest' });
+        // The hit rows were just rebuilt, and their replace buttons with them.
+        updateReplaceGate();
     }
 
     qBox.addEventListener('input', () => {
@@ -2499,6 +2527,9 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
         searchTimer = setTimeout(runSearch, 250);
     });
     for (const el of [fieldBox, wholeBox, caseBox]) el.addEventListener('change', runSearch);
+    toBox.addEventListener('input', updateReplaceGate);
+    emptyBox.addEventListener('change', updateReplaceGate);
+    updateReplaceGate();
 
     /**
      * Carry out a replace and offer to take it back.
@@ -2508,8 +2539,6 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
      * the moment after it happened — so the way back is put in front of them
      * then, rather than left to be reconstructed from forty histories.
      */
-    const toBox = document.getElementById('cs-to');
-
     /** The chunk on screen, after the store was changed underneath it. */
     async function reloadText() {
         try {
@@ -2578,7 +2607,7 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
             e.preventDefault();
             openSearch();
         } else if (e.key === 'Escape' && !panel.hidden && document.activeElement !== ta) {
-            panel.hidden = true;
+            closeSearch();
         }
     };
     document.addEventListener('keydown', onKey);
