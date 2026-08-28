@@ -3,11 +3,21 @@
 Notable changes to prozetta. Newest first — both the sections and the entries
 inside them.
 
-Entries written from this wave onward open with the fingerprint of their commit:
-a link in the interface, an argument to `git show 5bba425` in a terminal. The
-1.0.0 section predates the practice and carries none.
+Entries from 1.1.0 onward open with the fingerprint of their commit: a link in
+the interface, an argument to `git show 5bba425` in a terminal. The 1.0.0 section
+predates the practice and carries none.
 
-## Unreleased — clarity wave
+## 1.1.0 — 2026-08-28
+
+Two waves of work, kept apart because they answer different questions. The
+quality wave is about a translation that stays consistent about who is speaking,
+who they are and what they are called — a book passport, a glossary that is
+checked rather than trusted, a review of the finished text whose every finding is
+a decision a person makes. The clarity wave is about the interface admitting what
+it can do: search and replace across the book, an edit history with diffs and an
+undo, and a help article behind every screen's own button.
+
+### Clarity wave
 
 Everything in this section is about one thing: an interface that answers the
 question a person opened the page with.
@@ -109,7 +119,7 @@ question a person opened the page with.
   reads as a status board. They lift under the pointer now, and a line says what
   a click is for.
 
-## Unreleased — quality wave
+### Quality wave
 
 Everything in this section is about one thing: a translation that stays
 consistent about who is speaking, who they are, and what they are called.
