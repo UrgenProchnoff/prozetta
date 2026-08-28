@@ -2266,12 +2266,29 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
     const historyHtml = history.map(h => {
         const stepType = h.step.startsWith('check') ? 'check'
             : h.step.startsWith('fix') ? 'fix'
-            : h.step.startsWith('redraft') ? 'redraft' : 'draft';
+            : h.step.startsWith('redraft') ? 'redraft'
+            : h.step === 'advice_fix' ? 'advice'
+            : h.step === 'replace' || h.step === 'revert' || h.step === 'manual_edit' ? 'hand'
+            : 'draft';
         const r = h.result;
         const pills = r ? `
             <span class="score-pill">${esc(t('chunk.scorePill', { v: r.score ?? '?' }))}</span>
             <span class="score-pill">${esc(t('chunk.likePill', { v: r.like ?? '?' }))}</span>
             <span class="score-pill">${esc(t('chunk.errPill', { v: r.error ?? '?' }))}</span>` : '';
+
+        // Why the step happened, in its own words. A fix on advice used to be a
+        // line reading "advice_fix" and a changed paragraph, and what the change
+        // had been asked to achieve could only be guessed at from the change —
+        // which is the one thing a reader cannot check it against. The instruction
+        // is stored; it was simply never shown.
+        const why = h.step === 'advice_fix' && h.advice
+            ? { label: t('chunk.histAdvice', { n: (h.keys || []).length || 1 }), text: h.advice }
+            : h.step === 'replace' && h.replaced
+                ? { label: t('chunk.histReplace', { n: h.replaced.n }), text: `«${h.replaced.from}» → «${h.replaced.to || ''}»` }
+                : h.step === 'revert' && h.undid
+                    ? { label: t('chunk.histRevert'), text: `${h.undid.step} · ${fmtDate(h.undid.at)}` }
+                    : null;
+
         const body = [
             r?.comment ? t('chunk.editorLabel', { comment: r.comment }) : '',
             h.translator_comment ? t('chunk.translatorLabel', { comment: h.translator_comment }) : ''
@@ -2280,9 +2297,10 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
             <summary>
                 <span class="step ${stepType}">${esc(h.step)}</span>
                 ${pills}
+                ${why ? `<span class="step-why">${esc(why.label)}</span>` : ''}
                 <span class="ts">${fmtDate(h.timestamp)}</span>
             </summary>
-            <div class="body">${body ? `<div class="comment">${esc(body)}</div>` : ''}${h.text ? `\n${esc(h.text)}` : ''}</div>
+            <div class="body">${why ? `<div class="hist-why">${esc(why.text)}</div>` : ''}${body ? `<div class="comment">${esc(body)}</div>` : ''}${h.text ? `\n${esc(h.text)}` : ''}</div>
         </details>`;
     }).join('');
 
