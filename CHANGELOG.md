@@ -14,6 +14,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `7ef9682` — An edit history for the whole book, beside the glossary and the
+  passport: every change with its time, chunk and kind, a word-level diff on
+  opening a row, and an undo that is itself recorded and can be undone.
 - `7fb6190` — Replace, beside the search: all at once or one hit at a time, in
   translations only, with an Undo offered in the toast that puts every touched
   chunk back.
