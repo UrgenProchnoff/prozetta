@@ -14,6 +14,8 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `9010fbb` — Help for every screen, not just the monitor: eight articles in both
+  languages, a **? Help** button on each screen, and an index at `#/help`.
 - `688ca69` — A help article for the monitor — what every part of the screen is,
   what it is for, and what to do in the usual cases — behind a **? Help** button
   and in `docs/MONITOR.en.md`.
