@@ -817,16 +817,48 @@ table.glossary .del { text-align: center; }
 /* --- Token usage stats --- */
 .card .usage-line { margin: 6px 0 0; color: var(--accent); cursor: help; }
 
-.usage-details { margin-top: 14px; }
+/* The foldable sections of the monitor — the review, the manual run, the token
+   spend. They were three lines of grey text on the page's own colour, under a
+   chunk map of 129 tiles: real sections that read as leftovers. Each is a
+   surface of its own now, a shade up from the card holding it, so the eye can
+   find where one ends and the next begins without reading any of them. */
+.usage-details {
+    margin-top: 12px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
 .usage-details > summary {
     cursor: pointer;
-    color: var(--muted);
-    font-size: 13px;
+    color: var(--text);
+    font-size: 14px;
     font-weight: 600;
-    padding: 4px 0;
+    padding: 11px 14px;
     user-select: none;
+    /* Flowed, not flexed. These headings carry a run of figures after them —
+       "score 7/10 · 17 open, 32 closed by editing" — and as a flex item beside
+       the heading it wrapped the title into two lines to sit next to it. Inline,
+       the figures simply continue the sentence and wrap where they run out. */
+    list-style: none;
 }
-.usage-details > summary:hover { color: var(--text); }
+.usage-details > summary::-webkit-details-marker { display: none; }
+.usage-details > summary::before {
+    content: '▸';
+    color: var(--muted);
+    display: inline-block;
+    width: 14px;
+    transition: transform 0.12s ease;
+}
+.usage-details[open] > summary::before { transform: rotate(90deg); }
+.usage-details > summary .cfg-hint { font-weight: 400; }
+.usage-details > summary:hover { background: rgba(255, 255, 255, 0.03); border-radius: 8px; }
+.usage-details[open] > summary {
+    border-bottom: 1px solid var(--border);
+    border-radius: 8px 8px 0 0;
+}
+/* Everything the fold contains, indented to the heading it belongs to. */
+.usage-details > *:not(summary) { padding: 0 14px 12px; }
+.usage-details[open] > *:not(summary) { padding-top: 12px; }
 
 .usage-panel { margin-top: 8px; }
 .usage-panel.empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
