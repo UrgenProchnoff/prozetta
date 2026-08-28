@@ -24,6 +24,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `b8126a9` — The README is written around the interface now, with the command
+  line in a section of its own: eight screens described and linked to their help
+  articles, and all seven pipeline steps instead of the two it still claimed.
 - `9010fbb` — Help for every screen, not just the monitor: eight articles in both
   languages, a **? Help** button on each screen, and an index at `#/help`.
 - `688ca69` — A help article for the monitor — what every part of the screen is,
