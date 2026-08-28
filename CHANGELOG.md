@@ -14,6 +14,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `688ca69` — A help article for the monitor — what every part of the screen is,
+  what it is for, and what to do in the usual cases — behind a **? Help** button
+  and in `docs/MONITOR.en.md`.
 - `0878c54` — Editing a chunk by hand works again: a refactor had deleted the PUT
   handler and nothing noticed. `npm run routes` now checks every call the
   interface makes against the routes the server registers.
