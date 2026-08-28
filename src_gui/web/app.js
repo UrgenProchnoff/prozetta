@@ -146,6 +146,7 @@ function route() {
     if (parts.length === 0) return renderDashboard();
     if (parts[0] === 'settings') return renderSettings();
     if (parts[0] === 'changelog') return renderChangelog();
+    if (parts[0] === 'help' && parts[1]) return renderHelp(parts[1]);
     if (parts[0] === 'glossary' && parts[1]) return renderGlossary(decodeURIComponent(parts[1]));
     if (parts[0] === 'passport' && parts[1]) return renderPassport(decodeURIComponent(parts[1]));
     if (parts[0] === 'history' && parts[1]) return renderHistory(decodeURIComponent(parts[1]), params);
@@ -269,6 +270,27 @@ function renderMarkdown(src, commits = {}, repository = null) {
     flushPara();
     closeList();
     return out.join('\n');
+}
+
+/**
+ * A help article, rendered with the same markdown pass the changelog uses.
+ *
+ * No commit links to resolve here, so it is given none — the renderer turns a
+ * bare hex word into a dead reference when git does not know it, and an article
+ * has no business producing those.
+ */
+async function renderHelp(topic) {
+    setCrumbs(`${crumbHome()} / ${esc(t('help.crumb'))}`);
+    app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
+    try {
+        const { text, lang, requested } = await api(
+            `/api/help?topic=${encodeURIComponent(topic)}&lang=${encodeURIComponent(i18n.getLang())}`);
+        const note = lang !== requested ? `<div class="rv-bar">${esc(t('ver.noTranslation'))}</div>` : '';
+        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text)}</div>`;
+        window.scrollTo(0, 0);
+    } catch (e) {
+        app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
+    }
 }
 
 async function renderChangelog() {
@@ -1130,6 +1152,7 @@ async function renderMonitor(prefix) {
             <a class="btn" href="#/glossary/${encodeURIComponent(prefix)}">${esc(t('dash.glossary'))}</a>
             <a class="btn" href="#/passport/${encodeURIComponent(prefix)}">${esc(t('dash.passport'))}</a>
             <a class="btn" href="#/history/${encodeURIComponent(prefix)}">${esc(t('hist.link'))}</a>
+            <a class="btn" href="#/help/monitor" title="${esc(t('help.monitorTitle'))}">${esc(t('help.link'))}</a>
             <a id="m-download" class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">${esc(t('dash.download'))}</a>
             <a class="btn" href="#/book/${encodeURIComponent(prefix)}">${esc(t('mon.book'))}</a>
         </div>

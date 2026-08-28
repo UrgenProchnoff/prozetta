@@ -295,6 +295,9 @@
             'book.chaptersHint': 'Главы в FB2 определяются автоматически по заголовкам в тексте («Глава 7», «Пролог», КОРОТКИЕ СТРОКИ КАПСОМ, отдельно стоящие номера). Разделители «* * *» становятся сценическими паузами.',
 
             'hist.link': 'История',
+            'help.link': '? Справка',
+            'help.crumb': 'Справка',
+            'help.monitorTitle': 'Что на этом экране есть, зачем это надо и как этим пользоваться',
             'hist.heading': 'История правок',
             'hist.explain': 'Всё, что меняло текст перевода, — новое сверху. Проверки не показаны: они ставят оценку, но текст не трогают. Отмена не стирает запись, а дописывает свою, поэтому её саму тоже можно отменить.',
             'hist.total': 'изменений: {n}',
@@ -828,6 +831,9 @@
             'book.chaptersHint': 'FB2 chapters are detected automatically from headings in the text ("Chapter 7", "Prologue", SHORT ALL-CAPS LINES, standalone numbers). "* * *" separators become scene breaks.',
 
             'hist.link': 'History',
+            'help.link': '? Help',
+            'help.crumb': 'Help',
+            'help.monitorTitle': 'What is on this screen, what it is for and how to use it',
             'hist.heading': 'Edit history',
             'hist.explain': 'Everything that changed the translation, newest first. Checks are left out: they award a score without touching the text. An undo is recorded rather than erased, so it can be undone in its turn.',
             'hist.total': '{n} change(s)',

@@ -162,6 +162,34 @@ app.get('/api/changelog', (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+/**
+ * A help article, in the reader's language when there is one.
+ *
+ * Prose lives in docs/ and not in the dictionary. Interface strings are labels a
+ * checker can hold to account for existing in both languages; an article is
+ * paragraphs, and putting it in i18n.js would make every edit to a sentence an
+ * edit to the file every button reads.
+ *
+ * Falls back to English the way the changelog does — an article that is not
+ * translated yet is better read in the wrong language than not read.
+ */
+app.get('/api/help', (req, res) => {
+    // Both values pick a filename, so both are matched rather than interpolated.
+    const topic = /^[a-z]{2,20}$/.test(String(req.query.topic || '')) ? String(req.query.topic) : '';
+    const lang = /^[a-z]{2}$/.test(String(req.query.lang || '')) ? String(req.query.lang) : 'en';
+    if (!topic) return res.status(400).json({ error: 'No such help topic.' });
+
+    const name = topic.toUpperCase();
+    const wanted = path.join(ROOT, 'docs', `${name}.${lang}.md`);
+    const english = path.join(ROOT, 'docs', `${name}.en.md`);
+    const file = fs.existsSync(wanted) ? wanted : english;
+    if (!fs.existsSync(file)) return res.status(404).json({ error: `No help article for "${topic}".` });
+
+    try {
+        res.json({ text: fs.readFileSync(file, 'utf-8'), lang: file === wanted ? lang : 'en', requested: lang });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 const passportPath = (prefix) => paths(prefix).passport;
 const runLogPath = (prefix) => paths(prefix).log;
 
