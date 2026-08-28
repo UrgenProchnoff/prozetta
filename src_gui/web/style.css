@@ -1270,3 +1270,8 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
     white-space: pre-wrap;
     line-height: 1.55;
 }
+
+/* Help. The index reads as a table of contents; the article ends by pointing at
+   the next screen, since these were written in an order a reader cannot see. */
+.help-index { font-size: 15px; line-height: 2; }
+.help-next { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--border); }

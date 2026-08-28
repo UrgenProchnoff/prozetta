@@ -146,7 +146,7 @@ function route() {
     if (parts.length === 0) return renderDashboard();
     if (parts[0] === 'settings') return renderSettings();
     if (parts[0] === 'changelog') return renderChangelog();
-    if (parts[0] === 'help' && parts[1]) return renderHelp(parts[1]);
+    if (parts[0] === 'help') return renderHelp(parts[1] || '');
     if (parts[0] === 'glossary' && parts[1]) return renderGlossary(decodeURIComponent(parts[1]));
     if (parts[0] === 'passport' && parts[1]) return renderPassport(decodeURIComponent(parts[1]));
     if (parts[0] === 'history' && parts[1]) return renderHistory(decodeURIComponent(parts[1]), params);
@@ -280,17 +280,43 @@ function renderMarkdown(src, commits = {}, repository = null) {
  * has no business producing those.
  */
 async function renderHelp(topic) {
-    setCrumbs(`${crumbHome()} / ${esc(t('help.crumb'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
+    const lang = encodeURIComponent(i18n.getLang());
     try {
-        const { text, lang, requested } = await api(
-            `/api/help?topic=${encodeURIComponent(topic)}&lang=${encodeURIComponent(i18n.getLang())}`);
-        const note = lang !== requested ? `<div class="rv-bar">${esc(t('ver.noTranslation'))}</div>` : '';
-        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text)}</div>`;
+        if (!topic) {
+            setCrumbs(`${crumbHome()} / ${esc(t('help.crumb'))}`);
+            const { topics } = await api(`/api/help?lang=${lang}`);
+            app.innerHTML = `<div class="changelog">
+                <h2>${esc(t('help.indexHeading'))}</h2>
+                <p>${esc(t('help.indexLead'))}</p>
+                <ul class="help-index">${topics.map(x =>
+                    `<li><a href="#/help/${esc(x.topic)}">${esc(x.title || x.topic)}</a></li>`).join('')}</ul>
+            </div>`;
+            window.scrollTo(0, 0);
+            return;
+        }
+
+        const { text, lang: got, requested, topics } = await api(`/api/help?topic=${encodeURIComponent(topic)}&lang=${lang}`);
+        const here = topics.findIndex(x => x.topic === topic);
+        const title = here >= 0 ? topics[here].title : '';
+        setCrumbs(`${crumbHome()} / <a href="#/help">${esc(t('help.crumb'))}</a> / ${esc(title || topic)}`);
+        const note = got !== requested ? `<div class="rv-bar">${esc(t('ver.noTranslation'))}</div>` : '';
+        // The next screen, because these were written to be read in an order and
+        // a reader who finishes one has no way of knowing there is an order.
+        const next = here >= 0 && here + 1 < topics.length ? topics[here + 1] : null;
+        const onward = next
+            ? `<p class="help-next"><a href="#/help/${esc(next.topic)}">${esc(t('help.next', { title: next.title }))}</a></p>`
+            : `<p class="help-next"><a href="#/help">${esc(t('help.backToIndex'))}</a></p>`;
+        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text)}${onward}</div>`;
         window.scrollTo(0, 0);
     } catch (e) {
         app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
     }
+}
+
+/** The help button a screen carries, pointing at its own article. */
+function helpLink(topic) {
+    return `<a class="btn" href="#/help/${topic}" title="${esc(t('help.screenTitle'))}">${esc(t('help.link'))}</a>`;
 }
 
 async function renderChangelog() {
@@ -372,6 +398,8 @@ async function renderDashboard() {
         <div class="row" style="margin-bottom:14px">
             <button id="upload-btn" class="btn primary">${esc(t('dash.upload'))}</button>
             <input id="upload-input" type="file" accept=".txt,text/plain" hidden>
+            <span class="spacer"></span>
+            ${helpLink('projects')}
         </div>
         ${projectCards ? `<div class="cards">${projectCards}</div>` : `<p class="loading">${esc(t('dash.noProjects'))}</p>`}
         ${newBookCards ? `<h3>${esc(t('dash.newBooks'))}</h3><div class="cards">${newBookCards}</div>` : ''}
@@ -660,6 +688,7 @@ async function renderGlossary(prefix) {
             <span id="g-count" class="badge"></span>
             <span class="badge" title="${esc(t('gloss.junkHintTitle'))}">${esc(t('gloss.junkHint'))}</span>
             <select id="g-issues" class="issues-select" title="${esc(t('gloss.issuesTitle'))}"></select>
+            ${helpLink('glossary')}
             <select id="g-sort" class="issues-select" title="${esc(t('gloss.sortTitle'))}">
                 <option value="file">${esc(t('gloss.sortFile'))}</option>
                 <option value="original">${esc(t('gloss.sortOriginal'))}</option>
@@ -1152,7 +1181,7 @@ async function renderMonitor(prefix) {
             <a class="btn" href="#/glossary/${encodeURIComponent(prefix)}">${esc(t('dash.glossary'))}</a>
             <a class="btn" href="#/passport/${encodeURIComponent(prefix)}">${esc(t('dash.passport'))}</a>
             <a class="btn" href="#/history/${encodeURIComponent(prefix)}">${esc(t('hist.link'))}</a>
-            <a class="btn" href="#/help/monitor" title="${esc(t('help.monitorTitle'))}">${esc(t('help.link'))}</a>
+            ${helpLink('monitor')}
             <a id="m-download" class="btn" href="/api/projects/${encodeURIComponent(prefix)}/output">${esc(t('dash.download'))}</a>
             <a class="btn" href="#/book/${encodeURIComponent(prefix)}">${esc(t('mon.book'))}</a>
         </div>
@@ -1823,7 +1852,8 @@ async function renderBook(prefix) {
     const coverUrl = () => `/api/projects/${encodeURIComponent(prefix)}/cover?ts=${Date.now()}`;
 
     app.innerHTML = `
-        <h2>📖 ${esc(t('book.heading'))}: ${esc(prefix)}</h2>
+        <div class="toolbar"><h2 style="margin:0">📖 ${esc(t('book.heading'))}: ${esc(prefix)}</h2>
+            <span class="spacer"></span>${helpLink('book')}</div>
         <div class="card book-card">
             <div class="book-layout">
                 <div class="book-cover">
@@ -2004,6 +2034,7 @@ async function renderPassport(prefix) {
         <div class="toolbar">
             <h2 style="margin:0">${esc(t('pass.heading'))}: ${esc(prefix)}</h2>
             <span class="spacer"></span>
+            ${helpLink('passport')}
             <span id="p-dirty" class="dirty" hidden>${esc(t('gloss.unsaved'))}</span>
             <button id="p-save" class="primary">${esc(t('common.save'))}</button>
         </div>
@@ -2175,6 +2206,8 @@ async function renderHistory(prefix, params = new URLSearchParams()) {
                 <span class="badge">${esc(picked.size
                     ? t('hist.totalFiltered', { n: fmtNum(total), all: fmtNum(all) })
                     : t('hist.total', { n: fmtNum(total) }))}</span>
+                <span class="spacer"></span>
+                ${helpLink('history')}
             </div>
             <div class="cfg-hint">${esc(t('hist.explain'))}</div>
             <div class="hist-kinds">
@@ -2357,6 +2390,7 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
             ${chunk.dispute ? `<span class="badge b-disputed">${esc(t('chunk.disputedBadge'))}</span>` : ''}
             <span class="badge">${esc(t('chunk.tokens', { n: chunk.tokens ?? '?' }))}</span>
             <span class="badge" title="${esc(t('chunk.termsTitle'))}">${extracted ? esc(t('chunk.termsExtracted', { n: nTerms ?? '✓' })) : esc(t('chunk.termsNot'))}</span>
+            ${helpLink('chunk')}
             <button id="c-find" title="${esc(t('chunk.findTitle'))}">${esc(t('chunk.find'))}</button>
             <button id="c-toggle-orig" title="${esc(t('chunk.toggleTitle'))}"></button>
             <span class="font-ctl">
@@ -3011,6 +3045,7 @@ async function renderSettings() {
             <button id="cfg-save" class="primary">${esc(t('common.save'))}</button>
             <button id="cfg-reset" class="danger">${esc(t('settings.reset'))}</button>
             <span class="spacer"></span>
+            ${helpLink('settings')}
             ${modeSwitch}
         </div>
         <div class="hint">${esc(t('settings.note'))}</div>

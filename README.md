@@ -10,9 +10,13 @@ terminology consistent across an entire book and self-checks its own quality.
 > first translation — all through the GUI. Short version: run `start.bat` (Windows)
 > or `start.sh` (macOS/Linux) and the web interface opens in your browser.
 >
-> Once a book is loaded, [the monitor](docs/MONITOR.en.md) is the screen you will
-> live on — what every part of it means, and what to do in the usual cases. It is
-> also in the app, behind the **? Help** button.
+> Every screen has an article of its own — what is on it, what it is for, and what
+> to do in the usual cases: [projects](docs/PROJECTS.en.md),
+> [monitor](docs/MONITOR.en.md), [glossary](docs/GLOSSARY.en.md),
+> [passport](docs/PASSPORT.en.md), [chunk editor](docs/CHUNK.en.md),
+> [history](docs/HISTORY.en.md), [book](docs/BOOK.en.md),
+> [settings](docs/SETTINGS.en.md). They are in the app too, behind the **? Help**
+> button each screen carries.
 
 Most machine translation handles a chapter in isolation, so a character called
 *Wei Ying* drifts into *Weiying* and *Young Master Wei* a hundred pages later.

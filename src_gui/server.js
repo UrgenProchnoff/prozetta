@@ -173,11 +173,36 @@ app.get('/api/changelog', (req, res) => {
  * Falls back to English the way the changelog does — an article that is not
  * translated yet is better read in the wrong language than not read.
  */
+// The screens, in the order somebody meets them. The list is here and not read
+// off the directory because the order is editorial: alphabetical, "book" would
+// come before "monitor" and a reader would meet the last screen first.
+const HELP_TOPICS = ['projects', 'monitor', 'glossary', 'passport', 'chunk', 'history', 'book', 'settings'];
+
+/** The article's own first heading, so a title is never written down twice. */
+function helpTitle(file) {
+    try {
+        const head = fs.readFileSync(file, 'utf-8').slice(0, 400);
+        const m = head.match(/^#\s+(.+)$/m);
+        return m ? m[1].trim() : null;
+    } catch { return null; }
+}
+
 app.get('/api/help', (req, res) => {
     // Both values pick a filename, so both are matched rather than interpolated.
     const topic = /^[a-z]{2,20}$/.test(String(req.query.topic || '')) ? String(req.query.topic) : '';
     const lang = /^[a-z]{2}$/.test(String(req.query.lang || '')) ? String(req.query.lang) : 'en';
-    if (!topic) return res.status(400).json({ error: 'No such help topic.' });
+
+    // No topic: what there is to read.
+    if (!topic) {
+        const topics = HELP_TOPICS.map(name => {
+            const wanted = path.join(ROOT, 'docs', `${name.toUpperCase()}.${lang}.md`);
+            const english = path.join(ROOT, 'docs', `${name.toUpperCase()}.en.md`);
+            const file = fs.existsSync(wanted) ? wanted : english;
+            if (!fs.existsSync(file)) return null;
+            return { topic: name, title: helpTitle(file), translated: file === wanted };
+        }).filter(Boolean);
+        return res.json({ topics });
+    }
 
     const name = topic.toUpperCase();
     const wanted = path.join(ROOT, 'docs', `${name}.${lang}.md`);
@@ -186,7 +211,18 @@ app.get('/api/help', (req, res) => {
     if (!fs.existsSync(file)) return res.status(404).json({ error: `No help article for "${topic}".` });
 
     try {
-        res.json({ text: fs.readFileSync(file, 'utf-8'), lang: file === wanted ? lang : 'en', requested: lang });
+        res.json({
+            text: fs.readFileSync(file, 'utf-8'), lang: file === wanted ? lang : 'en', requested: lang,
+            // Where this article sits in the reading order, so a page can offer
+            // the next one without the front end keeping its own copy of the list.
+            topics: HELP_TOPICS.filter(n => fs.existsSync(path.join(ROOT, 'docs', `${n.toUpperCase()}.en.md`)))
+                .map(n => ({
+                    topic: n,
+                    title: helpTitle(path.join(ROOT, 'docs',
+                        fs.existsSync(path.join(ROOT, 'docs', `${n.toUpperCase()}.${lang}.md`))
+                            ? `${n.toUpperCase()}.${lang}.md` : `${n.toUpperCase()}.en.md`)),
+                })),
+        });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
