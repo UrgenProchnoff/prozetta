@@ -14,6 +14,8 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `865815b` — A chunk's history shows why each step happened: the advice a fix was
+  given, the words a replace exchanged, what an undo undid.
 - `1c47610` — Replacing with an empty box now needs an "allow an empty
   replacement" tick, which clears when the search panel closes.
 - `54f5708` — The history filters by kind of change — buttons with counts that add
