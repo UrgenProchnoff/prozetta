@@ -890,6 +890,51 @@ function handleRevert(req, res) {
 
 app.post('/api/projects/:prefix/replace/undo', handleRevert);
 
+app.put('/api/projects/:prefix/chunks/:i', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — редактирование заблокировано' });
+    }
+
+    const file = statePath(prefix);
+    const state = readJson(file);
+    const i = parseInt(req.params.i, 10);
+    const chunk = state.chunks?.[i];
+    if (!chunk) return res.status(404).json({ error: 'Chunk not found' });
+
+    const { translation, translation_status, reset } = req.body || {};
+
+    if (reset) {
+        delete chunk.translation;
+        delete chunk.translationTokens;
+        delete chunk.translation_status;
+        delete chunk.history;
+        // Goes with the status it belongs to: left behind, it would claim a
+        // block that the reset just erased.
+        delete chunk.translation_blocked_by;
+    } else {
+        if (typeof translation === 'string') {
+            chunk.translation = translation;
+            // Counted here for the same reason a replace counts: the whole-book
+            // budget guard reads this, and an edit can move it either way.
+            chunk.translationTokens = countTokens(translation);
+        }
+        if (typeof translation_status === 'string') chunk.translation_status = translation_status;
+        chunk.history = chunk.history || [];
+        chunk.history.push({
+            step: 'manual_edit',
+            text: chunk.translation,
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    state.metadata = state.metadata || {};
+    state.metadata.updatedAt = new Date().toISOString();
+    writeJsonAtomic(file, state);
+    res.json({ ok: true });
+});
+
 // --- API: history ---
 // Everything that has changed a chunk's text, in one list. The chunk pages have
 // held this all along, one chunk at a time, which answers "what happened here"

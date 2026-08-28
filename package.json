@@ -14,7 +14,8 @@
     "gui": "node src_gui/server.js",
     "changelog": "node src_v4/tools/changelog_check.js",
     "migrate": "node src_v4/tools/migrate_projects.js",
-    "i18n": "node src_v4/tools/i18n_check.js"
+    "i18n": "node src_v4/tools/i18n_check.js",
+    "routes": "node src_v4/tools/routes_check.js"
   },
   "main": "src_v4/main.js",
   "dependencies": {
