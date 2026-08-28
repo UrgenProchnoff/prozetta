@@ -950,14 +950,30 @@ function groupRows(rows) {
     return out;
 }
 
+/** A step's kind, without the attempt number the translation loop appends. */
+const stepKind = (step) => String(step || '').replace(/_\d+$/, '');
+
 app.get('/api/projects/:prefix/history', (req, res) => {
     const prefix = validPrefix(req, res);
     if (!prefix) return;
     const chunks = readJson(statePath(prefix)).chunks || [];
     const all = groupRows(historyRows(chunks));
+
+    // Counted over every row, not the filtered ones: a filter whose numbers move
+    // when you use it cannot be read, and the point of the number is to say what
+    // is there before you ask for it.
+    const kinds = {};
+    for (const row of all) {
+        const kind = stepKind(row.step);
+        kinds[kind] = (kinds[kind] || 0) + 1;
+    }
+
+    const wanted = String(req.query.kind || '').split(',').map(k => k.trim()).filter(Boolean);
+    const rows = wanted.length ? all.filter(row => wanted.includes(stepKind(row.step))) : all;
+
     const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 60));
-    res.json({ total: all.length, offset, rows: all.slice(offset, offset + limit) });
+    res.json({ total: rows.length, all: all.length, kinds, offset, rows: rows.slice(offset, offset + limit) });
 });
 
 app.get('/api/projects/:prefix/history/diff', (req, res) => {

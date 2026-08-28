@@ -1218,3 +1218,8 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 .d-gap { color: var(--muted); font-style: italic; opacity: 0.7; }
 .d-head { color: var(--muted); font-size: 12px; margin: 10px 0 3px; }
 .d-head:first-child { margin-top: 0; }
+
+/* Which kinds of change to show. Buttons rather than a dropdown: the counts are
+   half the answer, and a dropdown hides them until it is opened. */
+.hist-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+.hist-kinds button { font-size: 13px; }

@@ -148,7 +148,7 @@ function route() {
     if (parts[0] === 'changelog') return renderChangelog();
     if (parts[0] === 'glossary' && parts[1]) return renderGlossary(decodeURIComponent(parts[1]));
     if (parts[0] === 'passport' && parts[1]) return renderPassport(decodeURIComponent(parts[1]));
-    if (parts[0] === 'history' && parts[1]) return renderHistory(decodeURIComponent(parts[1]));
+    if (parts[0] === 'history' && parts[1]) return renderHistory(decodeURIComponent(parts[1]), params);
     if (parts[0] === 'monitor' && parts[1]) return renderMonitor(decodeURIComponent(parts[1]));
     if (parts[0] === 'book' && parts[1]) return renderBook(decodeURIComponent(parts[1]));
     if (parts[0] === 'chunk' && parts[1] && parts[2] !== undefined)
@@ -2106,12 +2106,17 @@ async function renderPassport(prefix) {
  * and there are more of them than there are changes; listed together the changes
  * would be the minority of their own list.
  */
-async function renderHistory(prefix) {
+async function renderHistory(prefix, params = new URLSearchParams()) {
     setCrumbs(`${crumbHome()} / ${crumbBook(prefix)} / ${esc(t('hist.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
     let shown = [];
     let total = 0;
+    let all = 0;
+    let kinds = {};
+    // In the URL, so a filtered view is a place that can be returned to and
+    // reloaded — and so that loading the next sixty asks for the same subset.
+    let picked = new Set(String(params.get('kind') || '').split(',').filter(Boolean));
 
     /** A step's name, without the attempt number the loop appends to it. */
     const stepName = (step) => t(`hist.step.${String(step).replace(/_\d+$/, '')}`);
@@ -2144,19 +2149,44 @@ async function renderHistory(prefix) {
         app.innerHTML = `
             <div class="toolbar">
                 <h2 style="margin:0">${esc(t('hist.heading'))}: ${esc(prefix)}</h2>
-                <span class="badge">${esc(t('hist.total', { n: fmtNum(total) }))}</span>
+                <span class="badge">${esc(picked.size
+                    ? t('hist.totalFiltered', { n: fmtNum(total), all: fmtNum(all) })
+                    : t('hist.total', { n: fmtNum(total) }))}</span>
             </div>
             <div class="cfg-hint">${esc(t('hist.explain'))}</div>
+            <div class="hist-kinds">
+                <button data-kind="" class="${picked.size ? '' : 'primary'}">${esc(t('hist.kindAll', { n: fmtNum(all) }))}</button>
+                ${Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([kind, n]) =>
+                    `<button data-kind="${esc(kind)}" class="${picked.has(kind) ? 'primary' : ''}">${esc(stepName(kind))} ${fmtNum(n)}</button>`).join('')}
+            </div>
             <div id="h-rows">${shown.map(rowHtml).join('') || `<div class="cfg-hint">${esc(t('hist.empty'))}</div>`}</div>
             ${shown.length < total ? `<button id="h-more">${esc(t('hist.more', { n: fmtNum(total - shown.length) }))}</button>` : ''}`;
 
         document.getElementById('h-more')?.addEventListener('click', () => load(shown.length));
+
+        app.querySelector('.hist-kinds').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-kind]');
+            if (!btn) return;
+            const kind = btn.dataset.kind;
+            // Kinds add up rather than replace one another — "by hand" and
+            // "replace" together is the useful question "what did I do", and it
+            // is not answerable one kind at a time. The all button clears.
+            if (!kind) picked.clear();
+            else if (picked.has(kind)) picked.delete(kind);
+            else picked.add(kind);
+            const query = [...picked].join(',');
+            location.hash = `#/history/${encodeURIComponent(prefix)}${query ? `?kind=${encodeURIComponent(query)}` : ''}`;
+        });
     }
 
     async function load(offset) {
         try {
-            const r = await api(`/api/projects/${encodeURIComponent(prefix)}/history?offset=${offset}&limit=60`);
+            const query = new URLSearchParams({ offset, limit: 60 });
+            if (picked.size) query.set('kind', [...picked].join(','));
+            const r = await api(`/api/projects/${encodeURIComponent(prefix)}/history?${query}`);
             total = r.total;
+            all = r.all;
+            kinds = r.kinds;
             shown = offset ? shown.concat(r.rows) : r.rows;
             paint();
         } catch (e) {
