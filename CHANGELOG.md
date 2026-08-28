@@ -14,6 +14,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `0878c54` — Editing a chunk by hand works again: a refactor had deleted the PUT
+  handler and nothing noticed. `npm run routes` now checks every call the
+  interface makes against the routes the server registers.
 - `8ca332d` — The monitor's folded sections read as sections: their own surface, a
   border, a heading in the text colour and a chevron that turns.
 - `865815b` — A chunk's history shows why each step happened: the advice a fix was
