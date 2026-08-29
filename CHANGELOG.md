@@ -24,6 +24,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `65b7831` — `start.bat` had LF line endings, so cmd.exe executed the tails of
+  its own lines — the four "is not recognized" errors Windows users saw on every
+  launch. `.gitattributes` now hands out CRLF on every checkout.
 - `b8126a9` — The README is written around the interface now, with the command
   line in a section of its own: eight screens described and linked to their help
   articles, and all seven pipeline steps instead of the two it still claimed.
