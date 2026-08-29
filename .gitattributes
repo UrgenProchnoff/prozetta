@@ -1,0 +1,14 @@
+# Windows shells seek a batch file by byte offset and count those offsets
+# assuming CRLF. Given LF-only endings, cmd.exe resumes each command a little
+# further into the file than it should and ends up executing the tail of a line:
+# users reported 'rts' is not recognized, which is the end of "…first run, starts
+# the web server…" — a rem comment, escaping its own rem.
+#
+# Checked out with CRLF everywhere, not only on Windows, so that editing the file
+# on Linux cannot quietly put it back the way it was.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# The other side of the same coin: a shell script with CRLF fails on the shebang
+# line with "bad interpreter: /bin/sh^M".
+*.sh text eol=lf
