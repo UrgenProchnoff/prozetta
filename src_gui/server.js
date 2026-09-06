@@ -1187,11 +1187,18 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
     if (fs.existsSync(statePath(prefix))) {
         const chunks = readJson(statePath(prefix)).chunks || [];
         bookTokens = chunks.reduce((n, c) => n + (c.tokens || Math.round((c.original || '').length / 4)), 0);
-        const lower = chunks.map(c => (c.original || '').toLowerCase());
+        // Whitespace collapsed on both sides before comparing. Books arrive
+        // hard-wrapped, so a two-word term sits across a line break — "Modelview
+        // Matrix" is "Modelview\nMatrix" in Sterling's Junk DNA, and a plain
+        // substring test called it absent. Eight of that book's entries were
+        // reported as occurring zero times while every one of them occurred,
+        // which is worse than a wrong number: the zero is what the junk filter
+        // offers to delete.
+        const flat = chunks.map(c => (c.original || '').toLowerCase().replace(/\s+/g, ' '));
         counts = terms.map(t => {
-            const needle = (t.original || '').toLowerCase();
+            const needle = (t.original || '').toLowerCase().replace(/\s+/g, ' ').trim();
             if (!needle) return 0;
-            return lower.reduce((n, text) => n + (text.includes(needle) ? 1 : 0), 0);
+            return flat.reduce((n, text) => n + (text.includes(needle) ? 1 : 0), 0);
         });
         source = chunks.map(c => c.original || '').join('\n');
         try {

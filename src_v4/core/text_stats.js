@@ -30,10 +30,20 @@ const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p
  * The assertion is dropped only on the side whose own character belongs to an
  * unspaced script, so a Latin term inside a Chinese text still gets its
  * boundaries and a mixed term gets one of each.
+ *
+ * A space inside the term matches any run of whitespace, because books arrive
+ * hard-wrapped and a two-word term lands across the fold. Sterling's Junk DNA is
+ * wrapped at about seventy columns, and "Modelview Matrix" sits in it as
+ * "Modelview\nMatrix": the glossary counted it zero times, the hygiene report
+ * called it absent, and — the part that mattered — the translator was never
+ * handed it for the chunk it appears in. Twelve of that book's terms were
+ * invisible this way, "San Jose" and "Ruben Gutierrez" among them, which are
+ * exactly the kind that drift when nobody is holding them still.
  */
 export function wholeWordRegex(term, flags = 'giu') {
     const text = String(term);
-    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\s+/g, '\\s+');
     const left = UNSPACED_SCRIPT.test(text[0] || '') ? '' : `(?<!${WORD})`;
     const right = UNSPACED_SCRIPT.test(text[text.length - 1] || '') ? '' : `(?!${WORD})`;
     return new RegExp(`${left}${escaped}${right}`, flags);
