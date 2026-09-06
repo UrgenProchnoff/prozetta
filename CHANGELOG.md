@@ -24,6 +24,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `707fdcb` — A multi-word term split across a line break counted as absent: wrong
+  in the glossary's occurrence column, and worse in the cheat sheet, where the
+  translator never received it. Hard-wrapped books were affected throughout.
 - `65b7831` — `start.bat` had LF line endings, so cmd.exe executed the tails of
   its own lines — the four "is not recognized" errors Windows users saw on every
   launch. `.gitattributes` now hands out CRLF on every checkout.
