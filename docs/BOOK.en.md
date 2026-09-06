@@ -9,6 +9,13 @@ They go into the FB2 metadata — what the reader app shows on its shelf. An emp
 title is replaced by the project name, but a real one is better: the project name
 usually comes from a filename.
 
+## Annotation
+
+The blurb the reader app shows in the book's description — what it is about.
+Optional. Every line becomes its own paragraph, so blank lines are not needed.
+Below your text the program appends three lines: the project, the model and the
+link to the repository — so the file always says what translated it.
+
 ## Cover
 
 JPEG or PNG, up to 10 MB. Optional — the book builds without one, the shelf is

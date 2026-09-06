@@ -1875,6 +1875,10 @@ async function renderBook(prefix) {
                     <label>${esc(t('book.authorLabel'))}
                         <input id="b-author" type="text" maxlength="300" placeholder="${esc(t('book.authorPlaceholder'))}" value="${esc(meta.author)}">
                     </label>
+                    <label>${esc(t('book.annotationLabel'))}
+                        <textarea id="b-annotation" rows="5" maxlength="3000"
+                                  placeholder="${esc(t('book.annotationPlaceholder'))}">${esc(meta.annotation)}</textarea>
+                    </label>
                     <div class="cfg-hint">${esc(t('book.hint'))}</div>
                     <div class="row">
                         <button id="b-save" class="primary">${esc(t('common.save'))}</button>
@@ -1898,6 +1902,7 @@ async function renderBook(prefix) {
                 body: {
                     title: document.getElementById('b-title').value,
                     author: document.getElementById('b-author').value,
+                    annotation: document.getElementById('b-annotation').value,
                 },
             });
             toast(t('book.saved'), 'ok');

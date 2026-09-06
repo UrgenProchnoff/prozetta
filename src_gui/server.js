@@ -1833,6 +1833,7 @@ app.get('/api/projects/:prefix/book-meta', (req, res) => {
     res.json({
         title: book.title || '',
         author: book.author || '',
+        annotation: book.annotation || '',
         langSuffix: state.metadata?.langSuffix || 'rus',
         hasCover: !!findCover(prefix),
     });
@@ -1848,12 +1849,14 @@ app.put('/api/projects/:prefix/book-meta', (req, res) => {
     let state;
     try { state = readJson(file); } catch { return res.status(404).json({ error: 'Project not found' }); }
 
-    const { title, author } = req.body || {};
+    const { title, author, annotation } = req.body || {};
     state.metadata = state.metadata || {};
     state.metadata.book = {
         ...(state.metadata.book || {}),
         title: String(title ?? '').trim().slice(0, 300),
         author: String(author ?? '').trim().slice(0, 300),
+        // Кладётся в <annotation> абзацами по строкам, поэтому переносы живые.
+        annotation: String(annotation ?? '').replace(/\r\n?/g, '\n').trim().slice(0, 3000),
     };
     state.metadata.updatedAt = new Date().toISOString();
     writeJsonAtomic(file, state);
@@ -1935,6 +1938,7 @@ app.get('/api/projects/:prefix/output', async (req, res) => {
         const { xml } = assembleBookFb2(chunks, {
             title: book.title || prefix,
             author: book.author || '',
+            annotation: book.annotation || '',
             langSuffix: state.metadata?.langSuffix,
             modelName,
             cover,

@@ -114,8 +114,8 @@ function bookUuid(seed) {
  *
  * @param {Array<{translation?: string}>} chunks
  * @param {{
- *   title: string, author?: string, langSuffix?: string, modelName?: string,
- *   cover?: { base64: string, mime: string } | null
+ *   title: string, author?: string, annotation?: string, langSuffix?: string,
+ *   modelName?: string, cover?: { base64: string, mime: string } | null
  * }} meta
  * @returns {{ xml: string, missing: number, sections: number }}
  */
@@ -172,8 +172,17 @@ export function assembleBookFb2(chunks, meta) {
         ? `\n<binary id="cover.${coverExt}" content-type="${escXml(cover.mime)}">${cover.base64.replace(/(.{76})/g, '$1\n')}</binary>`
         : '';
 
+    // The reader's blurb goes first, the prozetta lines after it, separated by a
+    // blank line so the two do not read as one paragraph run.
+    const blurb = String(meta.annotation || '')
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map(l => `<p>${escXml(l)}</p>`)
+        .join('');
     const annotation =
         `<annotation>` +
+        (blurb ? blurb + `<empty-line/>` : '') +
         `<p>Перевод сделан проектом prozetta — помощник переводчика.</p>` +
         `<p>Модель: ${escXml(meta.modelName || '—')}.</p>` +
         `<p>GitHub: https://github.com/UrgenProchnoff/prozetta</p>` +

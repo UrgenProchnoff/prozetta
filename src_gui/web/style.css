@@ -922,6 +922,7 @@ table.glossary .del { text-align: center; }
 .book-fields { flex: 1 1 280px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .book-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .book-fields input { width: 100%; }
+.book-fields textarea { width: 100%; resize: vertical; min-height: 90px; line-height: 1.45; }
 
 /* Glossary hygiene: rows the source-text check flagged. A marker rather than a
    colour wash, because the table is for editing — the row must stay readable. */
