@@ -24,6 +24,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `23de3da` — An annotation for the book on the Book screen: what the book is
+  about, which a reader app shows under the cover and there was nowhere to type.
+  Every line becomes a paragraph; the prozetta and model lines stay below it.
 - `9107982` — A deleted project's `.bak` copy goes to `projects/` instead of the
   repository root, which was the last thing writing there.
 - `707fdcb` — A multi-word term split across a line break counted as absent: wrong
