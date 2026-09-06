@@ -24,6 +24,8 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `9107982` — A deleted project's `.bak` copy goes to `projects/` instead of the
+  repository root, which was the last thing writing there.
 - `707fdcb` — A multi-word term split across a line break counted as absent: wrong
   in the glossary's occurrence column, and worse in the cheat sheet, where the
   translator never received it. Hard-wrapped books were affected throughout.
