@@ -7,7 +7,7 @@ import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER } from '../src_
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { outstandingFindings as glossaryOutstanding } from '../src_v4/core/glossary_review.js';
-import { projectPaths, projectDir, listProjects } from '../src_v4/core/paths.js';
+import { projectPaths, projectDir, listProjects, PROJECTS_DIR } from '../src_v4/core/paths.js';
 import { handEdited } from '../src_v4/core/passport.js';
 import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
@@ -1741,8 +1741,14 @@ app.post('/api/projects/:prefix/delete', (req, res) => {
     if (!fs.existsSync(sp)) return res.status(404).json({ error: 'Project not found' });
 
     // The state is kept outside the folder about to go, so a delete can still be
-    // undone by hand.
-    const backup = path.join(ROOT, `${prefix}_project_state.deleted.bak`);
+    // undone by hand — but beside that folder, not in the repository root. It
+    // used to land there under the flat name every project file had before they
+    // moved into projects/, and it was the last thing still writing to the root:
+    // delete three books and three multi-megabyte .bak files appear next to
+    // README.md. projects/ is gitignored and listProjects only counts
+    // directories holding a state.json, so a file here is out of the way without
+    // being out of reach.
+    const backup = path.join(ROOT, PROJECTS_DIR, `${prefix}.deleted.bak`);
     try { fs.copyFileSync(sp, backup); } catch { /* best effort */ }
 
     // The whole folder, rather than a list of the files in it. The list was
