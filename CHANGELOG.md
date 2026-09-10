@@ -24,6 +24,9 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `33e573e` — A dismissed finding can be taken back: a folded "Dismissed
+  findings" block at the end of the review, each row with its own button.
+  Dismissing used to be the one decision with no way out but editing the file.
 - `23de3da` — An annotation for the book on the Book screen: what the book is
   about, which a reader app shows under the cover and there was nowhere to type.
   Every line becomes a paragraph; the prozetta and model lines stay below it.
