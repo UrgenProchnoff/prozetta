@@ -466,7 +466,7 @@ function projectSummary(prefix) {
     if (fs.existsSync(transReviewPath(prefix))) {
         try {
             const r = readJson(transReviewPath(prefix));
-            const { open, done, hidden } = reviewOutstanding(r, chunks);
+            const { open, done, hidden, dismissed } = reviewOutstanding(r, chunks);
             // For a glossary finding that names its entry: how many chunks use
             // that term. Fixing the glossary changes nothing already translated,
             // so this is the size of the work the finding actually implies, and
@@ -483,6 +483,14 @@ function projectSummary(prefix) {
                 returned: r.returned ?? null,
                 rejected: r.rejected || null,
                 open, done, hidden,
+                // The dismissed ones, so they can be read and taken back. Trimmed
+                // to what identifies a finding and what it objected to: the rest
+                // comes with it when it returns to the open list, and this list
+                // rides along on every summary the monitor asks for.
+                dismissed: dismissed.map(f => ({
+                    key: f.key, chunk: f.chunk, scope: f.scope,
+                    issue: f.issue, quote: f.quote, problem: f.problem,
+                })),
                 // Advice already accepted onto chunks, so the interface can show
                 // what is queued for the next Stage 2 run without walking chunks.
                 accepted: chunks.reduce((n, c) => n + (c.advice?.length || 0), 0),
@@ -1391,8 +1399,8 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
         return res.status(409).json({ error: 'Этап выполняется — решения заблокированы' });
     }
     const { key, action } = req.body || {};
-    if (!key || !['accept', 'dismiss', 'undo', 'handled', 'queueTerm'].includes(action)) {
-        return res.status(400).json({ error: 'Expected { key, action: accept|dismiss|undo|handled|queueTerm }' });
+    if (!key || !['accept', 'dismiss', 'restore', 'undo', 'handled', 'queueTerm'].includes(action)) {
+        return res.status(400).json({ error: 'Expected { key, action: accept|dismiss|restore|undo|handled|queueTerm }' });
     }
     const file = transReviewPath(prefix);
     if (!fs.existsSync(file)) return res.status(404).json({ error: 'No review for this project' });
@@ -1408,6 +1416,19 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
 
     if (action === 'dismiss') {
         review.dismissed = [...new Set([...(review.dismissed || []), String(key).toLowerCase()])];
+        writeJsonAtomic(file, review);
+        return res.json({ ok: true, dismissed: review.dismissed.length });
+    }
+
+    // Back into the open list. A dismissal is a judgement, and a judgement made
+    // in a hurry over sixty findings is one a person may want back — the finding
+    // itself was never deleted, only hidden. Both lists are cleared because both
+    // close a finding, and taking it back means taking back whichever one closed
+    // it; a key sits in one of them or in neither.
+    if (action === 'restore') {
+        const k = String(key).toLowerCase();
+        review.dismissed = (review.dismissed || []).filter(x => String(x).toLowerCase() !== k);
+        review.handled = (review.handled || []).filter(x => String(x).toLowerCase() !== k);
         writeJsonAtomic(file, review);
         return res.json({ ok: true, dismissed: review.dismissed.length });
     }

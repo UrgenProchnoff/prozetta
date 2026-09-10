@@ -106,6 +106,11 @@ Inside is the list of findings. Each one is **a decision, not a notification**:
 The button with the chunk number opens that chunk **on the quote itself**, which
 arrives selected in the editable text.
 
+A dismissal is not a deletion: at the end of the list is a folded **Dismissed
+findings** block, each with a **Take back** button that returns it to the open
+ones. Dismissing is a judgement, and a judgement can be hasty — the more so when
+there are sixty findings to make it about.
+
 A finding leaves the list on its own once the text it complained about is gone.
 Nothing is applied without you.
 

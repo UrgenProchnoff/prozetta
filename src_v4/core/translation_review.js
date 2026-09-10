@@ -219,7 +219,10 @@ function appliedInHistory(chunk, key, advice, since) {
  * about is no longer there. Nothing has to be marked done by hand, and nothing
  * has to be discarded wholesale when one chunk changes.
  *
- * @returns {{open: Array, done: number, hidden: number}}
+ * Dismissals come back alongside the count, because a dismissal is a judgement
+ * and a judgement can be wrong: the list is what makes it reversible.
+ *
+ * @returns {{open: Array, done: number, hidden: number, dismissed: Array}}
  */
 export function outstandingFindings(review, chunks) {
     const dismissed = new Set((review?.dismissed || []).map(k => String(k).toLowerCase()));
@@ -231,11 +234,12 @@ export function outstandingFindings(review, chunks) {
     // nothing it asks for shows up in the text it quoted.
     const handled = new Set((review?.handled || []).map(k => String(k).toLowerCase()));
     const open = [];
+    const dismissedList = [];
     let done = 0, hidden = 0;
 
     for (const f of review?.findings || []) {
         const key = findingKey(f);
-        if (dismissed.has(key)) { hidden++; continue; }
+        if (dismissed.has(key)) { hidden++; dismissedList.push({ ...f, key }); continue; }
         if (handled.has(key)) { done++; continue; }
 
         const chunk = chunks[f.chunk];
@@ -265,8 +269,9 @@ export function outstandingFindings(review, chunks) {
     open.sort((a, b) => (a.chunk - b.chunk)
         || (Number(a.queued) - Number(b.queued))
         || String(a.issue).localeCompare(String(b.issue)));
+    dismissedList.sort((a, b) => (a.chunk - b.chunk) || String(a.issue).localeCompare(String(b.issue)));
 
-    return { open, done, hidden };
+    return { open, done, hidden, dismissed: dismissedList };
 }
 
 /**

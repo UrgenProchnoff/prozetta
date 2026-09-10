@@ -1690,10 +1690,36 @@ async function renderMonitor(prefix) {
             </div>`;
         }).join('');
 
+        // The dismissed ones, foldable and out of the way. Reading its own open
+        // state off the page it is about to replace: restoring redraws the block,
+        // and a fold that shut itself after every click would make taking back
+        // three findings a matter of opening it three times.
+        const dismissedOpen = document.getElementById('rev-dismissed')?.open ?? false;
+        const dismissedRows = (r.dismissed || []).map(f => `
+            <div class="rev-item">
+                <div class="rev-head">
+                    <span class="badge b-${f.scope === 'chunk' ? 'best_effort' : 'disputed'}">${esc(t('rev.scope.' + f.scope))}</span>
+                    <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${f.chunk}"
+                       title="${esc(t('rev.goToQuote'))}">${f.chunk + 1}</a>
+                    <span class="rev-issue">${esc(f.issue)}</span>
+                    <span class="spacer"></span>
+                    <button data-rev="restore" data-key="${esc(f.key)}">${esc(t('rev.restore'))}</button>
+                </div>
+                <div class="rev-quote">«${esc(f.quote)}»</div>
+                <div class="rev-problem">${esc(f.problem)}</div>
+            </div>`).join('');
+        const dismissedBox = dismissedRows
+            ? `<details id="rev-dismissed" class="usage-details rev-dismissed" ${dismissedOpen ? 'open' : ''}>
+                <summary>${esc(t('rev.dismissedHeading', { n: r.dismissed.length }))}</summary>
+                <div>${dismissedRows}</div>
+            </details>`
+            : '';
+
         reviewEl.innerHTML = `<details class="usage-details" ${r.open.length ? 'open' : ''}>
             <summary>${esc(t('rev.heading'))} <span class="cfg-hint">${esc(verdict)}</span></summary>
             ${r.summary ? `<div class="rev-summary">${esc(r.summary)}</div>` : ''}
             ${rows || `<div class="cfg-hint">${esc(t('rev.allHandled'))}</div>`}
+            ${dismissedBox}
         </details>` + manualRunBox();
         wireBookCalls(prefix, refreshGrid);
     }
@@ -1709,6 +1735,7 @@ async function renderMonitor(prefix) {
                 accept: () => t('rev.accepted', { chunk: res.chunk + 1 }),
                 undo: () => t('rev.unqueued'),
                 dismiss: () => t('rev.dismissed'),
+                restore: () => t('rev.restored'),
                 handled: () => t('rev.markedDone'),
                 queueTerm: () => t('rev.termQueued', { n: res.queued }),
             }[btn.dataset.rev](), 'ok');

@@ -1139,6 +1139,12 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 /* A finding already queued for fixing. It stays in the list until the fix is
    made and its quote is gone, so it has to be legible as decided-and-waiting
    rather than still-to-decide. */
+/* The dismissed findings, folded away inside the review: a panel within a panel,
+   so it carries no surface of its own — only the fold and the quieter text. */
+.rev-dismissed { background: none; margin-top: 4px; }
+.rev-dismissed > summary { font-size: 13px; color: var(--muted); }
+.rev-dismissed .rev-quote, .rev-dismissed .rev-problem { opacity: 0.75; }
+
 .rev-item.rev-done { opacity: 0.55; }
 .rev-item.rev-done .rev-quote { border-left-color: var(--green); }
 /* Findings on one chunk are adjacent; a rule closes each chunk's block. */
