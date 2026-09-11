@@ -24,6 +24,11 @@ question a person opened the page with.
 
 **2026-08-24**
 
+- `9bc7f63` — The steps are called by their names, not by numbers: "Stage 2" was
+  left over from when there were two of them, and the roadmap has had seven named
+  steps for a long time. The interface, the guide and the log say Extraction and
+  Translation; the command line gained `--stage=extract` and `--stage=translate`,
+  with the digits still accepted.
 - `33e573e` — A dismissed finding can be taken back: a folded "Dismissed
   findings" block at the end of the review, each row with its own button.
   Dismissing used to be the one decision with no way out but editing the file.
