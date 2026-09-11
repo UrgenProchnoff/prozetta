@@ -31,7 +31,10 @@ Each job picks a provider from the cards below. The same card can serve both.
 Where to connect and with what. Filled in once.
 
 - **Google** — a free tier that is enough for a book. Needs a key from AI Studio.
-- **Groq** — fast, also with a free tier.
+- **Another service** — anything with an OpenAI-compatible interface:
+  OpenRouter, Together, NVIDIA NIM, a vLLM of your own. This card has presets: a
+  service you have set up can be remembered under a name, and the dropdown
+  switches between them.
 - **A local model** — through an OpenAI-compatible address (LM Studio, Ollama).
   No key, no money, and **no content filter** — the only way to finish a book whose
   chunks a cloud model refuses.

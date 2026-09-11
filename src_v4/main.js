@@ -34,7 +34,7 @@ async function main() {
     const suffixArg = args.find(a => a.startsWith('--suffix='));
 
     if (!stageArg || !fileArg) {
-        console.error('Usage: node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=<path/to/book.txt> [--model=google|local|groq] [--lang=<язык>] [--suffix=<код>]');
+        console.error('Usage: node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=<path/to/book.txt> [--model=google|local|custom] [--lang=<язык>] [--suffix=<код>]');
         console.error('  --stage=extract reads the book chunk by chunk and pulls out names, places and terms (also accepted as 1).');
         console.error('  --stage=passport reads the whole book at once (book_model profile) and writes <prefix>_passport.json.');
         console.error('  --stage=glossary reviews the glossary against the whole book and writes glossary_review.json (applies nothing).');
@@ -48,8 +48,11 @@ async function main() {
     // Set LLM Provider if specified
     if (modelArg) {
         const provider = modelArg.split('=')[1];
-        if (provider === 'google' || provider === 'local' || provider === 'groq') {
-            llmManager.setProvider(provider);
+        // "custom" is what the card is called; "groq" is what the settings file
+        // has called it since there was only one such service, and it still works.
+        const named = provider === 'custom' ? 'groq' : provider;
+        if (named === 'google' || named === 'local' || named === 'groq') {
+            llmManager.setProvider(named);
         } else {
             console.warn(`[Warning] Unknown model provider '${provider}'. Using default (local).`);
         }

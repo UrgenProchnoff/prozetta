@@ -6,7 +6,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const defaults = {
     // Active LLM provider used when no --model override is passed on the CLI.
-    // One of: 'local' | 'google' | 'groq'. Set via the GUI settings page.
+    // One of: 'local' | 'google' | 'groq' (the other-service card). Set on the
+    // settings page.
     activeProvider: 'local',
 
     // --- Translation language settings ---
@@ -41,15 +42,18 @@ const defaults = {
         maxRPM: 10, // Conservative for Google Free/Pay-as-you-go
         maxOutputTokens: 8192
     },
-    // Custom OpenAI-compatible endpoint. Defaults to Groq, but baseUrl can point
-    // at any OpenAI-compatible API (Together, OpenRouter, vLLM, ...).
+    // Any OpenAI-compatible endpoint: OpenRouter, Together, NVIDIA NIM, a vLLM
+    // of your own. The default address is one such service rather than a
+    // recommendation — the field is there to be replaced.
+    // The group keeps its old name because it is the name in everyone's saved
+    // settings; what a person types is --model=custom and CUSTOM_API_KEY.
     groq_model: {
         baseUrl: 'https://api.groq.com/openai/v1',
-        apiKey: process.env.GROQ_API_KEY,
+        apiKey: process.env.CUSTOM_API_KEY || process.env.GROQ_API_KEY,
         modelName: 'moonshotai/kimi-k2-instruct-0905',
         timeout: 300000,
         temperature: 0.7,
-        maxRPM: 10 // Conservative for Groq
+        maxRPM: 10 // Conservative for a free tier
     },
 
     // --- Whole-book calls ---

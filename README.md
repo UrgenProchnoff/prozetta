@@ -43,7 +43,9 @@ You need **Node.js**, and a model to translate with — one of:
   key, no cost, and no content filter, which is the only way to finish a book
   whose chunks a cloud model refuses;
 - **Google**, whose free tier is enough for a whole book — a key from AI Studio;
-- **Groq**, also with a free tier;
+- **any service with an OpenAI-compatible interface** — OpenRouter, Together,
+  NVIDIA NIM: the address, key and model name can be kept as a preset and
+  switched between;
 - anything else reachable over the OpenAI protocol.
 
 Keys are entered on the Settings page and stored in
@@ -137,7 +139,7 @@ Everything the interface does, the CLI does too — it is the same pipeline, and
 GUI runs these very commands.
 
 ```bash
-node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=txt/My_Book.txt [--model=google|local|groq]
+node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=txt/My_Book.txt [--model=google|local|custom]
 ```
 
 `--file` is required at every stage. It identifies the project: the source, the
@@ -175,7 +177,7 @@ Cloud keys come from the environment when running this way:
 
 ```bash
 export GOOGLE_API_KEY="your_key"
-export GROQ_API_KEY="your_key"
+export CUSTOM_API_KEY="your_key"
 ```
 
 ### Tools

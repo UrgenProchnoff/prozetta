@@ -43,7 +43,8 @@ start.bat          # Windows
   надо, денег не стоит, и **фильтра содержимого у неё нет** — это единственный
   способ дожать книгу, куски которой отклоняет облачная модель;
 - **Google**, чьего бесплатного уровня хватает на целую книгу, — ключ из AI Studio;
-- **Groq**, тоже с бесплатным уровнем;
+- **любой сервис с OpenAI-совместимым интерфейсом** — OpenRouter, Together,
+  NVIDIA NIM: адрес, ключ и имя модели можно запомнить пресетом и переключаться;
 - что угодно ещё, доступное по протоколу OpenAI.
 
 Ключи вводятся на странице настроек и лежат в `src_v4/config.overrides.json`,
@@ -135,7 +136,7 @@ start.bat          # Windows
 запускает ровно эти команды.
 
 ```bash
-node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=txt/My_Book.txt [--model=google|local|groq]
+node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=txt/My_Book.txt [--model=google|local|custom]
 ```
 
 `--file` обязателен на каждом этапе. Он определяет проект: исходник, префикс
@@ -173,7 +174,7 @@ node src_v4/main.js --stage=extract --file=txt/My_Book.txt --lang=немецки
 
 ```bash
 export GOOGLE_API_KEY="ваш_ключ"
-export GROQ_API_KEY="ваш_ключ"
+export CUSTOM_API_KEY="ваш_ключ"
 ```
 
 ### Инструменты

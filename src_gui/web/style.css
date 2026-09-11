@@ -62,7 +62,6 @@ header {
 
 /* --- Settings page --- */
 .cfg-group .title { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
-.cfg-gid { color: var(--muted); font-size: 12px; font-weight: 400; font-family: ui-monospace, monospace; }
 .cfg-test-area { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
 .cfg-test { font-size: 12px; padding: 3px 10px; }
 .cfg-test-result { font-size: 12px; color: var(--muted); cursor: help; }
@@ -119,6 +118,21 @@ header {
 .cfg-input input[type="number"] { flex: 1 1 120px; min-width: 0; }
 .cfg-hint { color: var(--muted); font-size: 12px; }
 .cfg-ovr { color: var(--yellow); }
+
+/* Presets on the other-service card: a row of its own between the description
+   and the fields, so it reads as "which service is this" rather than as another
+   setting. */
+.cfg-presets {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #1c212b;
+}
+.cfg-presets select { min-width: 180px; max-width: 100%; }
+.cfg-presets button { font-size: 12px; padding: 3px 10px; }
 
 /* Google model picker */
 .cfg-models { margin-top: 10px; padding-top: 8px; border-top: 1px solid #1c212b; }

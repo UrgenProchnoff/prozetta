@@ -3019,6 +3019,8 @@ async function renderSettings() {
     }
 
     const groupProvider = { logic_model: 'local', google_model: 'google', groq_model: 'groq' };
+    // The card that is not one service but whichever one you point it at.
+    const PRESET_GROUP = 'groq_model';
     // 'openai' exists only here: the large model's own OpenAI-compatible
     // endpoint, with no card of its own to inherit an address from.
     const BOOK_PROVIDERS = ['google', 'local', 'groq', 'openai'];
@@ -3045,6 +3047,21 @@ async function renderSettings() {
         </div>`;
     }
 
+    // Presets, on the one card that needs them. A free tier runs out and the
+    // answer is another service: another address, another key, another model
+    // name — four fields the person who asked for this was keeping in a text
+    // file beside the program. The other cards are one service each, where a
+    // preset would be a name for the thing already on screen.
+    function presetsHtml(g) {
+        if (g.id !== PRESET_GROUP) return '';
+        return `<div class="cfg-presets">
+            <span class="cfg-hint">${esc(t('settings.presets'))}</span>
+            <select data-preset="pick"><option value="">${esc(t('settings.presetPick'))}</option></select>
+            <button data-preset="save" type="button">${esc(t('settings.presetSave'))}</button>
+            <button data-preset="del" type="button" class="danger" disabled>${esc(t('settings.presetDelete'))}</button>
+        </div>`;
+    }
+
     function groupHtml(g) {
         const provider = groupProvider[g.id];
         const isBook = g.id === 'book_model';
@@ -3067,11 +3084,17 @@ async function renderSettings() {
         if (provider && provider === activeProvider) classes.push('cfg-active');
         if (provider && provider === bookProvider) classes.push('cfg-uses-book');
         const groupDesc = t('cfg.groupdesc.' + g.id);
-        const title = `<span class="cfg-title-name">${esc(t('cfg.group.' + g.id))}</span>`
-            + (simple ? '' : ` <span class="cfg-gid">${esc(g.id)}</span>`) + badges + testArea;
+        // The card carries its name and nothing else. It used to show the store's
+        // own id beside it — `groq_model` next to "Another service", which is a
+        // card that has not been about Groq for a long time. Field keys stay:
+        // those are what the guide and a support answer name ("Settings → the
+        // Google group → maxRPM"), and the label above them is a Russian
+        // sentence. A group id is named by nobody.
+        const title = `<span class="cfg-title-name">${esc(t('cfg.group.' + g.id))}</span>` + badges + testArea;
         return `<div class="${classes.join(' ')}" ${provider ? `data-provider="${esc(provider)}"` : ''} data-group="${esc(g.id)}">
             <div class="title">${title}</div>
             ${groupDesc.startsWith('cfg.') ? '' : `<div class="cfg-groupdesc">${esc(groupDesc)}</div>`}
+            ${presetsHtml(g)}
             ${g.fields.map(f => fieldHtml(g.id, f)).join('')}
             ${modelsPickerHtml(g)}
         </div>`;
@@ -3327,6 +3350,67 @@ async function renderSettings() {
             renderSettings();
         } catch (e) { toast(e.message, 'error'); }
     });
+
+    // --- Presets on the "another service" card ---
+    //
+    // Applying one is done by the server rather than by filling the form: a
+    // preset carries the API key, and the page has never been told a key and has
+    // no reason to start. It comes back as the whole settings payload, so the
+    // page simply draws itself again with the new service in place.
+    (function wirePresets() {
+        const box = app.querySelector('.cfg-presets');
+        if (!box) return;
+        const pick = box.querySelector('[data-preset="pick"]');
+        const del = box.querySelector('[data-preset="del"]');
+        const url = `/api/config/presets?group=${encodeURIComponent(PRESET_GROUP)}`;
+
+        const fill = (names) => {
+            pick.innerHTML = `<option value="">${esc(t('settings.presetPick'))}</option>`
+                + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+            del.disabled = true;
+        };
+
+        api(url).then(r => fill(r.names || [])).catch(() => { /* no presets, no row to fill */ });
+
+        pick.addEventListener('change', async () => {
+            const name = pick.value;
+            del.disabled = !name;
+            if (!name) return;
+            try {
+                await api('/api/config/presets/apply', { method: 'POST', body: { group: PRESET_GROUP, name } });
+                toast(t('settings.presetApplied', { name }), 'ok');
+                renderSettings();
+            } catch (e) { toast(e.message, 'error'); }
+        });
+
+        box.querySelector('[data-preset="save"]').addEventListener('click', async () => {
+            const name = (prompt(t('settings.presetNamePrompt'), pick.value || '') || '').trim();
+            if (!name) return;
+            const known = [...pick.options].some(o => o.value === name);
+            if (known && !confirm(t('settings.presetOverwrite', { name }))) return;
+            try {
+                // Saved first, then remembered: a preset is a copy of what is
+                // stored, and the key is only ever stored — the field for it is
+                // empty on every visit by design.
+                await api('/api/config', { method: 'PUT', body: collectChanges() });
+                const r = await api('/api/config/presets', { method: 'POST', body: { group: PRESET_GROUP, name } });
+                fill(r.names || []);
+                pick.value = name;
+                del.disabled = false;
+                toast(t('settings.presetSaved', { name }), 'ok');
+            } catch (e) { toast(e.message, 'error'); }
+        });
+
+        del.addEventListener('click', async () => {
+            const name = pick.value;
+            if (!name || !confirm(t('settings.presetDeleteConfirm', { name }))) return;
+            try {
+                const r = await api('/api/config/presets', { method: 'DELETE', body: { group: PRESET_GROUP, name } });
+                fill(r.names || []);
+                toast(t('settings.presetDeleted', { name }), 'ok');
+            } catch (e) { toast(e.message, 'error'); }
+        });
+    })();
 
     // Read all current (unsaved) form values for one provider group.
     function collectGroupValues(groupId) {

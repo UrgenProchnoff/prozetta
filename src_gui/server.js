@@ -30,6 +30,7 @@ const ROOT = path.resolve(__dirname, '..');
 const TXT_DIR = path.join(ROOT, 'txt');
 const CONFIG_PATH = path.join(ROOT, 'src_v4', 'config.js');
 const OVERRIDES_PATH = path.join(ROOT, 'src_v4', 'config.overrides.json');
+const PRESETS_PATH = path.join(ROOT, 'src_v4', 'config.presets.json');
 const PORT = process.env.GUI_PORT || 3457;
 
 const app = express();
@@ -2046,6 +2047,114 @@ function readOverrides() {
     catch { return {}; }
 }
 
+function writeOverrides(overrides) {
+    const tmp = OVERRIDES_PATH + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(overrides, null, 2));
+    fs.renameSync(tmp, OVERRIDES_PATH);
+}
+
+// --- Settings presets: a named copy of one card's settings ---
+//
+// Free tiers run out, and the answer is another service with another address,
+// another key and another model name. That is four fields to retype from memory,
+// or from a text file somebody keeps beside the program — which is what the
+// person who asked for this was doing.
+//
+// A preset is a snapshot of one group as it is saved, keys and all. It lives
+// beside config.overrides.json and is gitignored for the same reason: what is in
+// it is a set of credentials.
+function readPresets() {
+    if (!fs.existsSync(PRESETS_PATH)) return {};
+    try { return JSON.parse(fs.readFileSync(PRESETS_PATH, 'utf-8')); }
+    catch { return {}; }
+}
+
+function writePresets(presets) {
+    const tmp = PRESETS_PATH + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(presets, null, 2));
+    fs.renameSync(tmp, PRESETS_PATH);
+}
+
+const PRESET_LIMIT = 30;
+
+/** The group and name from a request, or null — which has already answered. */
+function presetTarget(req, res) {
+    const group = String(req.body?.group ?? req.query?.group ?? '');
+    const name = String(req.body?.name ?? req.query?.name ?? '').trim();
+    if (!MODEL_GROUPS.includes(group)) {
+        res.status(400).json({ error: `Unknown settings group: ${group}` });
+        return null;
+    }
+    if (!name || name.length > 40 || /[\u0000-\u001f]/.test(name)) {
+        res.status(400).json({ error: 'A preset needs a name of 1-40 characters' });
+        return null;
+    }
+    return { group, name };
+}
+
+/** Names only: the values hold an API key and have no business in a page. */
+app.get('/api/config/presets', (req, res) => {
+    const group = String(req.query.group || '');
+    if (!MODEL_GROUPS.includes(group)) return res.status(400).json({ error: `Unknown settings group: ${group}` });
+    res.json({ names: Object.keys(readPresets()[group] || {}).sort((a, b) => a.localeCompare(b)) });
+});
+
+// Snapshot what is saved, not what is typed: the form never holds the API key —
+// its field says "new key (empty — keep)" and starts empty — so a preset built
+// from the form would be a preset that cannot connect. The page saves first and
+// then asks for this, which makes the two the same thing.
+app.post('/api/config/presets', (req, res) => {
+    const target = presetTarget(req, res);
+    if (!target) return;
+    const saved = readOverrides()[target.group];
+    if (!saved || !Object.keys(saved).length) {
+        return res.status(400).json({ error: 'This card has nothing saved to remember yet' });
+    }
+    const presets = readPresets();
+    presets[target.group] = presets[target.group] || {};
+    if (!(target.name in presets[target.group]) && Object.keys(presets[target.group]).length >= PRESET_LIMIT) {
+        return res.status(400).json({ error: `That is ${PRESET_LIMIT} presets on one card — delete one first` });
+    }
+    presets[target.group][target.name] = { ...saved };
+    writePresets(presets);
+    res.json({ ok: true, names: Object.keys(presets[target.group]).sort((a, b) => a.localeCompare(b)) });
+});
+
+// The group is replaced rather than merged: a preset is a whole card, and
+// merging would leave the previous service's address behind whenever the new one
+// does not name it. The key is the exception — a preset that carries none means
+// "not mine to say", so the saved one stays rather than being wiped.
+app.post('/api/config/presets/apply', async (req, res) => {
+    const target = presetTarget(req, res);
+    if (!target) return;
+    const preset = readPresets()[target.group]?.[target.name];
+    if (!preset) return res.status(404).json({ error: `No preset named "${target.name}"` });
+
+    const overrides = readOverrides();
+    const currentKey = overrides[target.group]?.apiKey;
+    overrides[target.group] = { ...preset };
+    if (!overrides[target.group].apiKey && currentKey) overrides[target.group].apiKey = currentKey;
+
+    try { writeOverrides(overrides); }
+    catch (e) { return res.status(500).json({ error: e.message }); }
+
+    try {
+        const fresh = await loadEffectiveConfig();
+        res.json({ ok: true, groups: describeConfig(fresh, overrides), activeProvider: fresh.activeProvider || 'local' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/config/presets', (req, res) => {
+    const target = presetTarget(req, res);
+    if (!target) return;
+    const presets = readPresets();
+    if (!presets[target.group]?.[target.name]) return res.status(404).json({ error: `No preset named "${target.name}"` });
+    delete presets[target.group][target.name];
+    if (!Object.keys(presets[target.group]).length) delete presets[target.group];
+    writePresets(presets);
+    res.json({ ok: true, names: Object.keys(presets[target.group] || {}).sort((a, b) => a.localeCompare(b)) });
+});
+
 // Load the effective config fresh (defaults merged with overrides). Cache-bust
 // the dynamic import so edits are reflected without restarting the server.
 async function loadEffectiveConfig() {
@@ -2164,13 +2273,8 @@ app.put('/api/config', async (req, res) => {
         if (Object.keys(overrides[groupId]).length === 0) delete overrides[groupId];
     }
 
-    try {
-        const tmp = OVERRIDES_PATH + '.tmp';
-        fs.writeFileSync(tmp, JSON.stringify(overrides, null, 2));
-        fs.renameSync(tmp, OVERRIDES_PATH);
-    } catch (e) {
-        return res.status(500).json({ error: e.message });
-    }
+    try { writeOverrides(overrides); }
+    catch (e) { return res.status(500).json({ error: e.message }); }
 
     const fresh = await loadEffectiveConfig();
     res.json({ ok: true, groups: describeConfig(fresh, overrides), activeProvider: fresh.activeProvider || 'local' });
