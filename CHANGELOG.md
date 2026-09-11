@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-08-24**
 
+- `d428317` — A refused answer is diagnosed rather than quoted, and it stays on
+  screen: a panel under the paste box that can be selected and copied, carrying
+  the line and column in your own text and the line itself. For the commonest
+  break — a paragraph the model left without a field name — it says what to do,
+  because there the parser points one line below the guilty one.
 - `80ed2ff` — The monitor recommends the right step, and the button says which
   step it will run. Accepted advice went uncounted: with every chunk translated
   the line said "assemble the book" at exactly the moment the answer was "run
