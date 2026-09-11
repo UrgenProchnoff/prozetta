@@ -11,6 +11,9 @@
  *   - commits with no entry (the change nobody wrote down);
  *   - entries naming a commit that does not exist (a typo, or a rebase);
  *   - entries out of order (the file reads newest first, at both levels);
+ *   - entries under the wrong date (a line goes to the top of the file, and the
+ *     top of the file is whatever date group is there — which is how a section
+ *     headed 28.08 came to hold work from two weeks later);
  *   - a commit described in one language but not the other.
  *
  * Usage:
@@ -42,6 +45,19 @@ function refsInOrder(text) {
     const out = [];
     for (const m of text.matchAll(REF_RE)) {
         for (const h of (m[1] || m[2] || '').split(/,\s*/)) if (h) out.push(h);
+    }
+    return out;
+}
+
+/** Entries that open with a fingerprint, each with the date group above it. */
+function entriesWithDates(text) {
+    const out = [];
+    let group = null;
+    for (const line of text.split('\n')) {
+        const heading = /^\*\*(\d{4}-\d{2}-\d{2})\*\*\s*$/.exec(line);
+        if (heading) { group = heading[1]; continue; }
+        const entry = /^- `([0-9a-f]{7,40})`/.exec(line);
+        if (entry && group) out.push({ hash: entry[1], group });
     }
     return out;
 }
@@ -91,6 +107,20 @@ function main() {
             problems++;
         }
 
+        // The date an entry sits under is the date its commit was made. It is
+        // easy to let this drift: a new line goes to the top of the file, and
+        // the top of the file is whatever date group happens to be there. Left
+        // alone it produced a section headed 28.08 whose top group, dated
+        // 24.08, held work from two weeks later — dates that mislead are worse
+        // than no dates, and this is the kind of question a program should ask.
+        for (const { hash, group } of entriesWithDates(fs.readFileSync(full, 'utf-8'))) {
+            let made;
+            try { made = git('log', '-1', '--format=%cs', hash); } catch { continue; }
+            if (made === group) continue;
+            console.error(`[Changelog] ${file}: ${hash} sits under ${group} and was committed on ${made}`);
+            problems++;
+        }
+
         // Order, checked only over the commits in range: those are the ones the
         // file claims to list. Newest first, at both levels — the whole point of
         // the arrangement is that there is one direction to remember.
@@ -131,7 +161,7 @@ function main() {
         console.error(`\n[Changelog] ${problems} problem(s). Every commit needs a line, and every line a commit.`);
         process.exitCode = 1;
     } else {
-        console.log(`[Changelog] ${commits.length} commit(s) in ${range}: all recorded, in order, in both languages.`);
+        console.log(`[Changelog] ${commits.length} commit(s) in ${range}: all recorded, in order, on their dates, in both languages.`);
     }
 }
 

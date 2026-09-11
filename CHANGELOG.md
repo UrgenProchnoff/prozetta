@@ -9,7 +9,7 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
-**2026-08-24**
+**2026-09-11**
 
 - `c16132b` — A program unpacked from a ZIP knows its own fingerprint: GitHub's
   archive is made by `git archive`, which substitutes the hash into a file. The
@@ -54,6 +54,9 @@ predates the practice and carries none.
 - `33e573e` — A dismissed finding can be taken back: a folded "Dismissed
   findings" block at the end of the review, each row with its own button.
   Dismissing used to be the one decision with no way out but editing the file.
+
+**2026-09-06**
+
 - `23de3da` — An annotation for the book on the Book screen: what the book is
   about, which a reader app shows under the cover and there was nowhere to type.
   Every line becomes a paragraph; the prozetta and model lines stay below it.
@@ -62,9 +65,15 @@ predates the practice and carries none.
 - `707fdcb` — A multi-word term split across a line break counted as absent: wrong
   in the glossary's occurrence column, and worse in the cheat sheet, where the
   translator never received it. Hard-wrapped books were affected throughout.
+
+**2026-08-29**
+
 - `65b7831` — `start.bat` had LF line endings, so cmd.exe executed the tails of
   its own lines — the four "is not recognized" errors Windows users saw on every
   launch. `.gitattributes` now hands out CRLF on every checkout.
+
+**2026-08-28**
+
 - `b8126a9` — The README is written around the interface now, with the command
   line in a section of its own: eight screens described and linked to their help
   articles, and all seven pipeline steps instead of the two it still claimed.
@@ -87,12 +96,18 @@ predates the practice and carries none.
 - `7ef9682` — An edit history for the whole book, beside the glossary and the
   passport: every change with its time, chunk and kind, a word-level diff on
   opening a row, and an undo that is itself recorded and can be undone.
+
+**2026-08-27**
+
 - `7fb6190` — Replace, beside the search: all at once or one hit at a time, in
   translations only, with an Undo offered in the toast that puts every touched
   chunk back.
 - `2b0643a` — Cross-chunk search in the editor (Ctrl+Shift+F): translation,
   original or both, whole words or not, and clicking a hit opens that chunk with
   the match selected — the search surviving the jump.
+
+**2026-08-26**
+
 - `6f7de59` — A finding's chunk button now opens the chunk with the quote
   selected in the editable text, and the chunk page lists what the review said
   about it, each finding able to show its own quote.
@@ -102,6 +117,9 @@ predates the practice and carries none.
 - `b33eb29` — A chunk whose advice fix was never approved could fall back to its
   pre-review translation, restoring the defect while the finding still counted as
   handled. The best-of-history scan now stops at the last advice fix.
+
+**2026-08-24**
+
 - `f04762b` — The passport page can build a passport when there is none. It used
   to send you to the monitor at exactly the moment it could have helped: the card
   that builds one sat three lines below an early return.
@@ -162,7 +180,6 @@ predates the practice and carries none.
   always been links, with no hover and no focus ring — a grid of coloured squares
   reads as a status board. They lift under the pointer now, and a line says what
   a click is for.
-
 - `b32c025` — The passport and the glossary review can be carried to a web console
   by hand as well. Morphotrophic's passport needs 159,522 tokens and its glossary
   review 167,850, against a ceiling near 168,000 — both fit today by a few
