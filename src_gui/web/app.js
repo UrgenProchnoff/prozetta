@@ -28,17 +28,36 @@ async function api(url, opts = {}) {
     return data;
 }
 
+// How long a message stays. Four seconds was enough to notice that something had
+// happened and never enough to read what: a line number, a model's complaint, a
+// count worth arguing with. A minute for anything that went wrong or offers to be
+// undone, half of that for a notice that something went right.
+const TOAST_MS = { error: 60000, offer: 60000, notice: 30000 };
+// At a minute apiece they accumulate, and a stack tall enough to cover the page
+// is a worse loss than the message it buries. The newest are the ones worth
+// keeping, so the oldest leaves.
+const TOAST_MAX = 5;
+
 /**
- * A passing message, optionally with a way to take back what caused it.
+ * A message that waits to be read, optionally with a way to take back what
+ * caused it.
  *
- * An offer needs longer on screen than a notice does: four seconds is enough to
- * read "done", and not enough to read "forty chunks changed", decide it was
- * wrong, and reach for the button.
+ * Stacks upward from the bottom right: the newest arrives nearest the corner and
+ * pushes its elders up, which is the order they were read in. Every one carries
+ * a close button, because a minute is long enough to be in the way, and hovering
+ * stops the clock, because text that disappears halfway through being selected
+ * cannot be copied.
  */
 function toast(msg, kind = '', offer = null) {
+    const box = document.getElementById('toast');
     const el = document.createElement('div');
     el.className = `t ${kind}`;
-    el.textContent = msg;
+
+    const body = document.createElement('span');
+    body.className = 't-text';
+    body.textContent = msg;
+    el.appendChild(body);
+
     if (offer) {
         const btn = document.createElement('button');
         btn.className = 't-undo';
@@ -51,8 +70,21 @@ function toast(msg, kind = '', offer = null) {
         });
         el.appendChild(btn);
     }
-    document.getElementById('toast').appendChild(el);
-    setTimeout(() => el.remove(), offer ? 15000 : 4000);
+
+    const close = document.createElement('button');
+    close.className = 't-close';
+    close.textContent = '✕';
+    close.title = t('common.close');
+    close.addEventListener('click', () => el.remove());
+    el.appendChild(close);
+
+    box.appendChild(el);
+    while (box.children.length > TOAST_MAX) box.firstElementChild.remove();
+
+    const ms = offer ? TOAST_MS.offer : (kind === 'error' ? TOAST_MS.error : TOAST_MS.notice);
+    let timer = setTimeout(() => el.remove(), ms);
+    el.addEventListener('mouseenter', () => clearTimeout(timer));
+    el.addEventListener('mouseleave', () => { timer = setTimeout(() => el.remove(), ms); });
 }
 
 function fmtDate(iso) {

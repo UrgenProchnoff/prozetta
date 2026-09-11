@@ -801,14 +801,31 @@ table.glossary .del { text-align: center; }
     z-index: 100;
 }
 #toast .t {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
     background: var(--panel2);
     border: 1px solid var(--border);
     border-left: 3px solid var(--accent);
     border-radius: 6px;
     padding: 10px 14px;
     min-width: 220px;
+    /* A message can be a paragraph now that there is time to read one — the
+       parser's complaint, a model's objection. Wrapped and capped rather than
+       stretched across the window. */
+    max-width: min(460px, calc(100vw - 40px));
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     animation: fadein 0.15s;
 }
+#toast .t-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#toast .t-close {
+    flex: none;
+    margin: -4px -6px 0 0;
+    padding: 2px 6px;
+    line-height: 1;
+    color: var(--muted);
+}
+#toast .t-close:hover { color: var(--text); }
 #toast .t.error { border-left-color: var(--red); }
 #toast .t.ok { border-left-color: var(--green); }
 

@@ -20,6 +20,7 @@
             'common.loading': 'Загрузка…',
             'common.error': 'Ошибка: {msg}',
             'common.save': '💾 Сохранить',
+            'common.close': 'Закрыть',
 
             'header.lang': 'Язык / Language',
 
@@ -571,6 +572,7 @@
             'common.loading': 'Loading…',
             'common.error': 'Error: {msg}',
             'common.save': '💾 Save',
+            'common.close': 'Close',
 
             'header.lang': 'Язык / Language',
 
