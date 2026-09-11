@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-08-24**
 
+- `80ed2ff` — The monitor recommends the right step, and the button says which
+  step it will run. Accepted advice went uncounted: with every chunk translated
+  the line said "assemble the book" at exactly the moment the answer was "run
+  Translation". The button now carries the step's name and follows the
+  recommendation until a step is picked by hand.
 - `9bc7f63` — The steps are called by their names, not by numbers: "Stage 2" was
   left over from when there were two of them, and the roadmap has had seven named
   steps for a long time. The interface, the guide and the log say Extraction and
