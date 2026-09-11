@@ -11,7 +11,7 @@
  * a decision recorded once and injected as a constraint does.
  *
  * Stored next to the glossary as <prefix>_passport.json, for the same reasons:
- * a human edits it, and a Stage 2 reset must not destroy it.
+ * a human edits it, and resetting the translation must not destroy it.
  */
 
 import fs from 'fs';

@@ -11,7 +11,7 @@ import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
 export async function runTranslationLoopStage(state) {
-    console.log('--- SYSTEM: Starting Stage 2 (Smart Translation Loop) ---');
+    console.log('--- SYSTEM: Starting the translation (smart loop) ---');
 
     const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
     const prompts = getPrompts(config.translation.promptLang);
@@ -22,12 +22,12 @@ export async function runTranslationLoopStage(state) {
 
     if (fs.existsSync(glossaryPath)) {
         glossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf-8'));
-        console.log(`[Stage 2] Loaded glossary with ${glossary.length} terms.`);
+        console.log(`[Translation] Loaded glossary with ${glossary.length} terms.`);
         const named = glossary.filter(t => t?.type === 'name' && t.gender).length;
         const noted = glossary.filter(t => String(t?.notes || '').trim()).length;
-        console.log(`[Stage 2] Cheat sheet carries gender for ${named} character(s) and notes for ${noted} entr(ies).`);
+        console.log(`[Translation] Cheat sheet carries gender for ${named} character(s) and notes for ${noted} entr(ies).`);
     } else {
-        console.warn('[Stage 2] No glossary found. Translation will proceed without it.');
+        console.warn('[Translation] No glossary found. Translation will proceed without it.');
     }
 
     // Book passport: whole-book decisions (narration person/tense, address
@@ -35,17 +35,17 @@ export async function runTranslationLoopStage(state) {
     // Missing or broken passport degrades to empty → prompts stay unchanged.
     const passport = loadPassport(state.getPassportPath());
     if (isEmptyPassport(passport)) {
-        console.log('[Stage 2] No passport found — translating without <style> constraints (run --stage=passport to build one).');
+        console.log('[Translation] No passport found — translating without <style> constraints (run --stage=passport to build one).');
     } else {
         const n = passport.narration || {};
-        console.log(`[Stage 2] Passport loaded: narration ${n.person || '—'}/${n.tense || '—'}, ${passport.characters.length} POV character(s), ${passport.povMap.length} map span(s).`);
+        console.log(`[Translation] Passport loaded: narration ${n.person || '—'}/${n.tense || '—'}, ${passport.characters.length} POV character(s), ${passport.povMap.length} map span(s).`);
     }
 
     // Names the glossary genders two ways travel without a gender rather than
     // with a wrong one. Computed once: the glossary does not change mid-run.
     const contradicted = contradictedNames(glossary);
     if (contradicted.size) {
-        console.warn(`[Stage 2] ${contradicted.size} name(s) carry contradictory genders in the glossary ` +
+        console.warn(`[Translation] ${contradicted.size} name(s) carry contradictory genders in the glossary ` +
             `and will be sent without one — run tools/glossary_hygiene.js or open the glossary editor to settle them.`);
     }
 
@@ -59,7 +59,7 @@ export async function runTranslationLoopStage(state) {
     // observed on Morphotrophic, where gemini-3.6-flash translated a chunk that
     // gemini-3.5-flash-lite would not. So a block is recorded against the model
     // that made it, and only that model skips the chunk on a rerun. Same field
-    // shape as Stage 1, under its own name: extraction and translation can be
+    // shape as extraction, under its own name: extraction and translation can be
     // blocked by different models, and one field could not say so.
     const modelSignature = `${llmManager.provider}:${llmManager.getModelName()}`;
 
@@ -79,10 +79,10 @@ export async function runTranslationLoopStage(state) {
             continue;
         }
         if (chunk.translation_status === 'blocked') {
-            console.log(`[Stage 2] Chunk ${i + 1} was blocked by "${chunk.translation_blocked_by || 'unknown model'}" — retrying with "${modelSignature}"...`);
+            console.log(`[Translation] Chunk ${i + 1} was blocked by "${chunk.translation_blocked_by || 'unknown model'}" — retrying with "${modelSignature}"...`);
         }
 
-        console.log(`[Stage 2] Processing Chunk ${i + 1}/${chunks.length}...`);
+        console.log(`[Translation] Processing Chunk ${i + 1}/${chunks.length}...`);
 
         let history = chunk.history || [];
 
@@ -386,20 +386,20 @@ export async function runTranslationLoopStage(state) {
 
         processedCount++;
         state.save();
-        console.log(`[Stage 2] Saved progress.`);
+        console.log(`[Translation] Saved progress.`);
         const usageLine = usageTracker.sessionLine();
         if (usageLine) console.log(usageLine);
     }
 
     state.save();
     if (blockedChunks.length) {
-        console.warn(`\n[Stage 2] WARNING: ${blockedChunks.length} chunk(s) were refused by the content filter of ` +
+        console.warn(`\n[Translation] WARNING: ${blockedChunks.length} chunk(s) were refused by the content filter of ` +
             `${modelSignature} and are left untranslated: ${blockedChunks.join(', ')}.`);
-        console.warn(`[Stage 2] They are marked on the chunk map, and the exported book will be missing them. ` +
-            `Switch to another provider or model in the settings — a local one has no such filter — and run Stage 2 ` +
+        console.warn(`[Translation] They are marked on the chunk map, and the exported book will be missing them. ` +
+            `Switch to another provider or model in the settings — a local one has no such filter — and run the translation ` +
             `again: everything already translated is kept, only the blocked chunks are picked up.`);
     }
-    console.log('--- SYSTEM: Stage 2 (Translation Loop) Completed ---');
+    console.log('--- SYSTEM: Translation completed ---');
 }
 
 // --- HELPERS ---
@@ -426,7 +426,7 @@ const MAX_NOTE_CHARS = 120;
 /**
  * Names whose gender the glossary states two ways.
  *
- * Stage 1 files one character under several entries, and they can disagree —
+ * Extraction files one character under several entries, and they can disagree —
  * "Detective Sergeant Smith"=m beside "Sue Smith"=f for the same woman. Passing
  * that into the prompt is worse than passing nothing: it would order masculine
  * agreement in a female narrator's chapters. The hygiene tool reports these for

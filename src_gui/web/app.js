@@ -1273,8 +1273,8 @@ async function renderMonitor(prefix) {
     }
     window.addEventListener('resize', fitLog);
 
-    // Language is fixed when the project is created (Stage 1). For an existing
-    // project show its saved values, disabled; editable only before Stage 1.
+    // Language is fixed when the project is created (at extraction). For an existing
+    // project show its saved values, disabled; editable only before extraction.
     let suffixTouched = false;
     suffixInput.addEventListener('input', () => { suffixTouched = true; });
     langInput.addEventListener('input', () => {
@@ -1590,7 +1590,7 @@ async function renderMonitor(prefix) {
      * The whole-book review: its verdict, and the findings still open.
      *
      * Each finding is a decision, not a notification. A chunk-scoped one can be
-     * taken — its advice is queued on the chunk and the next Stage 2 run fixes
+     * taken — its advice is queued on the chunk and the next translation run fixes
      * that chunk with it — or dismissed. A glossary or passport one names
      * something no chunk can repair, so it offers a way to the page where it can
      * be, and dismissal.
@@ -1790,8 +1790,8 @@ async function renderMonitor(prefix) {
         const warning = preflight(stage, summary);
         if (warning && !confirm(warning)) return;
 
-        // Language is only sent when the project is first created (Stage 1 or a
-        // direct Stage 2 run both bootstrap a fresh project).
+        // Language is only sent when the project is first created (extraction or a
+        // direct translation run both bootstrap a fresh project).
         const body = { prefix, stage };
         if ((stage === '1' || stage === '2') && !(summary && summary.total > 0)) {
             if (langInput.value.trim()) body.lang = langInput.value.trim();
@@ -1823,7 +1823,7 @@ async function renderMonitor(prefix) {
                 return;
             }
             appendSeparator(t('mon.logRunSeparator', { stage: stageLabel(stage) }));
-            toast(t('mon.stageStarted', { stage }), 'ok');
+            toast(t('mon.stageStarted', { stage: stageLabel(stage) }), 'ok');
         } catch (e) {
             toast(e.message, 'error');
         }

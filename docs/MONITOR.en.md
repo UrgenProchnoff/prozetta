@@ -53,7 +53,7 @@ the book will translate without it".
 Under the pipeline sits one sentence about what to do next, and the button that
 does it. The sentence follows the state of the book:
 
-- "No project yet. Start with Stage 1 — extracting terms."
+- "Project not created. Start with Extraction — it pulls the names and terms out of the book."
 - "Terms extracted, but the glossary is empty. Check or fill in the glossary
   before translating."
 - "Every chunk is translated. You can assemble the book (export) or open a chunk

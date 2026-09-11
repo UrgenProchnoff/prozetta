@@ -360,8 +360,8 @@ function chunkStatus(chunk) {
     return 'pending';
 }
 
-// A chunk counts as extracted if Stage 1 marked it done — including 'blocked'
-// (the content filter refused the text; Stage 1 skipped it permanently). Older
+// A chunk counts as extracted if the extraction marked it done — including 'blocked'
+// (the content filter refused the text; extraction skipped it permanently). Older
 // projects predate the extraction_status field but still carry extracted_terms.
 function isExtracted(chunk) {
     return chunk.extraction_status === 'success'
@@ -397,7 +397,7 @@ function projectSummary(prefix) {
             blocked: c.extraction_status === 'blocked',
             blockedBy: c.extraction_status === 'blocked' ? (c.blocked_by || null) : null,
             // Which model refused to translate it. Separate from the two above,
-            // which are about Stage 1: the same chunk can be refused by one model
+            // which are about extraction: the same chunk can be refused by one model
             // at extraction and by another at translation.
             translationBlockedBy: c.translation_status === 'blocked' ? (c.translation_blocked_by || null) : null,
             // Translator and reviewer could not agree (repeated rejection of a
@@ -405,7 +405,7 @@ function projectSummary(prefix) {
             // human should settle it.
             disputed: !!c.dispute,
             // Advice accepted from the whole-book review and waiting for the next
-            // Stage 2 run. Work outstanding on a chunk that otherwise looks done,
+            // translation run. Work outstanding on a chunk that otherwise looks done,
             // so the map has to say so or 35 queued fixes are invisible.
             advice: c.advice?.length || 0,
             // Already corrected on advice at some point. The advice itself is
@@ -492,7 +492,7 @@ function projectSummary(prefix) {
                     issue: f.issue, quote: f.quote, problem: f.problem,
                 })),
                 // Advice already accepted onto chunks, so the interface can show
-                // what is queued for the next Stage 2 run without walking chunks.
+                // what is queued for the next translation run without walking chunks.
                 accepted: chunks.reduce((n, c) => n + (c.advice?.length || 0), 0),
             };
         } catch { translationReview = { broken: true }; }
@@ -554,7 +554,7 @@ function exportedState(prefix, state) {
 }
 
 // Resolve the --file argument for a project. On an existing project the file
-// only identifies the prefix; on a fresh one Stage 1/2 read it to build chunks.
+// only identifies the prefix; on a fresh one extraction/translation read it to build chunks.
 function resolveSourceFile(prefix) {
     const sp = statePath(prefix);
     if (fs.existsSync(sp)) {
@@ -1257,7 +1257,7 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
         // Entries that are inflections of one source word and are translated two
         // ways. Sent per row rather than as a list of groups: the editor shows
         // rows, and a group number on each member is what lets it gather them
-        // and put the widest disagreement first. The warning before Stage 2
+        // and put the widest disagreement first. The warning before the translation
         // promised this list opens here, and for a while it did not.
         forms: formGroups(terms),
         review: reviewMeta,
@@ -1371,7 +1371,7 @@ app.post('/api/run', (req, res) => {
 
     const args = ['src_v4/main.js', `--stage=${stage}`, `--file=${sourceFile}`];
     if (model && model !== 'default') args.push(`--model=${model}`);
-    // Language is set once at Stage 1; passing it on other stages just overrides.
+    // Language is set once at extraction; passing it on other steps just overrides.
     if (cleanLang) args.push(`--lang=${cleanLang}`);
     if (typeof suffix === 'string' && suffix.trim() !== '') args.push(`--suffix=${suffix.trim()}`);
 
@@ -1383,7 +1383,7 @@ app.post('/api/run', (req, res) => {
  * Decide a finding from the whole-book review.
  *
  * "accept" queues the advice on the chunk the quote was found in; the next
- * Stage 2 run fixes that chunk with the advice as its instruction and clears it
+ * translation run fixes that chunk with the advice as its instruction and clears it
  * on approval. "dismiss" records the judgement by findingKey, which survives a
  * re-review — a finding argued down once should not have to be argued down again
  * because the pass was repeated.
@@ -1663,7 +1663,7 @@ app.get('/api/projects/:prefix/job', (req, res) => {
     res.json(job);
 });
 
-// Revert the whole project to its post-Stage-1 state: drop what Stage 2 wrote so
+// Revert the whole project to its post-extraction state: drop what the translation wrote so
 // it can be re-run from scratch, and leave the rest of the chunk alone. Shares
 // withoutTranslation() with src_v4/tools/reset_to_stage1.js — the two used to
 // carry the same list separately, and the same defect with it. Backs up first.
@@ -1698,7 +1698,7 @@ app.post('/api/projects/:prefix/reset-stage1', (req, res) => {
 
 // Clone a project to translate the same book into another language. Chunking and
 // term extraction are language-independent, so we copy them as-is (extraction is
-// skipped on the clone's Stage 1); only consolidation + Stage 2 re-run for the
+// skipped on the clone's extraction); only consolidation + translation re-run for the
 // new language. The glossary is NOT copied — it would be in the wrong language.
 app.post('/api/projects/:prefix/clone', (req, res) => {
     const prefix = validPrefix(req, res);

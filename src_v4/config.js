@@ -12,7 +12,7 @@ const defaults = {
     // --- Translation language settings ---
     // These are the defaults for CLI runs and for new projects created in the GUI.
     // Per-project values are stored in <prefix>_project_state.json metadata at
-    // Stage 1; precedence at run time is: CLI flag > project metadata > these.
+    // extraction; precedence at run time is: CLI flag > project metadata > these.
     translation: {
         // Language the pipeline translates INTO. Free-form string injected into
         // the prompts, so write it in the form that fits promptLang
@@ -98,10 +98,10 @@ const defaults = {
         chunkBaseTokens: 500,       // Minimum tokens before starting a new chunk
         chunkOverflowTokens: 500,   // Additional tokens before splitting
 
-        // Stage 1: Extraction
+        // Extraction
         extractionMaxRetries: 3,
 
-        // Stage 1b: Consolidation
+        // Consolidation
         consolidationBatchSize: 30, // Terms per LLM batch
         consolidationMaxRetries: 3,
 
@@ -133,7 +133,7 @@ const defaults = {
         // Raise this on a paid tier.
         bookCallTokenBudget: 170000,
 
-        // Stage 2: Translation loop
+        // Translation loop
         translationMaxRetries: 10,
         approvalScoreThreshold: 9.1,    // Score >= this + like=1 → approved
         redraftScoreThreshold: 7.5,     // Score < this OR like=0 → retranslate from scratch

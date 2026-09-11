@@ -1,7 +1,7 @@
 /**
  * Glossary hygiene — deterministic clean-up, no LLM involved.
  *
- * Stage 1 builds the glossary chunk by chunk, so the same character ends up
+ * Extraction builds the glossary chunk by chunk, so the same character ends up
  * under several entries ("Sue Smith", "Smith", "Detective Sergeant Smith"),
  * sometimes with contradictory genders, and the surface form that actually
  * occurs in the book ("Sue") can be missing entirely. Entries whose text never

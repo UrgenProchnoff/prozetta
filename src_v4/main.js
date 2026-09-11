@@ -19,6 +19,12 @@ function reportUsage() {
     if (report) console.log('\n' + report);
 }
 
+// The steps are named after the work they do. "1" and "2" are what two of them
+// were called back when there were only two, and they still arrive from the
+// interface and from anything anybody scripted, so they keep working — as
+// spellings of a name, not as a numbering anyone has to learn.
+const STAGE_ALIASES = { '1': 'extract', '2': 'translate' };
+
 async function main() {
     const args = process.argv.slice(2);
     const stageArg = args.find(a => a.startsWith('--stage='));
@@ -28,12 +34,14 @@ async function main() {
     const suffixArg = args.find(a => a.startsWith('--suffix='));
 
     if (!stageArg || !fileArg) {
-        console.error('Usage: node src_v4/main.js --stage=<1|passport|glossary|2|review|export> --file=<path/to/book.txt> [--model=google|local|groq] [--lang=<язык>] [--suffix=<код>]');
+        console.error('Usage: node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=<path/to/book.txt> [--model=google|local|groq] [--lang=<язык>] [--suffix=<код>]');
+        console.error('  --stage=extract reads the book chunk by chunk and pulls out names, places and terms (also accepted as 1).');
         console.error('  --stage=passport reads the whole book at once (book_model profile) and writes <prefix>_passport.json.');
         console.error('  --stage=glossary reviews the glossary against the whole book and writes glossary_review.json (applies nothing).');
+        console.error('  --stage=translate is the translation itself, chunk by chunk (also accepted as 2).');
         console.error('  --stage=review reads the finished translation in one call and writes translation_review.json (changes nothing).');
         console.error('  --file is always required to identify the project.');
-        console.error('  --lang / --suffix override the target language and output suffix from config.js (set once at Stage 1).');
+        console.error('  --lang / --suffix override the target language and output suffix from config.js (set once at extraction).');
         process.exit(1);
     }
 
@@ -47,7 +55,7 @@ async function main() {
         }
     }
 
-    const stage = stageArg.split('=')[1];
+    const stage = STAGE_ALIASES[stageArg.split('=')[1]] || stageArg.split('=')[1];
     const filePath = fileArg.split('=')[1];
 
     // Derive prefix from filename: "txt/Sterling_Junk_DNA.txt" → "Sterling_Junk_DNA"
@@ -78,10 +86,10 @@ async function main() {
     if (suffixArg) state.data.metadata.langSuffix = suffixArg.split('=')[1];
 
     // Bootstrap a fresh project: read the source and split it into chunks.
-    // Any LLM stage can do this, so Stage 2 works directly (translate without
+    // Any LLM stage can do this, so translation works directly (translate without
     // a glossary) — extraction is no longer a prerequisite for chunking. The
     // passport stage needs chunks too: its map is expressed in chunk indices.
-    if ((stage === '1' || stage === '2' || stage === 'passport') && state.getChunks().length === 0) {
+    if ((stage === 'extract' || stage === 'translate' || stage === 'passport') && state.getChunks().length === 0) {
         if (!fs.existsSync(filePath)) {
             console.error(`[Error] File not found: ${filePath}`);
             process.exit(1);
@@ -105,16 +113,16 @@ async function main() {
 
     try {
         switch (stage) {
-            case '1':
-                console.log('\n=== STAGE 1: CONTEXT PREPARATION ===');
+            case 'extract':
+                console.log('\n=== EXTRACTION: CONTEXT PREPARATION ===');
                 await runExtractionStage(state);
                 console.log('\n--- Starting Consolidation ---');
                 await runConsolidationStage(state);
                 state.save(); // flush token-usage stats (consolidation writes only the glossary)
-                console.log('\n=== STAGE 1 COMPLETE ===');
+                console.log('\n=== EXTRACTION COMPLETE ===');
                 reportUsage();
                 console.log(`Now please MANUALLY REVIEW and EDIT "${path.basename(state.getGlossaryPath())}" to ensure terms are correct.`);
-                console.log(`Once finished, run: node src_v4/main.js --stage=2 --file=${filePath}`);
+                console.log(`Once finished, run: node src_v4/main.js --stage=translate --file=${filePath}`);
                 break;
             case 'passport':
                 await runPassportStage(state);
@@ -136,7 +144,7 @@ async function main() {
                 state.save();   // flush token-usage stats: the review is its own file
                 reportUsage();
                 break;
-            case '2':
+            case 'translate':
                 await runTranslationLoopStage(state);
                 reportUsage();
                 // Auto-export after translation loop

@@ -181,7 +181,7 @@ const NOT_A_NAME = new Set([
  * Names in vocative position inside dialogue: "…, Sue?" or "Sue, get over here".
  *
  * The glossary cannot be the only source of candidates. It is built chunk by
- * chunk, so it holds whatever surface form Stage 1 happened to see — in one
+ * chunk, so it holds whatever surface form extraction happened to see — in one
  * measured case "Sue Smith", which occurs exactly once in the book, while the
  * form people actually use, "Sue", was missing entirely. Someone addressed out
  * loud is a character worth considering whether or not the glossary noticed.
@@ -222,7 +222,7 @@ export function characterCandidates(text, glossary, limit = 25) {
         if (term.type !== 'name') continue;
         if (!new RegExp(`^\\p{L}[\\p{L}'’-]{${minNameLength - 1},}$`, 'u').test(name)) continue;
         const key = name.toLowerCase();
-        // Stage 1 can store the same name in several cases ("ELAINE" from a
+        // Extraction can store the same name in several cases ("ELAINE" from a
         // chapter heading and "Elaine" from prose) — keep one entry.
         if (!byName.has(key)) {
             byName.set(key, {

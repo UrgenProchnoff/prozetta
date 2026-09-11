@@ -1,7 +1,7 @@
 /**
  * Reviewing the glossary against the book it belongs to.
  *
- * The glossary is built by Stage 1b in batches of thirty terms, and a batch sees
+ * The glossary is built by consolidation in batches of thirty terms, and a batch sees
  * only its own terms plus 200 characters of context — never the book, never the
  * rest of the glossary. Measured on Halting State, that produces exactly the
  * defects you would predict: six separate entries each describing themselves as

@@ -1,9 +1,9 @@
 /**
- * Carrying Stage 1's work across a re-split.
+ * Carrying the extraction's work across a re-split.
  *
  * The passport stage may re-cut a book so that no chunk straddles a change of
  * narrator. The splitter returns bare chunks — text and a token count — so a
- * re-split used to throw away `extracted_terms`, the per-chunk result of Stage 1.
+ * re-split used to throw away `extracted_terms`, the per-chunk result of extraction.
  * The glossary file survives (it lives apart), but the extraction behind it does
  * not, and rebuilding it means paying for every extraction call again.
  *
@@ -49,7 +49,7 @@ function overlapping(ranges, start, end) {
     return out;
 }
 
-// The same key Stage 1b consolidates by, so a term merged here and a term merged
+// The same key consolidation merges by, so a term merged here and a term merged
 // there are the same term.
 const key = (term) => String(term?.original || '').trim().toLowerCase();
 
@@ -129,7 +129,7 @@ export function carryExtraction(oldChunks, newChunks) {
         if (terms.length) chunk.extracted_terms = terms;
 
         // Extracted only if everything underneath it was. The other way round
-        // would silently claim work that was never done, and Stage 1 would skip
+        // would silently claim work that was never done, and extraction would skip
         // a chunk whose terms nobody ever collected — a re-run costs calls, a
         // false "done" costs terms.
         const covering = overlapping(oldSpans, newSpans[i][0], newSpans[i][1]);

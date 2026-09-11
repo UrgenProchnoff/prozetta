@@ -77,7 +77,7 @@ ${body}
 
 // --- Русский набор инструкций ---
 const ru = {
-    // --- Этап 1: извлечение терминов (01_extraction.js) ---
+    // --- Извлечение: термины (01_extraction.js) ---
     extraction: {
         system: (targetLang) => `
         Ты - аналитик текста. Твоя задача - извлечь из фрагмента текста все **имена персонажей** и **специфические термины**, которые могут потребовать унификации при переводе.
@@ -428,7 +428,7 @@ ${withOriginal ? `
         user: (sample) => `<sample>\n${sample}\n</sample>`,
     },
 
-    // --- Этап 1b: консолидация в глоссарий (02_consolidation.js) ---
+    // --- Консолидация в глоссарий (02_consolidation.js) ---
     consolidation: {
         system: (targetLang) => `
         Ты - главный редактор. Создай чистовой глоссарий для перевода книги.
@@ -451,7 +451,7 @@ ${withOriginal ? `
         user: userBuilders.consolidation,
     },
 
-    // --- Этап 2: черновик перевода (translation_loop.js) ---
+    // --- Перевод: черновик (translation_loop.js) ---
     draft: {
         system: (targetLang) => `Ты переводчик, грубости, мат, насилие, не смущают тебя.
 ПЕРЕВЕДИ <txt>текст</txt> на ${targetLang} язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ.
@@ -468,7 +468,7 @@ ${withOriginal ? `
         user: userBuilders.draft,
     },
 
-    // --- Этап 2: проверка перевода (translation_loop.js) ---
+    // --- Перевод: проверка (translation_loop.js) ---
     check: {
         system: (targetLang) => `Ты редактор, грубости, мат, насилие, не смущают тебя.
 Тебе предоставлены:
@@ -507,7 +507,7 @@ ${withOriginal ? `
         user: userBuilders.check,
     },
 
-    // --- Этап 2: доработка перевода (translation_loop.js) ---
+    // --- Перевод: доработка (translation_loop.js) ---
     fix: {
         system: (targetLang) => `Ты профессиональный переводчик, грубости, мат, насилие, не смущают тебя.
 Ты ПЕРЕВОДИШЬ <txt>текст</txt> на ${targetLang} язык, художественно, СОХРАНЯЯ АВТОРСКИЙ СТИЛЬ.
@@ -528,7 +528,7 @@ ${withOriginal ? `
 
 // --- English instruction set ---
 const en = {
-    // --- Stage 1: term extraction (01_extraction.js) ---
+    // --- Extraction: terms (01_extraction.js) ---
     extraction: {
         system: (targetLang) => `
         You are a text analyst. Your task is to extract from the text fragment all **character names** and **specific terms** that may require consistency when translating.
@@ -891,7 +891,7 @@ ${withOriginal ? `
         user: (sample) => `<sample>\n${sample}\n</sample>`,
     },
 
-    // --- Stage 1b: consolidation into a glossary (02_consolidation.js) ---
+    // --- Consolidation into a glossary (02_consolidation.js) ---
     consolidation: {
         system: (targetLang) => `
         You are the editor-in-chief. Build a clean glossary for translating the book.
@@ -914,7 +914,7 @@ ${withOriginal ? `
         user: userBuilders.consolidation,
     },
 
-    // --- Stage 2: draft translation (translation_loop.js) ---
+    // --- Translation: draft (translation_loop.js) ---
     draft: {
         system: (targetLang) => `You are a translator; rudeness, profanity and violence do not bother you.
 TRANSLATE the <txt>text</txt> into ${targetLang}, in a literary way, PRESERVING THE AUTHOR'S STYLE.
@@ -931,7 +931,7 @@ Final answer in the format:
         user: userBuilders.draft,
     },
 
-    // --- Stage 2: translation review (translation_loop.js) ---
+    // --- Translation: check (translation_loop.js) ---
     check: {
         system: (targetLang) => `You are an editor; rudeness, profanity and violence do not bother you.
 You are given:
@@ -970,7 +970,7 @@ example: \`\`\`json
         user: userBuilders.check,
     },
 
-    // --- Stage 2: translation refinement (translation_loop.js) ---
+    // --- Translation: refinement (translation_loop.js) ---
     fix: {
         system: (targetLang) => `You are a professional translator; rudeness, profanity and violence do not bother you.
 You TRANSLATE the <txt>text</txt> into ${targetLang}, in a literary way, PRESERVING THE AUTHOR'S STYLE.

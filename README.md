@@ -136,7 +136,7 @@ Everything the interface does, the CLI does too — it is the same pipeline, and
 GUI runs these very commands.
 
 ```bash
-node src_v4/main.js --stage=<1|glossary|passport|2|review|export> --file=txt/My_Book.txt [--model=google|local|groq]
+node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=txt/My_Book.txt [--model=google|local|groq]
 ```
 
 `--file` is required at every stage. It identifies the project: the source, the
@@ -145,7 +145,7 @@ several books run in parallel, each with its own state.
 
 ```bash
 # Extract terms and build the glossary
-node src_v4/main.js --stage=1 --file=txt/My_Book.txt --model=google
+node src_v4/main.js --stage=extract --file=txt/My_Book.txt --model=google
 
 # Review the glossary against the whole book (writes findings, applies nothing)
 node src_v4/main.js --stage=glossary --file=txt/My_Book.txt
@@ -154,7 +154,7 @@ node src_v4/main.js --stage=glossary --file=txt/My_Book.txt
 node src_v4/main.js --stage=passport --file=txt/My_Book.txt
 
 # Translate
-node src_v4/main.js --stage=2 --file=txt/My_Book.txt --model=google
+node src_v4/main.js --stage=translate --file=txt/My_Book.txt --model=google
 
 # Review the finished translation (writes findings, changes nothing)
 node src_v4/main.js --stage=review --file=txt/My_Book.txt
@@ -163,10 +163,10 @@ node src_v4/main.js --stage=review --file=txt/My_Book.txt
 node src_v4/main.js --stage=export --file=txt/My_Book.txt
 ```
 
-Target language is set at Stage 1 and then fixed for the project:
+Target language is set at extraction and then fixed for the project:
 
 ```bash
-node src_v4/main.js --stage=1 --file=txt/My_Book.txt --lang=English --suffix=en
+node src_v4/main.js --stage=extract --file=txt/My_Book.txt --lang=English --suffix=en
 # later stages assemble txt/My_Book_en.txt
 ```
 
@@ -180,7 +180,7 @@ export GROQ_API_KEY="your_key"
 ### Tools
 
 ```bash
-node src_v4/tools/reset_to_stage1.js --file=txt/My_Book.txt   # drop translations, keep Stage 1
+node src_v4/tools/reset_to_stage1.js --file=txt/My_Book.txt   # drop translations, keep what extraction found
 npm run i18n        # interface strings: both languages present, none dead
 npm run routes      # every call the interface makes has a route to answer it
 npm run changelog   # every commit is recorded, in both languages

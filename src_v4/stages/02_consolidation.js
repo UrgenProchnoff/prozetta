@@ -7,7 +7,7 @@ import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
 export async function runConsolidationStage(state) {
-    console.log('--- SYSTEM: Starting Stage 1b (Consolidation + Context) ---');
+    console.log('--- SYSTEM: Starting consolidation (+ context) ---');
     usageTracker.setStage('consolidation');
 
     const targetLang = state.data.metadata?.targetLanguage || config.translation.targetLanguage;
@@ -180,9 +180,9 @@ export async function runConsolidationStage(state) {
         skippedBatches.forEach(sb => {
             console.warn(`   Batch ${sb.batchNum}: ${sb.terms.join(', ')}`);
         });
-        console.warn(`   Re-run Stage 1b to retry these batches.\n`);
+        console.warn(`   Re-run the extraction to retry these batches.\n`);
     }
 
-    console.log('--- SYSTEM: Stage 1b Completed ---');
+    console.log('--- SYSTEM: Consolidation completed ---');
 }
 

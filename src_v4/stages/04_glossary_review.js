@@ -40,7 +40,7 @@ const TOKEN_BUDGET = config.pipeline.bookCallTokenBudget || 250000;
  */
 export function buildGlossaryReviewPrompt(state) {
     const chunks = state.getChunks();
-    if (!chunks.length) throw new Error('Project has no chunks yet — run Stage 1 first.');
+    if (!chunks.length) throw new Error('Project has no chunks yet — run the extraction first.');
 
     const glossaryPath = state.getGlossaryPath();
     if (!fs.existsSync(glossaryPath)) throw new Error(`No glossary to review: ${glossaryPath}`);

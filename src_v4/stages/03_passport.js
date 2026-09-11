@@ -89,7 +89,7 @@ function normalizeAddressForm(raw) {
  */
 export function buildPassportPrompt(state) {
     const chunks = state.getChunks();
-    if (!chunks.length) throw new Error('Project has no chunks yet — run Stage 1 first.');
+    if (!chunks.length) throw new Error('Project has no chunks yet — run the extraction first.');
 
     const bookText = chunks.map(c => c.original).join('\n');
     const glossary = readGlossary(state);
@@ -420,7 +420,7 @@ export function applyPassportAnswer(state, answer, meta) {
                 const source = chunks.map(c => c.original).join('');
                 const resplit = splitTextIntoChunks(source, offsets);
 
-                // The splitter returns bare chunks, so Stage 1's work has to be
+                // The splitter returns bare chunks, so the extraction's work has to be
                 // moved across by hand — otherwise a re-split silently throws
                 // away every extracted term and they have to be paid for again.
                 const { chunks: carried, stats, refused } = carryExtraction(chunks, resplit);

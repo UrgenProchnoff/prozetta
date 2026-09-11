@@ -3,8 +3,8 @@ import { usageTracker } from './usage_tracker.js';
 import { projectPaths, ensureProjectDir } from './paths.js';
 
 /**
- * What Stage 2 writes onto a chunk. Everything else — the source text, its token
- * count, Stage 1's terms and status, which model refused it — belongs to the
+ * What the translation writes onto a chunk. Everything else — the source text, its token
+ * count, the extracted terms and status, which model refused it — belongs to the
  * chunk and must survive a reset of the translation.
  *
  * A deny-list on purpose. This used to be an allow-list, rebuilding every chunk
@@ -15,8 +15,8 @@ import { projectPaths, ensureProjectDir } from './paths.js';
  * turning "refused by this model" into "refused by nobody in particular".
  *
  * An allow-list has to be revisited every time a field is added anywhere else.
- * It was not, twice. A deny-list only has to be revisited when Stage 2 itself
- * grows a field, which is where the person editing Stage 2 is already looking.
+ * It was not, twice. A deny-list only has to be revisited when the translation itself
+ * grows a field, which is where the person editing the translation is already looking.
  */
 export const TRANSLATION_FIELDS = [
     'translation',
@@ -30,7 +30,7 @@ export const TRANSLATION_FIELDS = [
     'advice',
 ];
 
-/** A copy of `chunk` with Stage 2's output removed and nothing else touched. */
+/** A copy of `chunk` with the translation's output removed, nothing else touched. */
 export function withoutTranslation(chunk) {
     const clean = { ...chunk };
     for (const field of TRANSLATION_FIELDS) delete clean[field];
@@ -50,7 +50,7 @@ export class ProjectState {
         this.glossaryFile = paths.glossary;
         // The passport lives beside the glossary rather than inside the state:
         // both are human-edited artefacts, and neither should be lost when
-        // Stage 2 is reset.
+        // the translation is reset.
         this.passportFile = paths.passport;
         // The model's glossary findings. Kept apart from the glossary itself
         // because nothing here is applied automatically: the file is a report

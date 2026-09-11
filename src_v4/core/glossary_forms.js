@@ -1,7 +1,7 @@
 /**
  * Glossary entries that describe forms of the same source word.
  *
- * Stage 1b files "replenisher" and "replenishers" as two independent entries and
+ * Consolidation files "replenisher" and "replenishers" as two independent entries and
  * has no way to notice they are one word. On Morphotrophic it gave them two
  * different translations — «восполнитель» and «восстановители» — and a third,
  * «люди-репликаторы», for the compound. The per-chunk cheat sheet then handed

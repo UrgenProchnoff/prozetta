@@ -134,7 +134,7 @@ start.bat          # Windows
 запускает ровно эти команды.
 
 ```bash
-node src_v4/main.js --stage=<1|glossary|passport|2|review|export> --file=txt/My_Book.txt [--model=google|local|groq]
+node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=txt/My_Book.txt [--model=google|local|groq]
 ```
 
 `--file` обязателен на каждом этапе. Он определяет проект: исходник, префикс
@@ -143,7 +143,7 @@ node src_v4/main.js --stage=<1|glossary|passport|2|review|export> --file=txt/My_
 
 ```bash
 # Извлечь термины и собрать глоссарий
-node src_v4/main.js --stage=1 --file=txt/My_Book.txt --model=google
+node src_v4/main.js --stage=extract --file=txt/My_Book.txt --model=google
 
 # Разобрать глоссарий по всей книге (пишет находки, ничего не применяет)
 node src_v4/main.js --stage=glossary --file=txt/My_Book.txt
@@ -152,7 +152,7 @@ node src_v4/main.js --stage=glossary --file=txt/My_Book.txt
 node src_v4/main.js --stage=passport --file=txt/My_Book.txt
 
 # Перевести
-node src_v4/main.js --stage=2 --file=txt/My_Book.txt --model=google
+node src_v4/main.js --stage=translate --file=txt/My_Book.txt --model=google
 
 # Оценить готовый перевод (пишет находки, ничего не меняет)
 node src_v4/main.js --stage=review --file=txt/My_Book.txt
@@ -161,10 +161,10 @@ node src_v4/main.js --stage=review --file=txt/My_Book.txt
 node src_v4/main.js --stage=export --file=txt/My_Book.txt
 ```
 
-Язык перевода задаётся на Этапе 1 и дальше закреплён за проектом:
+Язык перевода задаётся при извлечении и дальше закреплён за проектом:
 
 ```bash
-node src_v4/main.js --stage=1 --file=txt/My_Book.txt --lang=немецкий --suffix=de
+node src_v4/main.js --stage=extract --file=txt/My_Book.txt --lang=немецкий --suffix=de
 # последующие этапы соберут txt/My_Book_de.txt
 ```
 
@@ -178,7 +178,7 @@ export GROQ_API_KEY="ваш_ключ"
 ### Инструменты
 
 ```bash
-node src_v4/tools/reset_to_stage1.js --file=txt/My_Book.txt   # снять перевод, оставить Этап 1
+node src_v4/tools/reset_to_stage1.js --file=txt/My_Book.txt   # снять перевод, оставить извлечённое
 npm run i18n        # строки интерфейса: оба языка на месте, мёртвых нет
 npm run routes      # у каждого вызова интерфейса есть маршрут, который ответит
 npm run changelog   # каждый коммит записан, на обоих языках

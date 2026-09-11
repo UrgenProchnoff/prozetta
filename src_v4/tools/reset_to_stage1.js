@@ -3,13 +3,13 @@ import path from 'path';
 import { projectDir } from '../core/paths.js';
 import { ProjectState, withoutTranslation } from '../core/state_manager.js';
 
-// Simple script to reset project state to "After Stage 1"
-// Removes what Stage 2 wrote (translation, status, history, ...) and keeps
-// everything else the chunk carries — the text, its token count, Stage 1's terms.
+// Simple script to reset project state to "after extraction"
+// Removes what the translation wrote (translation, status, history, ...) and keeps
+// everything else the chunk carries — the text, its token count, the extracted terms.
 // Usage: node src_v4/tools/reset_to_stage1.js --file=txt/book.txt
 
 async function resetToStage1() {
-    console.log('--- RESET TOOL: Reverting to Post-Stage 1 State ---');
+    console.log('--- RESET TOOL: Reverting to the post-extraction state ---');
 
     const args = process.argv.slice(2);
     const fileArg = args.find(a => a.startsWith('--file='));
@@ -36,7 +36,7 @@ async function resetToStage1() {
     fs.copyFileSync(state.stateFile, backupPath);
     console.log(`Backup saved to: ${backupPath}`);
 
-    // Drop Stage 2's output and leave the rest of the chunk alone — see
+    // Drop the translation's output and leave the rest of the chunk alone — see
     // TRANSLATION_FIELDS in core/state_manager.js for why this is a deny-list.
     let modifiedCount = 0;
     const cleanChunks = chunks.map(chunk => {
@@ -53,7 +53,7 @@ async function resetToStage1() {
 
     state.save();
     console.log(`Reset complete. Cleared translation data from ${modifiedCount} chunks.`);
-    console.log(`projects/${filePrefix}/state.json is now ready for a fresh Stage 2 run.`);
+    console.log(`projects/${filePrefix}/state.json is now ready for a fresh translation run.`);
 }
 
 resetToStage1().catch(e => console.error(e));
