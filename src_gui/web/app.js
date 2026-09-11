@@ -1427,7 +1427,7 @@ async function renderMonitor(prefix) {
         // book is translated, go and export it" — that sentence used to arrive
         // at exactly the moment the answer was "run Translation again", which is
         // what sent at least one reader off to make every fix by hand.
-        const queued = s.translationReview?.accepted || 0;
+        const queued = (s.adviceQueue || []).reduce((n, q) => n + q.items.length, 0);
         if (queued)
             return { stage: '2', text: t('rec.adviceQueued', { n: queued }) };
         if (done >= s.total)
@@ -1758,15 +1758,50 @@ async function renderMonitor(prefix) {
         return manualCallBox(manualKind, { variants: manualKind === 'translation', open: manualOpen });
     }
 
+    /**
+     * What the next translation run will act on, as a list that can be emptied.
+     *
+     * Drawn from the queue itself rather than from the review, and drawn even
+     * when there is no review at all: advice outlives the findings it came from,
+     * and a second review leaves the first one's advice on the chunks with
+     * nothing on screen pointing at it. Before this, a counter said "8 queued"
+     * and the eight were nowhere — the corners were marked, the next run would
+     * act on them, and there was no way back out.
+     */
+    function queueBox() {
+        const queue = summary?.adviceQueue || [];
+        const total = queue.reduce((n, q) => n + q.items.length, 0);
+        if (!total) return '';
+        const wasOpen = document.getElementById('rev-queue')?.open ?? false;
+        const rows = queue.map(q => q.items.map(a => `
+            <div class="rev-item">
+                <div class="rev-head">
+                    <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${q.chunk}">${q.chunk + 1}</a>
+                    <span class="rev-issue">${esc(a.issue || '')}</span>
+                    ${a.term ? `<span class="rev-term">${esc(t('rev.term', { term: a.term }))}</span>` : ''}
+                    <span class="spacer"></span>
+                    <button data-queue="remove" data-chunk="${q.chunk}" data-key="${esc(a.key || '')}">${esc(t('rev.queueRemove'))}</button>
+                </div>
+                ${a.quote ? `<div class="rev-quote">«${esc(a.quote)}»</div>` : ''}
+                <div class="rev-advice">→ ${esc(a.advice || '')}</div>
+            </div>`).join('')).join('');
+        return `<details id="rev-queue" class="usage-details" ${wasOpen ? 'open' : ''}>
+            <summary>${esc(t('rev.queueHeading', { n: total }))}</summary>
+            <div class="cfg-hint">${esc(t('rev.queueHint'))}</div>
+            <div>${rows}</div>
+        </details>`;
+    }
+
     function drawReview() {
         if (!summary) { reviewEl.innerHTML = ''; return; }
         const r = summary.translationReview;
-        if (!r || r.broken) { reviewEl.innerHTML = manualRunBox(); wireBookCalls(prefix, refreshGrid); return; }
+        if (!r || r.broken) { reviewEl.innerHTML = queueBox() + manualRunBox(); wireBookCalls(prefix, refreshGrid); return; }
 
+        const queued = (summary.adviceQueue || []).reduce((n, q) => n + q.items.length, 0);
         const verdict = [
             r.score != null ? t('rev.score', { score: r.score }) : null,
             t('rev.counts', { open: r.open.length, done: r.done, hidden: r.hidden }),
-            r.accepted ? t('rev.queued', { n: r.accepted }) : null,
+            queued ? t('rev.queued', { n: queued }) : null,
         ].filter(Boolean).join(' · ');
 
         const where = { glossary: `#/glossary/${encodeURIComponent(prefix)}`, passport: `#/passport/${encodeURIComponent(prefix)}` };
@@ -1841,7 +1876,7 @@ async function renderMonitor(prefix) {
             </details>`
             : '';
 
-        reviewEl.innerHTML = `<details class="usage-details" ${r.open.length ? 'open' : ''}>
+        reviewEl.innerHTML = queueBox() + `<details class="usage-details" ${r.open.length ? 'open' : ''}>
             <summary>${esc(t('rev.heading'))} <span class="cfg-hint">${esc(verdict)}</span></summary>
             ${r.summary ? `<div class="rev-summary">${esc(r.summary)}</div>` : ''}
             ${rows || `<div class="cfg-hint">${esc(t('rev.allHandled'))}</div>`}
@@ -1851,6 +1886,25 @@ async function renderMonitor(prefix) {
     }
 
     reviewEl.addEventListener('click', async (e) => {
+        // Taking something out of the queue goes by chunk, not by finding: the
+        // advice may well have outlived the finding that put it there.
+        const off = e.target.closest('[data-queue="remove"]');
+        if (off) {
+            off.disabled = true;
+            try {
+                await api(`/api/projects/${encodeURIComponent(prefix)}/advice/remove`, {
+                    method: 'POST',
+                    body: { chunk: Number(off.dataset.chunk), key: off.dataset.key || undefined },
+                });
+                toast(t('rev.queueRemoved', { chunk: Number(off.dataset.chunk) + 1 }), 'ok');
+                refreshGrid();
+            } catch (err) {
+                off.disabled = false;
+                toast(t('common.error', { msg: err.message }), 'error');
+            }
+            return;
+        }
+
         const btn = e.target.closest('[data-rev]');
         if (!btn) return;
         btn.disabled = true;
@@ -2260,7 +2314,11 @@ async function renderPassport(prefix) {
     const markDirty = () => { dirty = true; dirtyEl.hidden = false; };
 
     // Narration fields are addressed by dotted path so the form stays flat.
-    app.addEventListener('input', (e) => {
+    // Named and taken off again on the way out: hung anonymously on the page
+    // container, it was added on every visit and removed on none, so a second
+    // visit had two of them writing into one form — the passport's quieter
+    // version of the history's disappearing diff.
+    const onPassportInput = (e) => {
         const key = e.target.dataset.p;
         if (key) {
             const parts = key.split('.');
@@ -2286,7 +2344,8 @@ async function renderPassport(prefix) {
             c[e.target.dataset.cf] = e.target.dataset.cf === 'gender' && e.target.value === '' ? null : e.target.value;
             markDirty();
         }
-    });
+    };
+    app.addEventListener('input', onPassportInput);
 
     document.getElementById('p-save').addEventListener('click', async () => {
         try {
@@ -2299,7 +2358,7 @@ async function renderPassport(prefix) {
         }
     });
 
-    cleanup = () => { if (dirty) { /* warn only; hash navigation cannot be cancelled cleanly */ } };
+    cleanup = () => { app.removeEventListener('input', onPassportInput); };
 }
 
 // ============================================================
@@ -2376,6 +2435,7 @@ async function renderHistory(prefix, params = new URLSearchParams()) {
             <div id="h-rows">${shown.map(rowHtml).join('') || `<div class="cfg-hint">${esc(t('hist.empty'))}</div>`}</div>
             ${shown.length < total ? `<button id="h-more">${esc(t('hist.more', { n: fmtNum(total - shown.length) }))}</button>` : ''}`;
 
+        wireRows();
         document.getElementById('h-more')?.addEventListener('click', () => load(shown.length));
 
         app.querySelector('.hist-kinds').addEventListener('click', (e) => {
@@ -2410,7 +2470,16 @@ async function renderHistory(prefix, params = new URLSearchParams()) {
 
     await load(0);
 
-    app.addEventListener('click', async (e) => {
+    // On #h-rows, which paint() rebuilds, and not on the page container, which
+    // lives as long as the tab does. Hung there, a handler was added on every
+    // visit and removed on none: two of them turned one click into open-then-
+    // close, so the diff worked on odd visits and did nothing on even ones —
+    // which is exactly the "sometimes it opens" it was reported as.
+    function wireRows() {
+        document.getElementById('h-rows')?.addEventListener('click', onRowClick);
+    }
+
+    async function onRowClick(e) {
         const btn = e.target.closest('[data-h]');
         if (!btn) return;
         const row = btn.closest('.hist-row');
@@ -2454,7 +2523,7 @@ async function renderHistory(prefix, params = new URLSearchParams()) {
             btn.disabled = false;
             toast(t('common.error', { msg: err.message }), 'error');
         }
-    });
+    }
 }
 
 async function renderChunk(prefix, i, params = new URLSearchParams()) {

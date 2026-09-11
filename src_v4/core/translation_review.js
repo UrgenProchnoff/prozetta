@@ -239,15 +239,22 @@ export function outstandingFindings(review, chunks) {
 
     for (const f of review?.findings || []) {
         const key = findingKey(f);
-        if (dismissed.has(key)) { hidden++; dismissedList.push({ ...f, key }); continue; }
-        if (handled.has(key)) { done++; continue; }
-
         const chunk = chunks[f.chunk];
         const text = chunk?.translation;
-        if (!text) { done++; continue; }
 
-        // Still queued on its chunk: accepted, waiting for the next run.
-        const queued = (chunk.advice || []).some(a => a.key === key);
+        // Still queued on its chunk: accepted, waiting for the next run — and
+        // that outranks every way a finding can be closed. A closed finding whose
+        // advice is still queued used to vanish from the screen while the advice
+        // stayed on the chunk: the corner was marked, the next run would act on
+        // it, and there was nothing anywhere to take it back out. "Queue the
+        // chunks using this term" reaches that state by design, since it marks
+        // the finding done the moment it queues the work.
+        const queued = (chunk?.advice || []).some(a => a.key === key);
+        if (!queued) {
+            if (dismissed.has(key)) { hidden++; dismissedList.push({ ...f, key }); continue; }
+            if (handled.has(key)) { done++; continue; }
+            if (!text) { done++; continue; }
+        }
 
         // Acted on. Two ways of knowing, because the obvious one is not enough:
         // a finding whose quote has gone was clearly fixed, but a fix can leave
@@ -272,6 +279,26 @@ export function outstandingFindings(review, chunks) {
     dismissedList.sort((a, b) => (a.chunk - b.chunk) || String(a.issue).localeCompare(String(b.issue)));
 
     return { open, done, hidden, dismissed: dismissedList };
+}
+
+/**
+ * Everything queued for the next translation run, chunk by chunk.
+ *
+ * Read from the chunks rather than from the review, because advice outlives the
+ * review that produced it: a second review writes a new set of findings, and the
+ * advice accepted from the first one stays on its chunks with nothing left to
+ * point at. That queue is work the next run will do, so it has to be visible and
+ * removable on its own terms.
+ *
+ * @returns {Array<{chunk: number, items: Array<object>}>}
+ */
+export function adviceQueue(chunks) {
+    const out = [];
+    (chunks || []).forEach((chunk, i) => {
+        const items = chunk?.advice || [];
+        if (items.length) out.push({ chunk: i, items });
+    });
+    return out;
 }
 
 /**

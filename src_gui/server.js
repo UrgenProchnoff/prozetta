@@ -18,7 +18,7 @@ import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/
 import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages/04_glossary_review.js';
 import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_passport.js';
 import { extractJson, describeJsonError } from '../src_v4/utils/parsers.js';
-import { outstandingFindings as reviewOutstanding, findingKey } from '../src_v4/core/translation_review.js';
+import { outstandingFindings as reviewOutstanding, findingKey, adviceQueue } from '../src_v4/core/translation_review.js';
 import { locateQuote } from '../src_v4/core/quoted_spans.js';
 import { wordDiff, condense, diffSize } from '../src_v4/core/text_diff.js';
 import config from '../src_v4/config.js';
@@ -496,9 +496,6 @@ function projectSummary(prefix) {
                     key: f.key, chunk: f.chunk, scope: f.scope,
                     issue: f.issue, quote: f.quote, problem: f.problem,
                 })),
-                // Advice already accepted onto chunks, so the interface can show
-                // what is queued for the next translation run without walking chunks.
-                accepted: chunks.reduce((n, c) => n + (c.advice?.length || 0), 0),
             };
         } catch { translationReview = { broken: true }; }
     }
@@ -521,6 +518,9 @@ function projectSummary(prefix) {
         glossaryForms,
         glossaryReview,
         translationReview,
+        // Beside the review rather than inside it: advice outlives the review it
+        // came from, and a queue nobody can see is a queue nobody can empty.
+        adviceQueue: adviceQueue(chunks),
         passport,
         dialogue,
         running: jobManager.isRunning(prefix),
@@ -1496,6 +1496,49 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
     state.metadata.updatedAt = new Date().toISOString();
     writeJsonAtomic(statePath(prefix), state);
     res.json({ ok: true, chunk: finding.chunk, queued: chunk.advice?.length || 0 });
+});
+
+/**
+ * Take a piece of advice off a chunk, by the chunk it sits on.
+ *
+ * The decision endpoint above can only undo what it can still find in the
+ * review, and the queue outlives reviews: a second pass writes new findings
+ * while the advice accepted from the first stays where it was put. Addressed by
+ * chunk and key, with no key meaning the whole chunk's queue, because that is
+ * how it is read on the screen — a chunk, and what is waiting to be done to it.
+ */
+app.post('/api/projects/:prefix/advice/remove', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — очередь заблокирована' });
+    }
+    const { chunk: index, key } = req.body || {};
+    if (!Number.isInteger(index) || index < 0) {
+        return res.status(400).json({ error: 'Expected { chunk: <index>, key?: <finding key> }' });
+    }
+
+    let state;
+    try { state = readJson(statePath(prefix)); }
+    catch { return res.status(404).json({ error: 'Project not found' }); }
+
+    const chunk = state.chunks?.[index];
+    if (!chunk) return res.status(404).json({ error: 'Chunk not found' });
+    const before = (chunk.advice || []).length;
+    if (!before) return res.status(404).json({ error: 'Nothing is queued on that chunk' });
+
+    chunk.advice = key
+        ? chunk.advice.filter(a => String(a.key || '').toLowerCase() !== String(key).toLowerCase())
+        : [];
+    if (!chunk.advice.length) delete chunk.advice;
+    if ((chunk.advice?.length || 0) === before) {
+        return res.status(404).json({ error: 'No such advice on that chunk' });
+    }
+
+    state.metadata = state.metadata || {};
+    state.metadata.updatedAt = new Date().toISOString();
+    writeJsonAtomic(statePath(prefix), state);
+    res.json({ ok: true, chunk: index, queued: chunk.advice?.length || 0 });
 });
 
 /**

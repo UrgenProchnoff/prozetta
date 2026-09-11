@@ -115,6 +115,12 @@ findings** block, each with a **Take back** button that returns it to the open
 ones. Dismissing is a judgement, and a judgement can be hasty — the more so when
 there are sixty findings to make it about.
 
+Above the review is a folded **Queued for fixing** block: everything the next
+Translation run intends to correct, chunk by chunk, each with a **Remove**
+button. It is shown even when there is no review at all — advice outlives the
+review it came from, since a second pass writes new findings while what was
+accepted from the first stays on its chunks.
+
 A finding leaves the list on its own once the text it complained about is gone.
 Nothing is applied without you.
 
