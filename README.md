@@ -7,8 +7,9 @@ terminology consistent across an entire book and self-checks its own quality.
 
 > 🚀 **Start here:** run `start.bat` (Windows) or `./start.sh` (macOS/Linux). It
 > installs what it needs on the first run and opens the web interface in your
-> browser. There is also a [step-by-step beginner guide](docs/GUIDE.ru.md) (in
-> Russian): installation, a free Google API key, and a first translation.
+> browser. There is also a [step-by-step beginner guide](docs/GUIDE.en.md):
+> installation, a free Google API key, a first translation, and everything from
+> there to a finished FB2. It is in the program too, first in **? Help**.
 
 Most machine translation handles a chapter in isolation, so a character called
 *Wei Ying* drifts into *Weiying* and *Young Master Wei* a hundred pages later.

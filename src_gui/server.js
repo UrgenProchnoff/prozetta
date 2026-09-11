@@ -176,7 +176,11 @@ app.get('/api/changelog', (req, res) => {
 // The screens, in the order somebody meets them. The list is here and not read
 // off the directory because the order is editorial: alphabetical, "book" would
 // come before "monitor" and a reader would meet the last screen first.
-const HELP_TOPICS = ['projects', 'monitor', 'glossary', 'passport', 'chunk', 'history', 'book', 'settings'];
+// The walkthrough first, then an article per screen in the order the screens come
+// up. The guide is not about a screen, which is why it used to be linked only
+// from the README on GitHub — findable by someone who had not installed the
+// program yet, and by nobody who had.
+const HELP_TOPICS = ['guide', 'projects', 'monitor', 'glossary', 'passport', 'chunk', 'history', 'book', 'settings'];
 
 /** The article's own first heading, so a title is never written down twice. */
 function helpTitle(file) {

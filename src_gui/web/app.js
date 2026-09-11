@@ -274,13 +274,35 @@ function renderMarkdown(src, commits = {}, repository = null) {
     // the text was folded, not where it ends. Buffering also means the inline
     // pass sees whole sentences, so bold or code spanning a fold still works.
     const out = [];
-    let list = false, item = null, para = [];
+    let list = null, item = null, para = [], quote = null, fence = null;
     const flushItem = () => { if (item !== null) { out.push(`<li>${inline(item)}</li>`); item = null; } };
-    const closeList = () => { flushItem(); if (list) { out.push('</ul>'); list = false; } };
+    const closeList = () => { flushItem(); if (list) { out.push(`</${list}>`); list = null; } };
     const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; } };
+    // A quotation is a document of its own, so it is rendered as one: what is
+    // inside a "> " block on the walkthrough's pages is whole paragraphs, and
+    // sometimes a list.
+    const flushQuote = () => {
+        if (!quote) return;
+        out.push(`<blockquote>${renderMarkdown(quote.join('\n'), commits, repository)}</blockquote>`);
+        quote = null;
+    };
 
     for (const raw of String(src).split('\n')) {
         const line = raw.trim();
+
+        // A fenced block is copied out as it stands — it is a command somebody
+        // will type, and the inline pass would eat the very marks that matter.
+        const fenced = line.match(/^```/);
+        if (fence) {
+            if (fenced) { out.push(`<pre class="md-code">${esc(fence.join('\n'))}</pre>`); fence = null; }
+            else fence.push(raw);
+            continue;
+        }
+        if (fenced) { flushPara(); closeList(); flushQuote(); fence = []; continue; }
+
+        const quoted = line.match(/^>\s?(.*)$/);
+        if (quoted) { flushPara(); closeList(); (quote ||= []).push(quoted[1]); continue; }
+        flushQuote();
 
         if (!line) { flushPara(); closeList(); continue; }
 
@@ -292,15 +314,22 @@ function renderMarkdown(src, commits = {}, repository = null) {
             continue;
         }
 
+        if (/^-{3,}$/.test(line)) { flushPara(); closeList(); out.push('<hr>'); continue; }
+
+        // Numbered steps as well as bullets: a walkthrough is a sequence, and
+        // "1." read as ordinary text glued every step of it into one paragraph.
         const bullet = line.match(/^[-*]\s+(.*)$/);
-        if (bullet) {
-            flushPara(); flushItem();
-            if (!list) { out.push('<ul>'); list = true; }
-            item = bullet[1];
+        const ordered = line.match(/^\d{1,3}\.\s+(.*)$/);
+        if (bullet || ordered) {
+            const want = bullet ? 'ul' : 'ol';
+            flushPara();
+            if (list && list !== want) closeList(); else flushItem();
+            if (!list) { out.push(`<${want}>`); list = want; }
+            item = (bullet || ordered)[1];
             continue;
         }
 
-        // An indented line under a bullet continues it.
+        // An indented line under an item continues it.
         if (item !== null && /^\s+\S/.test(raw)) { item += ' ' + line; continue; }
 
         closeList();
@@ -308,6 +337,8 @@ function renderMarkdown(src, commits = {}, repository = null) {
     }
     flushPara();
     closeList();
+    flushQuote();
+    if (fence) out.push(`<pre class="md-code">${esc(fence.join('\n'))}</pre>`);
     return out.join('\n');
 }
 

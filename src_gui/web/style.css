@@ -192,6 +192,28 @@ footer a:hover { color: var(--accent); }
     font-size: 12.5px;
 }
 .changelog a { color: var(--blue); }
+/* The walkthrough brought three shapes the changelog never used: numbered steps,
+   asides, and commands meant to be typed. */
+.changelog ol { margin: 6px 0 12px; padding-left: 22px; }
+.changelog blockquote {
+    margin: 12px 0;
+    padding: 2px 14px;
+    border-left: 3px solid var(--border);
+    background: var(--panel2);
+    border-radius: 0 6px 6px 0;
+}
+.changelog blockquote p { color: var(--text); }
+.changelog pre.md-code {
+    margin: 10px 0;
+    padding: 10px 12px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    font-family: ui-monospace, monospace;
+    font-size: 12.5px;
+}
+.changelog hr { margin: 22px 0; border: none; border-top: 1px solid var(--border); }
 
 .loading { color: var(--muted); padding: 40px; text-align: center; }
 
