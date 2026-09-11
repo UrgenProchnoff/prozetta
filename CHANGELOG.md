@@ -11,6 +11,12 @@ predates the practice and carries none.
 
 **2026-08-24**
 
+- `38540bb` — The other-service card remembers services by name: a preset
+  dropdown, "save as" and "delete", so an address, a key and a model name need
+  not live in a text file beside the program. Groq is also gone from what a
+  person reads and types — `--model=custom` and `CUSTOM_API_KEY`, with the old
+  names still accepted — and the cards no longer print the store's id beside
+  their names.
 - `b5485e0` — The beginner's walkthrough now reaches a finished book — the
   translation review, working through findings, building the FB2, and how to
   update — and lives inside the program as the first help article, in both
