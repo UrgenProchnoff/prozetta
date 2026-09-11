@@ -9,19 +9,6 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
-Two waves of work, kept apart because they answer different questions. The
-quality wave is about a translation that stays consistent about who is speaking,
-who they are and what they are called — a book passport, a glossary that is
-checked rather than trusted, a review of the finished text whose every finding is
-a decision a person makes. The clarity wave is about the interface admitting what
-it can do: search and replace across the book, an edit history with diffs and an
-undo, and a help article behind every screen's own button.
-
-### Clarity wave
-
-Everything in this section is about one thing: an interface that answers the
-question a person opened the page with.
-
 **2026-08-24**
 
 - `9bc7f63` — The steps are called by their names, not by numbers: "Stage 2" was
@@ -140,13 +127,6 @@ question a person opened the page with.
   always been links, with no hover and no focus ring — a grid of coloured squares
   reads as a status board. They lift under the pointer now, and a line says what
   a click is for.
-
-### Quality wave
-
-Everything in this section is about one thing: a translation that stays
-consistent about who is speaking, who they are, and what they are called.
-
-**2026-08-23**
 
 - `b32c025` — The passport and the glossary review can be carried to a web console
   by hand as well. Morphotrophic's passport needs 159,522 tokens and its glossary
