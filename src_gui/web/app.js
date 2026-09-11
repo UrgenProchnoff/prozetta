@@ -93,6 +93,12 @@ function fmtDate(iso) {
     return d.toLocaleString(i18n.dateLocale(), { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+/** A day without a time of day: right for a build date, where the hour is noise. */
+function fmtDay(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString(i18n.dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 function statusLabel(s) { return t(`status.${s}`); }
 
 // The runnable stages under the names the pipeline shows them by, so the log and
@@ -239,6 +245,41 @@ async function renderVersion() {
         dirty: v.dirty ? t('ver.dirty') : '',
     });
     if (!v.changelog) el.removeAttribute('href');
+    renderUpdateBadge();
+}
+
+// Whether a newer build exists, asked once per page load. The server's own
+// answer is a day old at most, so asking again on every render would only
+// repeat it.
+let updateState = null;
+async function updateInfo() {
+    if (!updateState) {
+        try { updateState = await api('/api/update'); }
+        catch { updateState = { available: false }; }
+    }
+    return updateState;
+}
+
+/**
+ * One word in the footer, on every page, leading to the changelog — which is
+ * where the dates and the links are.
+ *
+ * Deliberately not a toast: an update is not urgent, and someone who opened the
+ * program to translate a book did not come here to be interrupted about it.
+ */
+async function renderUpdateBadge() {
+    const footer = document.querySelector('footer');
+    if (!footer) return;
+    const upd = await updateInfo();
+    document.getElementById('update-badge')?.remove();
+    if (!upd.available) return;
+    const badge = document.createElement('a');
+    badge.id = 'update-badge';
+    badge.className = 'upd-badge';
+    badge.href = '#/changelog';
+    badge.textContent = t('upd.badge');
+    badge.title = t('upd.badgeTitle', { date: fmtDay(upd.commitDate) });
+    footer.appendChild(badge);
 }
 
 /**
@@ -407,7 +448,19 @@ async function renderChangelog() {
         const note = lang !== requested
             ? `<div class="rv-bar">${esc(t('ver.noTranslation'))}</div>`
             : '';
-        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text, commits === undefined ? {} : commits, repository)}</div>`;
+        // The list below stops at the build being run, so on an installation
+        // that has fallen behind it is a changelog with its end cut off. The
+        // bar says where the end is, and points at the rest of it: what the
+        // commits themselves say, on the repository, and how to get it.
+        const upd = await updateInfo();
+        const bar = upd.available
+            ? `<div class="rv-bar upd-bar">
+                <span>${esc(t('upd.bar', { mine: fmtDay(upd.mineDate), theirs: fmtDay(upd.commitDate) }))}</span>
+                <a href="${esc(upd.whatsNew)}" target="_blank" rel="noopener">${esc(t('upd.whatsNew'))}</a>
+                <a href="#/help/guide">${esc(t('upd.how'))}</a>
+               </div>`
+            : '';
+        app.innerHTML = `<div class="changelog">${note}${bar}${renderMarkdown(text, commits === undefined ? {} : commits, repository)}</div>`;
     } catch (e) {
         app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
     }
@@ -3217,6 +3270,9 @@ async function renderSettings() {
         return cards;
     })();
     const transGroups = groups.filter(g => g.kind === 'translation');
+    // Not a translation setting and not a pipeline one: this card is about the
+    // program, so it is shown in both modes rather than hidden behind advanced.
+    const appGroups = groups.filter(g => g.kind === 'app');
     const providers = ['local', 'google', 'groq'];
     const activeProvider = data.activeProvider || 'local';
     let pickedProvider = activeProvider;
@@ -3319,6 +3375,8 @@ async function renderSettings() {
         <div class="cards cards-col">${regularGroups.map(g => groupHtml(simple ? simpleOnly(g) : g)).join('')}</div>
         <h3>${esc(t('settings.sectionTranslation'))}</h3>
         <div class="cards cards-col">${transGroups.map(g => groupHtml(simple ? simpleOnly(g) : g)).join('')}</div>
+        <h3>${esc(t('settings.sectionApp'))}</h3>
+        <div class="cards cards-col">${appGroups.map(groupHtml).join('')}</div>
         ${simple ? `<div class="hint cfg-more">${esc(t('settings.moreInAdvanced'))}</div>`
                  : `<h3>${esc(t('settings.sectionPipeline'))}</h3>
         <div class="cards cards-col">${pipeGroups.map(groupHtml).join('')}</div>`}

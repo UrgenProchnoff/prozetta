@@ -183,6 +183,16 @@ footer a:hover { color: var(--accent); }
     font-family: ui-monospace, monospace;
     font-size: 12px !important;
 }
+/* A newer build exists. Coloured enough to be noticed on the way past, small
+   enough not to interrupt: nobody opened this program to install a program. */
+.upd-badge {
+    padding: 2px 8px;
+    border: 1px solid var(--blue);
+    border-radius: 10px;
+    color: var(--blue) !important;
+    font-size: 11.5px !important;
+}
+.upd-badge:hover { background: var(--blue); color: var(--bg) !important; }
 
 /* --- Changelog --- */
 .changelog { max-width: 860px; line-height: 1.55; }
@@ -1025,6 +1035,14 @@ table.glossary .del { text-align: center; }
     font-size: 12px;
 }
 .rv-bar a { color: var(--blue); }
+/* The changelog's own "this list ends here, the rest is over there". */
+.upd-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    border-color: var(--blue);
+}
 .rv-adds { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
 .rv-add {
     padding: 8px 12px;

@@ -31,6 +31,7 @@ const TXT_DIR = path.join(ROOT, 'txt');
 const CONFIG_PATH = path.join(ROOT, 'src_v4', 'config.js');
 const OVERRIDES_PATH = path.join(ROOT, 'src_v4', 'config.overrides.json');
 const PRESETS_PATH = path.join(ROOT, 'src_v4', 'config.presets.json');
+const UPDATE_CACHE_PATH = path.join(ROOT, '.update-check.json');
 const PORT = process.env.GUI_PORT || 3457;
 
 const app = express();
@@ -119,6 +120,115 @@ function archiveBuild() {
 
 app.get('/api/version', (req, res) => {
     res.json({ ...VERSION, changelog: fs.existsSync(path.join(ROOT, 'CHANGELOG.md')) });
+});
+
+// --- Is there a newer build than this one ---
+//
+// A release is a ZIP, and a ZIP cannot learn that it has been superseded: its
+// owner keeps running August's build into September because nothing ever tells
+// them otherwise. So the program asks GitHub for the date at the top of the
+// repository and compares it with its own build date — which it already knows
+// in both kinds of install, from git in a checkout and from build-info.json in
+// an archive.
+//
+// One anonymous GET, once a day, to the repository the program came from.
+// Nothing is downloaded, nothing is sent, and when the answer is "you are
+// current" — or when there is no network at all — the interface says nothing.
+const UPDATE_TTL_MS = 24 * 60 * 60 * 1000;
+// A failed attempt is remembered too, for an hour rather than a day. Without
+// it an offline machine — or one that has run into GitHub's hourly limit for
+// anonymous requests — would try again on every page opened, which is both
+// impolite and pointless.
+const UPDATE_RETRY_MS = 60 * 60 * 1000;
+const UPDATE_TIMEOUT_MS = 5000;
+
+/**
+ * The answer from last time, if it is still fresh enough to reuse: the tip, or
+ * `{failed:true}` for an attempt that got nowhere, or null when it is time to
+ * ask again.
+ */
+function readUpdateCache() {
+    try {
+        const raw = JSON.parse(fs.readFileSync(UPDATE_CACHE_PATH, 'utf-8'));
+        const age = Date.now() - (raw.checkedAt || 0);
+        if (raw.failed) return age > UPDATE_RETRY_MS ? null : { failed: true };
+        return age > UPDATE_TTL_MS ? null : raw;
+    } catch { return null; }
+}
+
+function writeUpdateCache(data) {
+    // A cache that cannot be written costs one extra request tomorrow, which is
+    // not worth failing a page over.
+    try { fs.writeFileSync(UPDATE_CACHE_PATH, JSON.stringify({ ...data, checkedAt: Date.now() }, null, 2)); }
+    catch { /* ignore */ }
+}
+
+/**
+ * The top of the repository's default branch, or null if GitHub could not be
+ * reached or answered with something unexpected. A failure here is not an
+ * error to report: nobody asked for this check, so nobody should be told it
+ * failed.
+ */
+async function fetchRepoTip(repository) {
+    const m = /github\.com\/([^/]+)\/([^/.]+)/.exec(repository || '');
+    if (!m) return null;
+    try {
+        const r = await fetch(`https://api.github.com/repos/${m[1]}/${m[2]}/commits/HEAD`, {
+            // GitHub refuses requests without a user agent, and the accept
+            // header pins the response shape to the documented one.
+            headers: { accept: 'application/vnd.github+json', 'user-agent': 'prozetta' },
+            signal: AbortSignal.timeout(UPDATE_TIMEOUT_MS),
+        });
+        if (!r.ok) return null;
+        const j = await r.json();
+        const sha = String(j?.sha || '');
+        const date = j?.commit?.committer?.date || j?.commit?.author?.date || null;
+        if (!/^[0-9a-f]{7,40}$/.test(sha) || !date || !Number.isFinite(Date.parse(date))) return null;
+        return { commit: sha.slice(0, 7), commitDate: date };
+    } catch { return null; }
+}
+
+app.get('/api/update', async (req, res) => {
+    const silent = { available: false };
+
+    // Someone editing the program is not someone who needs telling that the
+    // program has moved on: a dirty tree or a branch of one's own is work in
+    // progress, and the mark would be noise on every page of it.
+    if (VERSION.dirty || (VERSION.branch && VERSION.branch !== 'main')) return res.json(silent);
+    // Nothing to compare against: a folder copied from somewhere, with neither
+    // git beside it nor a build stamp inside it.
+    if (!VERSION.commitDate || !VERSION.repository) return res.json(silent);
+
+    try {
+        const cfg = await loadEffectiveConfig();
+        if (cfg.app?.checkUpdates === false) return res.json(silent);
+    } catch { /* an unreadable config is not a reason to skip the check */ }
+
+    let tip = readUpdateCache();
+    if (tip?.failed) return res.json(silent);
+    if (!tip) {
+        tip = await fetchRepoTip(VERSION.repository);
+        writeUpdateCache(tip || { failed: true });
+        if (!tip) return res.json(silent);
+    }
+
+    // Same commit is the common answer; a date at or before ours covers the
+    // rest, including a local commit that has not been pushed yet.
+    if (tip.commit === VERSION.commit) return res.json(silent);
+    if (Date.parse(tip.commitDate) <= Date.parse(VERSION.commitDate)) return res.json(silent);
+
+    res.json({
+        available: true,
+        commit: tip.commit,
+        commitDate: tip.commitDate,
+        mineDate: VERSION.commitDate,
+        // What changed between the two, in the words of the commits themselves.
+        // Both ends are named by commit rather than by branch: the base is a
+        // commit the repository has (this is only reached from a clean checkout
+        // of main or from an archive of one), and the tip is the one just
+        // looked up, so the link keeps meaning what it meant when it was made.
+        whatsNew: `${VERSION.repository}/compare/${VERSION.commit}...${tip.commit}`,
+    });
 });
 
 // A commit fingerprint, written either as `abc1234` at the head of an entry or
@@ -2271,6 +2381,13 @@ function describeConfig(cfg, overrides) {
     }));
     groups.push({ id: 'translation', kind: 'translation', fields: tFields });
 
+    const a = cfg.app || {};
+    const aFields = Object.keys(a).map(key => ({
+        key, type: fieldType(key, a[key]), value: a[key],
+        overridden: !!(ovr.app && Object.prototype.hasOwnProperty.call(ovr.app, key))
+    }));
+    groups.push({ id: 'app', kind: 'app', fields: aFields });
+
     return groups;
 }
 
@@ -2297,7 +2414,7 @@ app.put('/api/config', async (req, res) => {
     try { cfg = await loadEffectiveConfig(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
     const overrides = readOverrides();
-    const validGroups = [...MODEL_GROUPS, 'pipeline', 'translation'];
+    const validGroups = [...MODEL_GROUPS, 'pipeline', 'translation', 'app'];
 
     if (body.activeProvider !== undefined) {
         if (!PROVIDERS.includes(body.activeProvider)) {

@@ -10,6 +10,19 @@ const defaults = {
     // settings page.
     activeProvider: 'local',
 
+    // --- The program itself, rather than the translation ---
+    app: {
+        // Once a day, ask GitHub whether the top of the repository is newer than
+        // the build being run, and put a quiet mark in the footer if it is. A
+        // release is a ZIP, and a ZIP has no way of learning that it has been
+        // superseded — its owner keeps running August's build into September
+        // because nothing ever tells them otherwise.
+        //
+        // Nothing is downloaded and nothing is sent: one anonymous GET to the
+        // repository the program itself came from. Set false and it never asks.
+        checkUpdates: true,
+    },
+
     // --- Translation language settings ---
     // These are the defaults for CLI runs and for new projects created in the GUI.
     // Per-project values are stored in <prefix>_project_state.json metadata at

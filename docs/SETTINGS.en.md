@@ -55,6 +55,17 @@ The defaults come from measurement, and are worth changing only if you know what
 you are changing. The most meaningful one is the token ceiling, if your provider's
 quota differs.
 
+## The program
+
+One checkbox — **"Check for updates"**. Once a day the program asks GitHub
+whether a build newer than yours has appeared, and marks the bottom of the page
+if one has. Nothing is downloaded and nothing is sent: it is one request to the
+place the program itself came from.
+
+The checkbox exists because the program arrives as an archive, and an archive has
+no way of learning that a newer one exists. Clear it and the program stops
+asking; finding out about new versions is then up to you.
+
 ## How they apply
 
 Changes are written to `src_v4/config.overrides.json` and **apply at the next

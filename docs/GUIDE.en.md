@@ -228,8 +228,15 @@ it is a button for plain text, if FB2 is not what you want.
 
 ## How to update
 
-A new version comes as the same archive. What is new in it can be seen inside the
-program: the version number at the bottom of any page leads to the changelog.
+A new version comes as the same archive. The program says so itself when one
+appears: once a day it asks GitHub whether there is a build newer than yours, and
+if there is, **"update available"** lights up at the bottom of the page beside
+the version. Click it and the changelog opens, with a bar above it carrying two
+links: what is in the new build, and how to install it.
+
+Nothing is downloaded and nothing is sent — it is one request to the place you
+took the program from. The check can be switched off: Settings → The program →
+"Check for updates".
 
 1. Download the fresh ZIP (Step 2) and unpack it **over** the program's folder,
    agreeing to replace the files.
