@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-08-24**
 
+- `c16132b` — A program unpacked from a ZIP knows its own fingerprint: GitHub's
+  archive is made by `git archive`, which substitutes the hash into a file. The
+  footer used to carry the version alone, and every fingerprint in the changelog
+  was dead text there — they link now, because "git denies this commit" and
+  "there is no git to ask" are different answers.
 - `bd085e8` — The queue of advice is no longer invisible: while advice sits on a
   chunk its finding stays visible and can be taken back, and a "Queued for
   fixing" block above the review lists the chunks — it works without a review
