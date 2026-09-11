@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-09-11**
 
+- `4577ecb` — Every entry sits under the date its commit was made: a new line
+  went to the top of the file, and the top of the file was whatever date group
+  happened to be there, so a section headed 28.08 opened with a 24.08 heading
+  over work from a fortnight later. All 114 entries are regrouped, and
+  `npm run changelog` now checks the dates and names every mismatch.
 - `c16132b` — A program unpacked from a ZIP knows its own fingerprint: GitHub's
   archive is made by `git archive`, which substitutes the hash into a file. The
   footer used to carry the version alone, and every fingerprint in the changelog
