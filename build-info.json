@@ -1,0 +1,5 @@
+{
+  "_comment": "Filled in by `git archive` — which is what GitHub's Download ZIP runs. In a checkout the placeholders stay as they are and the program asks git instead.",
+  "commit": "$Format:%h$",
+  "commitDate": "$Format:%cI$"
+}

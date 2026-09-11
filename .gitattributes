@@ -12,3 +12,9 @@
 # The other side of the same coin: a shell script with CRLF fails on the shebang
 # line with "bad interpreter: /bin/sh^M".
 *.sh text eol=lf
+
+# A ZIP from GitHub carries no .git, so the program cannot ask git which build it
+# is — and a footer that names no commit leaves a reader unable to say what they
+# are running. "Download ZIP" is `git archive`, which substitutes $Format:…$
+# placeholders, so the answer travels inside the archive itself.
+build-info.json export-subst

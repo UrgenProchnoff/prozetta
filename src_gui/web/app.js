@@ -253,11 +253,19 @@ function renderMarkdown(src, commits = {}, repository = null) {
     // A bare (abc1234) becomes a link to the commit it names. The subject is put
     // in the tooltip, and a hash git does not know is left visibly dead rather
     // than linked into nothing — which is what a typo or a rebase produces.
+    // `commits` is null when the program is running from an archive: there is no
+    // git to ask, so nothing has been checked. A hash git denies is worth marking
+    // dead — that is a typo or a rebase — but a hash nobody could ask about is
+    // just a hash, and marking forty of them dead helps no one. Unchecked, they
+    // link.
+    const unchecked = commits === null;
     const refs = (text) => text.replace(/`([0-9a-f]{7,40})`|\(([0-9a-f]{7,40}(?:,\s*[0-9a-f]{7,40})*)\)/g, (whole, single, list) => {
         const parts = (single || list).split(/,\s*/).map(hash => {
-            const known = commits[hash];
-            const title = known ? `${known.subject}${known.date ? ' · ' + fmtDate(known.date) : ''}` : t('ver.unknownCommit');
-            if (!known) return `<span class="cm-ref dead" title="${esc(title)}">${esc(hash)}</span>`;
+            const known = commits?.[hash];
+            const title = known
+                ? `${known.subject}${known.date ? ' · ' + fmtDate(known.date) : ''}`
+                : (unchecked ? t('ver.uncheckedCommit') : t('ver.unknownCommit'));
+            if (!known && !unchecked) return `<span class="cm-ref dead" title="${esc(title)}">${esc(hash)}</span>`;
             if (!repository) return `<span class="cm-ref" title="${esc(title)}">${esc(hash)}</span>`;
             return `<a class="cm-ref" href="${esc(repository)}/commit/${esc(hash)}" target="_blank" rel="noopener" title="${esc(title)}">${esc(hash)}</a>`;
         });
@@ -399,7 +407,7 @@ async function renderChangelog() {
         const note = lang !== requested
             ? `<div class="rv-bar">${esc(t('ver.noTranslation'))}</div>`
             : '';
-        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text, commits || {}, repository)}</div>`;
+        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text, commits === undefined ? {} : commits, repository)}</div>`;
     } catch (e) {
         app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;
     }

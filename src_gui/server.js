@@ -98,9 +98,24 @@ const VERSION = (() => {
             dirty: git('status', '--porcelain', '--untracked-files=no').length > 0,
         };
     } catch {
-        return { version, repository, commit: null, commitDate: null, branch: null, dirty: false };
+        // No checkout — which is most installations, since a release is a ZIP
+        // and a ZIP has no .git. The archive carries its own answer instead: see
+        // build-info.json and the export-subst line in .gitattributes.
+        return { version, repository, branch: null, dirty: false, ...archiveBuild() };
     }
 })();
+
+/** The commit an archive was made from, or nulls in a checkout. */
+function archiveBuild() {
+    const empty = { commit: null, commitDate: null };
+    try {
+        const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'build-info.json'), 'utf-8'));
+        // Untouched placeholders mean this is a checkout after all, and git has
+        // already had its say.
+        if (String(raw.commit || '').startsWith('$Format')) return empty;
+        return { commit: String(raw.commit).slice(0, 40) || null, commitDate: raw.commitDate || null };
+    } catch { return empty; }
+}
 
 app.get('/api/version', (req, res) => {
     res.json({ ...VERSION, changelog: fs.existsSync(path.join(ROOT, 'CHANGELOG.md')) });
@@ -130,7 +145,14 @@ function describeCommits(text) {
             const [hash, subject, date] = line.split('\0');
             if (hash && wanted.has(hash)) found[hash] = { subject, date };
         }
-    } catch { /* no checkout: the refs stay plain text, which is still readable */ }
+    } catch {
+        // No checkout, so nothing was checked — which is not the same as having
+        // checked and found nothing. A hash git denies is worth marking dead: it
+        // is a typo or a rebase. A hash nobody could ask about is just a hash,
+        // and the reader still wants the link. Null says which of the two this
+        // is; the page decides what to do about it.
+        return null;
+    }
     return found;
 }
 
