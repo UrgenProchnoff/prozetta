@@ -17,7 +17,14 @@ async function api(url, opts = {}) {
     }
     const r = await fetch(url, opts);
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    if (!r.ok) {
+        // The body rides along on the error: a refusal can carry more than a
+        // sentence — where a pasted answer broke, for one — and a caller that
+        // only wants the sentence still gets it from `message`.
+        const err = new Error(data.error || `HTTP ${r.status}`);
+        err.data = data;
+        throw err;
+    }
     return data;
 }
 
@@ -489,6 +496,11 @@ function manualCallControls(variants) {
             <input type="text" data-bc="model" placeholder="${esc(t('rev.modelPlaceholder'))}" style="margin:8px 0;max-width:280px">
             <textarea data-bc="text" rows="6" style="width:100%" placeholder="${esc(t('rev.pastePlaceholder'))}"></textarea>
             <button data-bc="accept" class="primary" style="margin-top:8px">${esc(t('rev.acceptAnswer'))}</button>
+            <!-- A refusal here is a thing to work from: which line to open, what
+                 is wrong with it, and the parser's own words to search for. It
+                 used to be a toast — four seconds, unselectable, gone before a
+                 line number could be read, let alone copied. -->
+            <div data-bc="err" class="bc-error" hidden></div>
         </div>`;
 }
 
@@ -602,10 +614,44 @@ function wireBookCalls(prefix, onDone) {
             q('build').disabled = false;
         });
 
+        /**
+         * Show a refusal where the answer is, and keep it there.
+         *
+         * A broken paste is repaired by a person with a text editor open, so the
+         * panel says the line, the column and the line itself, and for the break
+         * that happens most — a paragraph the model left without a field name —
+         * what to do about it. The parser's own sentence stays at the bottom:
+         * it is what a search engine understands.
+         */
+        function showError(err) {
+            const box = q('err');
+            const d = err?.data || {};
+            const parts = [];
+            if (d.code === 'bad_json') {
+                parts.push(`<div class="bc-error-head">${esc(t('rev.err.badJson'))}</div>`);
+                if (d.line) parts.push(`<div>${esc(t('rev.err.at', { line: d.line, column: d.column }))}</div>`);
+                if (d.excerpt) parts.push(`<pre class="bc-error-line">${esc(d.excerpt)}</pre>`);
+                if (d.hint === 'bare_string') parts.push(`<div>${esc(t('rev.err.hint.bareString'))}</div>`);
+                parts.push(`<div class="bc-error-raw">${esc(err.message)}</div>`);
+            } else if (d.code === 'no_json') {
+                parts.push(`<div class="bc-error-head">${esc(t('rev.err.noJson'))}</div>`);
+                parts.push(`<div class="bc-error-raw">${esc(err.message)}</div>`);
+            } else {
+                parts.push(`<div class="bc-error-head">${esc(err.message)}</div>`);
+            }
+            box.innerHTML = `<button class="bc-error-close" data-bc="err-close" title="${esc(t('rev.err.close'))}">✕</button>${parts.join('')}`;
+            box.hidden = false;
+        }
+
+        q('err').addEventListener('click', (e) => {
+            if (e.target.closest('[data-bc="err-close"]')) q('err').hidden = true;
+        });
+
         q('accept').addEventListener('click', async (e) => {
             const text = q('text').value;
             if (!text.trim()) return;
             e.target.disabled = true;
+            q('err').hidden = true;
             try {
                 const res = await api(`/api/projects/${encodeURIComponent(prefix)}/book-call/${kind}/answer`, {
                     method: 'POST',
@@ -622,7 +668,7 @@ function wireBookCalls(prefix, onDone) {
                 q('text').value = '';
                 if (onDone) onDone();
             } catch (err) {
-                toast(t('common.error', { msg: err.message }), 'error');
+                showError(err);
             }
             e.target.disabled = false;
         });

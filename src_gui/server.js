@@ -17,7 +17,7 @@ import { countTokens } from '../src_v4/core/tokenizer.js';
 import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/stages/05_translation_review.js';
 import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages/04_glossary_review.js';
 import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_passport.js';
-import { extractJson } from '../src_v4/utils/parsers.js';
+import { extractJson, describeJsonError } from '../src_v4/utils/parsers.js';
 import { outstandingFindings as reviewOutstanding, findingKey } from '../src_v4/core/translation_review.js';
 import { locateQuote } from '../src_v4/core/quoted_spans.js';
 import { wordDiff, condense, diffSize } from '../src_v4/core/text_diff.js';
@@ -1616,8 +1616,17 @@ app.post('/api/projects/:prefix/book-call/:kind/answer', (req, res) => {
     let raw;
     try { raw = extractJson(answer); }
     catch (e) {
-        return res.status(400).json({ error: `No JSON found in the answer: ${e.message}. ` +
-            `Paste the reply whole, including its \`\`\`json block.` });
+        // "No JSON found" was said even when JSON had been found and was merely
+        // broken, which is the usual case and a different repair. What the
+        // parser knows — which line, and whether it is the unnamed-paragraph
+        // break — goes to the interface as fields, so the page can say it in the
+        // reader's language instead of quoting a parser at them.
+        const d = describeJsonError(answer, e);
+        return res.status(400).json({
+            code: d.kind === 'none' ? 'no_json' : 'bad_json',
+            error: e.message,
+            line: d.line, column: d.column, excerpt: d.excerpt, hint: d.hint,
+        });
     }
 
     try {

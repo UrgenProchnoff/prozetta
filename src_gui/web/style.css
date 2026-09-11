@@ -1139,6 +1139,39 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 /* A finding already queued for fixing. It stays in the list until the fix is
    made and its quote is gone, so it has to be legible as decided-and-waiting
    rather than still-to-decide. */
+/* A refusal from the paste box. Stays until it is closed or the next attempt,
+   because what it says — a line number, the line itself — is meant to be read
+   with a text editor open, and copied into it. */
+.bc-error {
+    position: relative;
+    margin-top: 10px;
+    padding: 10px 34px 10px 12px;
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    background: rgba(217, 87, 87, 0.07);
+    font-size: 13px;
+}
+.bc-error-head { font-weight: 600; margin-bottom: 4px; }
+.bc-error-line {
+    margin: 6px 0;
+    padding: 6px 8px;
+    background: var(--panel2);
+    border-radius: 4px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+}
+.bc-error-raw { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.bc-error-close {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    padding: 2px 6px;
+    line-height: 1;
+}
+
 /* The dismissed findings, folded away inside the review: a panel within a panel,
    so it carries no surface of its own — only the fold and the quieter text. */
 .rev-dismissed { background: none; margin-top: 4px; }

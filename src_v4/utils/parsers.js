@@ -58,10 +58,78 @@ export function extractJson(text) {
             try {
                 return JSON.parse(text.trim());
             } catch (e3) {
-                throw new Error(`Invalid JSON: ${e1.message}`);
+                // What was tried, and where it sat in the answer. An answer a
+                // person pasted by hand is an answer a person can repair, and
+                // the position in the error is counted inside the block while
+                // they are looking at the whole reply — see describeJsonError.
+                const err = new Error(`Invalid JSON: ${e1.message}`);
+                err.source = jsonStr;
+                err.offset = text.indexOf(jsonStr);
+                throw err;
             }
         }
     }
+}
+
+/**
+ * Where a failed parse went wrong, in terms of the answer a person is looking at.
+ *
+ * `JSON.parse` already says line and column, and saying only that is close to
+ * useless for the commonest break of all. A model asked for one long field
+ * sometimes writes it as two paragraphs and gives the second one no name:
+ *
+ *     "summary": "Перевод в целом читается…",
+ *     "Основные проблемы мешают считать текст готовым…",
+ *
+ * The parser reads that second string as a property name and complains at the
+ * comma that follows it — so the reported position is the end of a line that
+ * looks perfectly fine, one line below the line that is actually wrong. A reader
+ * sent there stares at a comma. So the culprit is walked back to where the
+ * unnamed string begins, and the position is translated out of the extracted
+ * block and into the pasted answer, which is the text they can edit.
+ *
+ * @param {string} text   the answer as pasted
+ * @param {Error} error   what extractJson threw
+ * @returns {{kind: 'none'|'broken', line?: number, column?: number,
+ *            excerpt?: string, hint?: 'bare_string'}}
+ */
+export function describeJsonError(text, error) {
+    const source = error?.source;
+    if (typeof source !== 'string') return { kind: 'none' };
+
+    const at = /at position (\d+)/.exec(String(error.message || ''));
+    let index = at ? Number(at[1]) : 0;
+    let hint;
+
+    // "Expected ':' after property name": a string sat where a name belongs.
+    if (/after property name/.test(String(error.message || ''))) {
+        const start = startOfStringBefore(source, index);
+        if (start >= 0) { index = start; hint = 'bare_string'; }
+    }
+
+    const offset = Number.isInteger(error.offset) && error.offset >= 0 ? error.offset : 0;
+    const abs = Math.min(offset + index, text.length - 1);
+    const before = text.slice(0, abs);
+    const line = before.split('\n').length;
+    const column = abs - (before.lastIndexOf('\n') + 1) + 1;
+    const excerpt = (text.split('\n')[line - 1] || '').trim().slice(0, 300);
+
+    return { kind: 'broken', line, column, excerpt, hint };
+}
+
+/** The opening quote of the string that ends just before `pos`, or -1. */
+function startOfStringBefore(s, pos) {
+    let i = pos - 1;
+    while (i >= 0 && /\s/.test(s[i])) i--;
+    if (s[i] !== '"') return -1;
+    for (i--; i >= 0; i--) {
+        if (s[i] !== '"') continue;
+        // A quote is the opening one unless an odd run of backslashes escapes it.
+        let b = i - 1, slashes = 0;
+        while (b >= 0 && s[b] === '\\') { slashes++; b--; }
+        if (slashes % 2 === 0) return i;
+    }
+    return -1;
 }
 
 

@@ -131,6 +131,13 @@ answer is pasted back into the same box and goes through **exactly the same
 checks** as an API answer: every finding must carry a verbatim quote, and the
 quote must be findable in the text.
 
+When an answer is refused, the reason stays under the box — it does not fade, and
+it can be selected and copied. For broken JSON it carries the line and column in
+your own text, the line itself, and, when the breakage is a familiar one, what to
+do about it. The most familiar: a model splits one long field into two paragraphs
+and gives the second no field name, in which case the parser's own message points
+at the end of the following line while the line above it is the guilty one.
+
 The manual route can also do something the API one cannot: only through it can the
 **original** be sent alongside the translation. That is twice the tokens — and it
 finds errors of meaning that the translation alone cannot show.
