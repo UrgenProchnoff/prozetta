@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-08-24**
 
+- `b5485e0` — The beginner's walkthrough now reaches a finished book — the
+  translation review, working through findings, building the FB2, and how to
+  update — and lives inside the program as the first help article, in both
+  languages. The help renderer learned ordered lists, quotes, code blocks and
+  rules.
 - `9c585d3` — A message waits to be read: thirty seconds for a notice, a minute
   for an error or an undo offer, instead of four seconds for everything. Each
   carries a close button, hovering stops the clock, and five stay on screen.
