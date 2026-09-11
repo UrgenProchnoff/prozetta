@@ -56,11 +56,15 @@ does it. The sentence follows the state of the book:
 - "Project not created. Start with Extraction — it pulls the names and terms out of the book."
 - "Terms extracted, but the glossary is empty. Check or fill in the glossary
   before translating."
+- "Advice queued from the review: 7. Run Translation — it fixes only the marked
+  chunks."
 - "Every chunk is translated. You can assemble the book (export) or open a chunk
   to edit by hand."
 
-If you do not know what to press, press Start. It runs exactly the step the
-recommendation names.
+The button names its step: **"▶ Start: Translation"**. Until you pick a step on
+the roadmap yourself it is aimed wherever the recommendation points, and it moves
+when the recommendation does. Click a circle and the button follows you from then
+on, the recommendation staying as the sentence in the line.
 
 Stop halts a run. Everything already translated stays: the next run picks the
 book up at the chunk it was abandoned on.

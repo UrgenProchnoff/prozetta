@@ -1298,7 +1298,12 @@ async function renderMonitor(prefix) {
 
     let activeChunk = null; // 0-based index parsed from the log
     let running = false;
-    let recommendApplied = false; // preselect the stage only once, then respect user choice
+    // Start follows the recommendation until the person picks a step themselves.
+    // It used to follow it once, on load, and then hold — but findings are
+    // accepted on this very page, so the line would start saying "run
+    // Translation" while the button still pointed at whatever it pointed at
+    // before, with nothing on screen admitting the two disagreed.
+    let stageChosen = false;
     let selectedStage = '1'; // which runnable step of the roadmap Start will launch
 
     // Where is the project in the pipeline? Drives the recommended next stage.
@@ -1308,6 +1313,14 @@ async function renderMonitor(prefix) {
         if (s.extracted < s.total)
             return { stage: '1', text: t('rec.stage1Incomplete', { done: s.extracted, total: s.total }) };
         const done = s.statuses.success + s.statuses.best_effort;
+        // Advice accepted from the review is work the person has already agreed
+        // to, waiting on a run that applies it. It has to be said before "the
+        // book is translated, go and export it" — that sentence used to arrive
+        // at exactly the moment the answer was "run Translation again", which is
+        // what sent at least one reader off to make every fix by hand.
+        const queued = s.translationReview?.accepted || 0;
+        if (queued)
+            return { stage: '2', text: t('rec.adviceQueued', { n: queued }) };
         if (done >= s.total)
             return { stage: 'export', text: t('rec.allDone') };
         if (!s.glossaryCount)
@@ -1439,23 +1452,27 @@ async function renderMonitor(prefix) {
                 <span class="pipe-sub">${esc(st.sub)}</span>
             </div>${line}`;
         }).join('');
+
+        // The button says which step it will run. Without the name it was the one
+        // control on the screen that could not be checked before pressing it —
+        // the roadmap showed the selection, but only to somebody who knew to look.
+        startBtn.textContent = t('mon.start', { stage: stageLabel(selectedStage) });
     }
 
     stepsEl.addEventListener('click', (e) => {
         const step = e.target.closest('.pipe-step[data-stage]');
         if (!step) return;
         selectedStage = step.dataset.stage;
-        recommendApplied = true; // explicit user choice — stop auto-preselecting
+        stageChosen = true; // explicit user choice — stop following the recommendation
         drawSteps();
         syncManual();
     });
 
     function applyRecommendation() {
         const rec = recommend(summary);
-        if (!recommendApplied && !running) {
-            selectedStage = rec.stage;
-            recommendApplied = true;
-        }
+        // Not while a stage runs: the button is disabled anyway, and re-aiming it
+        // under a person's hand is what the previous behaviour was guarding against.
+        if (!stageChosen && !running) selectedStage = rec.stage;
         drawSteps();
         syncManual();
         hintEl.hidden = false;
