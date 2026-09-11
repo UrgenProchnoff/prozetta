@@ -9,6 +9,16 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-12**
+
+- `c327156` — The program says when a newer build exists: once a day it asks
+  GitHub for the date at the top of the repository and compares it with its own,
+  which an archive knows from the stamp inside it. "Update available" lights up
+  in the footer, and a bar above the changelog carries the two dates and two
+  links: what is in it, and how to install it. Silent when there is nothing to
+  say — no network, a working tree with edits, or the check cleared in
+  Settings → The program.
+
 **2026-09-11**
 
 - `4577ecb` — Every entry sits under the date its commit was made: a new line
