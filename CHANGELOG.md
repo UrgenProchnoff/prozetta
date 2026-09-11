@@ -11,6 +11,9 @@ predates the practice and carries none.
 
 **2026-08-24**
 
+- `9c585d3` — A message waits to be read: thirty seconds for a notice, a minute
+  for an error or an undo offer, instead of four seconds for everything. Each
+  carries a close button, hovering stops the clock, and five stay on screen.
 - `d428317` — A refused answer is diagnosed rather than quoted, and it stays on
   screen: a panel under the paste box that can be selected and copied, carrying
   the line and column in your own text and the line itself. For the commonest
