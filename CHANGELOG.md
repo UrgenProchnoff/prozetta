@@ -11,6 +11,12 @@ predates the practice and carries none.
 
 **2026-08-24**
 
+- `bd085e8` — The queue of advice is no longer invisible: while advice sits on a
+  chunk its finding stays visible and can be taken back, and a "Queued for
+  fixing" block above the review lists the chunks — it works without a review
+  file too, since advice outlives one. Also, the history's "what changed" stopped
+  working every other time: its handler was added on each visit, and the second
+  copy closed what the first had opened.
 - `38540bb` — The other-service card remembers services by name: a preset
   dropdown, "save as" and "delete", so an address, a key and a model name need
   not live in a text file beside the program. Groq is also gone from what a
