@@ -14,6 +14,10 @@ human should look.
 - **🔍 Find** — search and replace across the whole book, see below.
 - **Hide the original** — when you are only working on the translation. The choice
   is remembered as you page through chunks.
+- **Scroll together** — the panes stay at the same place: scroll one and the other
+  follows, in proportion to the length of the text (a translation is nearly always
+  longer than its original, so it follows the fraction scrolled rather than the
+  line). On by default; clear it and each pane gets its own scrollbar.
 - **A− 15 A+** — text size in both panes. Clicking the number restores the default.
 - **Save** — write the edit.
 - **Save and approve** — write it and mark the chunk approved.

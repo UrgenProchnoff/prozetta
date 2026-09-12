@@ -2681,6 +2681,7 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
             ${helpLink('chunk')}
             <button id="c-find" title="${esc(t('chunk.findTitle'))}">${esc(t('chunk.find'))}</button>
             <button id="c-toggle-orig" title="${esc(t('chunk.toggleTitle'))}"></button>
+            <label class="cs-opt" id="c-sync-wrap" title="${esc(t('chunk.syncScrollTitle'))}"><input type="checkbox" id="c-sync"> ${esc(t('chunk.syncScroll'))}</label>
             <span class="font-ctl">
                 <button id="c-font-dec" title="${esc(t('chunk.fontSmaller'))}">A−</button>
                 <button id="c-font-size" class="font-size-label"></button>
@@ -2995,6 +2996,9 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
     function applyOrigHidden(hidden) {
         panes.classList.toggle('hide-original', hidden);
         toggleBtn.textContent = hidden ? t('chunk.showOriginal') : t('chunk.hideOriginal');
+        // There is nothing to keep in step with a pane that is not shown.
+        const syncWrap = document.getElementById('c-sync-wrap');
+        if (syncWrap) syncWrap.hidden = hidden;
     }
     applyOrigHidden(localStorage.getItem('prozetta.hideOriginal') === '1');
     toggleBtn.addEventListener('click', () => {
@@ -3002,6 +3006,43 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
         localStorage.setItem('prozetta.hideOriginal', hidden ? '1' : '0');
         applyOrigHidden(hidden);
     });
+
+    // Scroll one pane and the other follows. In proportion rather than by pixels
+    // or by lines: the two panes hold the same passage at different lengths, and
+    // only a fraction of the whole means the same thing on both sides. Line
+    // counting would drift with every wrapped line, which in prose is most of
+    // them.
+    //
+    // On by default — reading a translation against its original is what this
+    // screen is for — and remembered per browser, like the other two controls
+    // beside it.
+    const origText = panes.querySelector('#c-pane-orig .original-text');
+    const syncBox = document.getElementById('c-sync');
+    syncBox.checked = localStorage.getItem('prozetta.syncScroll') !== '0';
+    syncBox.addEventListener('change', () =>
+        localStorage.setItem('prozetta.syncScroll', syncBox.checked ? '1' : '0'));
+
+    // Mirroring a scroll scrolls the other pane, which would mirror straight
+    // back and fight the hand doing the scrolling. The lock is released a frame
+    // later, by which time the echo has been dispatched and ignored.
+    let mirroring = false;
+    function follow(from, to) {
+        if (!syncBox.checked || mirroring || panes.classList.contains('hide-original')) return;
+        const fromRange = from.scrollHeight - from.clientHeight;
+        const toRange = to.scrollHeight - to.clientHeight;
+        if (fromRange <= 0 || toRange <= 0) return;
+        mirroring = true;
+        to.scrollTop = (from.scrollTop / fromRange) * toRange;
+        requestAnimationFrame(() => { mirroring = false; });
+    }
+    if (origText) {
+        origText.addEventListener('scroll', () => follow(origText, ta));
+        ta.addEventListener('scroll', () => follow(ta, origText));
+        // Arriving on a finding's quote scrolls the editor before any of this is
+        // wired, so the original starts out on a different page of the book.
+        // One alignment on entry, and the two open together.
+        follow(ta, origText);
+    }
 
     // Reader font size — applied to both panes via a CSS variable, persisted.
     const FONT_DEFAULT = 15, FONT_MIN = 11, FONT_MAX = 32;

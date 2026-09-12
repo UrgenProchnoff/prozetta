@@ -1302,6 +1302,8 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 }
 #cs-q { flex: 1; min-width: 220px; }
 .cs-opt { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); white-space: nowrap; }
+/* display on the class would otherwise outrank the browser's rule for [hidden] */
+.cs-opt[hidden] { display: none; }
 #cs-hits { max-height: 40vh; overflow-y: auto; margin-top: 8px; }
 .cs-hit {
     display: flex;
