@@ -11,6 +11,14 @@ predates the practice and carries none.
 
 **2026-09-12**
 
+- `ef4ec2d` — An empty answer now says why it is empty: the reason was in the
+  response all along (`finish_reason`), but langchain does not hand it to the
+  caller, so a content filter's refusal on the OpenAI-compatible path looked
+  like an empty string. That path now has the diagnostic layer the Google client
+  has had: the reason and the token counts in the log, and a filter's refusal
+  marks the chunk at once instead of spending three doomed attempts, and three
+  more on the next run. The translation loop and the whole-book calls get the
+  same for free.
 - `62527e5` — The two panes of a chunk scroll together: a checkbox in the
   toolbar, on by default. In proportion rather than by line — a translation is
   longer than its original, so only the fraction scrolled means the same thing
