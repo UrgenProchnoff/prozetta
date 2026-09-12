@@ -54,7 +54,6 @@ export async function runExtractionStage(state) {
                 ]);
 
                 const content = response.content;
-                console.log('content=', content);
 
                 // Check for empty/truncated response
                 if (!content || content.trim().length === 0) {

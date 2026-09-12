@@ -82,6 +82,64 @@ class ChatGoogleGenerativeAIWithDiagnostics extends ChatGoogleGenerativeAI {
     }
 }
 
+/**
+ * ChatOpenAI that reports WHY a response is empty — the same service the class
+ * above does for Google, for the other half of the providers.
+ *
+ * The OpenAI shape carries the reason in `finish_reason`, and langchain keeps it
+ * in `generationInfo` inside `_generate`. What the caller gets back does not
+ * have it: off the non-streaming path `response_metadata` is given `usage` and
+ * `system_fingerprint` only when the provider sent a fingerprint, and
+ * `finish_reason` never at all. So this is the only place the reason can be
+ * attached to the error.
+ *
+ * It matters most behind a gateway in front of Google, which is how a person
+ * without a Google key reaches Gemini. A refusal arrives there as HTTP 200 with
+ * `finish_reason: "content_filter: PROHIBITED_CONTENT"`, no `message` in the
+ * choice at all, and zero completion tokens. Without this, a stage sees an empty
+ * string, calls it "Empty response", and spends its whole retry budget — and the
+ * next run's budget, since nothing gets marked — on text that will never come
+ * back.
+ */
+class ChatOpenAIWithDiagnostics extends ChatOpenAI {
+    async _generate(messages, options, runManager) {
+        const result = await super._generate(messages, options, runManager);
+        const gen = result.generations?.[0];
+        if (gen?.text) return result;
+
+        // Two shapes to read: the non-streaming path puts finish_reason in
+        // generationInfo, the streaming one folds it into response_metadata.
+        const reason = String(gen?.generationInfo?.finish_reason
+            || gen?.message?.response_metadata?.finish_reason || '');
+        const tu = result.llmOutput?.tokenUsage || result.llmOutput?.estimatedTokenUsage || {};
+        const usage = extractUsage(gen?.message)
+            || { inputTokens: tu.promptTokens, outputTokens: tu.completionTokens };
+        const what = `[${this.model}] The provider returned ${gen ? 'empty content' : 'no answer at all'}`
+            + (reason ? `; finish_reason=${reason}` : '; with no finish_reason to say why')
+            + ` (${usage.inputTokens ?? '?'} tokens in, ${usage.outputTokens ?? 0} out)`;
+
+        // A filter's refusal is permanent for this text: the same words are
+        // refused every time, so the stage is told to stop rather than to spend
+        // its budget proving it. The reason is matched loosely on purpose —
+        // "content_filter" is the documented value, but a gateway in front of
+        // another provider appends that provider's own word for it
+        // ("content_filter: PROHIBITED_CONTENT").
+        if (/content[_ -]?filter|safety|prohibited|blocked|recitation/i.test(reason)) {
+            const err = new Error(`${what}. Its content filter blocked the text of this chunk.`);
+            err.contentBlocked = true;
+            throw err;
+        }
+        if (/length|max[_ ]?tokens/i.test(reason)) {
+            throw new Error(`${what}. The answer ran into the output limit — raise maxOutputTokens in the settings.`);
+        }
+        // Anything else: an ordinary empty answer, or a provider that says
+        // nothing about why. Worth saying out loud, not worth calling final —
+        // another attempt may well come back with text.
+        console.warn(`${what}.`);
+        return result;
+    }
+}
+
 // Parse a Google "45s" / "1.5s" / "0.75s" protobuf duration into milliseconds.
 function parseDurationMs(s) {
     const m = /^([\d.]+)s$/.exec(String(s || '').trim());
@@ -314,7 +372,7 @@ export function createRawClient(provider, conf) {
             throw new Error('book_model uses the "openai" provider but no baseUrl is set — ' +
                 'give it the address of an OpenAI-compatible endpoint, or pick another provider.');
         }
-        return new ChatOpenAI({
+        return new ChatOpenAIWithDiagnostics({
             // A self-hosted endpoint usually wants no key, but the client
             // refuses to start without one and blames "Missing credentials",
             // which reads as an authentication problem rather than a placeholder
@@ -334,7 +392,7 @@ export function createRawClient(provider, conf) {
     }
     // local / openAI-compatible endpoint
     const timeoutMs = conf.timeout || 4000000;
-    return new ChatOpenAI({
+    return new ChatOpenAIWithDiagnostics({
         apiKey: conf.apiKey,
         configuration: {
             baseURL: conf.baseUrl,
