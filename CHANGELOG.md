@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-09-12**
 
+- `62527e5` — The two panes of a chunk scroll together: a checkbox in the
+  toolbar, on by default. In proportion rather than by line — a translation is
+  longer than its original, so only the fraction scrolled means the same thing
+  on both sides. It goes away with the original pane, and arriving on a
+  finding's quote now opens both panes at the quote.
 - `c327156` — The program says when a newer build exists: once a day it asks
   GitHub for the date at the top of the repository and compares it with its own,
   which an archive knows from the stamp inside it. "Update available" lights up
