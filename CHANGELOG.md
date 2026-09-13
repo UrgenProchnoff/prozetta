@@ -9,6 +9,18 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-13**
+
+- `73ab0f6` — The map's legend is grouped by step — Extraction, Translation,
+  Assess translation — each in a frame of its own. As one line it put "refused by
+  filter" (the cell's colour, refused during Translation) beside "refused by the
+  content filter" (a corner, refused during Extraction), and the two were taken
+  for each other. The yellow "disputed" corner had been drawn on the map since
+  August with no legend entry; it has one now. The monitor's help is rewritten
+  the same way, with three errors gone: a "flag" that is a corner, the violet
+  frame and violet corner described as one mark, and the "never got here" corner
+  left out.
+
 **2026-09-12**
 
 - `ef4ec2d` — An empty answer now says why it is empty: the reason was in the
