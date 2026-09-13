@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-09-13**
 
+- `8ad4cb2` — Links in the help go where they point: to another article inside
+  the program, to any other file in the repository on GitHub. The beginner's
+  walkthrough linked to the README and got "Cannot GET" from the program's own
+  address. The sentence itself is fixed too: instead of a "Custom" group and the
+  README it now points at the Providers section of the settings help.
 - `73ab0f6` — The map's legend is grouped by step — Extraction, Translation,
   Assess translation — each in a frame of its own. As one line it put "refused by
   filter" (the cell's colour, refused during Translation) beside "refused by the
