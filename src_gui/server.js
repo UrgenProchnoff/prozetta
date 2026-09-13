@@ -350,6 +350,9 @@ app.get('/api/help', (req, res) => {
     try {
         res.json({
             text: fs.readFileSync(file, 'utf-8'), lang: file === wanted ? lang : 'en', requested: lang,
+            // Where a link to a file outside the help should point: the articles
+            // are written for the repository, and README is not served from here.
+            repository: VERSION.repository,
             // Where this article sits in the reading order, so a page can offer
             // the next one without the front end keeping its own copy of the list.
             topics: HELP_TOPICS.filter(n => fs.existsSync(path.join(ROOT, 'docs', `${n.toUpperCase()}.en.md`)))

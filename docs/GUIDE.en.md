@@ -308,6 +308,7 @@ delete the old project on the front page (the "🗑 Delete" button).
 terminal `GUI_PORT=3500 ./start.sh` (Windows: `set GUI_PORT=3500` before running
 `start.bat`), then open `http://127.0.0.1:3500`.
 
-**You want a better model, or a different provider.** In Settings you can pick any
-OpenAI-compatible service (the "Custom" group) or a local model — those are
-subjects for the main [README](../README.md).
+**You want a better model, or a different provider.** In Settings you can connect
+any OpenAI-compatible service (the "Another service" card) or a model on your own
+machine (the "Your own computer" card). How to do it is in the Providers section
+of the [settings help](SETTINGS.en.md).

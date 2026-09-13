@@ -290,7 +290,7 @@ async function renderUpdateBadge() {
  * escaped before any of it is applied, so the file cannot inject markup into
  * the page whatever it contains.
  */
-function renderMarkdown(src, commits = {}, repository = null) {
+function renderMarkdown(src, commits = {}, repository = null, base = '') {
     // A bare (abc1234) becomes a link to the commit it names. The subject is put
     // in the tooltip, and a hash git does not know is left visibly dead rather
     // than linked into nothing — which is what a typo or a rebase produces.
@@ -313,10 +313,34 @@ function renderMarkdown(src, commits = {}, repository = null) {
         return `<span class="cm-refs">${parts.join(' ')}</span>`;
     });
 
+    // Links are written for the repository — the help articles are read on
+    // GitHub as well — so a relative one names a file beside the document, not a
+    // path under this program's address. Copied into href as they stood, the
+    // walkthrough's `../README.ru.md` asked the local server for /README.ru.md
+    // and got "Cannot GET". `base` is where the document lives in the repository.
+    //
+    // Another help article opens here, as a page of this help. Any other file
+    // opens on GitHub. An address with a scheme is left as it is. Both label and
+    // href arrive escaped, since the whole line was, and stay that way.
+    const link = (label, href) => {
+        const article = /^(?:\.\/)?([A-Z]+)\.[a-z]{2}\.md(?:#.*)?$/.exec(href);
+        if (base === 'docs/' && article) return `<a href="#/help/${article[1].toLowerCase()}">${label}</a>`;
+        if (/^[a-z][a-z\d+.-]*:|^[#/]/i.test(href)) return `<a href="${href}" target="_blank" rel="noopener">${label}</a>`;
+        const [pathPart, fragment] = href.split(/(?=#)/);
+        const parts = [];
+        for (const seg of (base + pathPart).split('/')) {
+            if (seg === '..') { if (!parts.pop()) return label; }   // climbs out of the repository
+            else if (seg && seg !== '.') parts.push(seg);
+        }
+        // Nowhere to send it: better plain words than a link that fails.
+        if (!repository || !parts.length) return label;
+        return `<a href="${esc(repository)}/blob/HEAD/${parts.join('/')}${fragment || ''}" target="_blank" rel="noopener">${label}</a>`;
+    };
+
     const inline = s => refs(esc(s))
         .replace(/`([^`]+)`/g, '<code>$1</code>')
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => link(label, href));
 
     // Paragraphs and bullets are buffered rather than emitted line by line: the
     // file is hard-wrapped at 80 columns, so a line break inside one is where
@@ -332,7 +356,7 @@ function renderMarkdown(src, commits = {}, repository = null) {
     // sometimes a list.
     const flushQuote = () => {
         if (!quote) return;
-        out.push(`<blockquote>${renderMarkdown(quote.join('\n'), commits, repository)}</blockquote>`);
+        out.push(`<blockquote>${renderMarkdown(quote.join('\n'), commits, repository, base)}</blockquote>`);
         quote = null;
     };
 
@@ -415,7 +439,7 @@ async function renderHelp(topic) {
             return;
         }
 
-        const { text, lang: got, requested, topics } = await api(`/api/help?topic=${encodeURIComponent(topic)}&lang=${lang}`);
+        const { text, lang: got, requested, topics, repository } = await api(`/api/help?topic=${encodeURIComponent(topic)}&lang=${lang}`);
         const here = topics.findIndex(x => x.topic === topic);
         const title = here >= 0 ? topics[here].title : '';
         setCrumbs(`${crumbHome()} / <a href="#/help">${esc(t('help.crumb'))}</a> / ${esc(title || topic)}`);
@@ -426,7 +450,7 @@ async function renderHelp(topic) {
         const onward = next
             ? `<p class="help-next"><a href="#/help/${esc(next.topic)}">${esc(t('help.next', { title: next.title }))}</a></p>`
             : `<p class="help-next"><a href="#/help">${esc(t('help.backToIndex'))}</a></p>`;
-        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text)}${onward}</div>`;
+        app.innerHTML = `<div class="changelog">${note}${renderMarkdown(text, {}, repository, 'docs/')}${onward}</div>`;
         window.scrollTo(0, 0);
     } catch (e) {
         app.innerHTML = `<div class="loading">${esc(t('common.error', { msg: e.message }))}</div>`;

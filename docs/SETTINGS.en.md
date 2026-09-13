@@ -35,11 +35,10 @@ Where to connect and with what. Filled in once.
   OpenRouter, Together, NVIDIA NIM, a vLLM of your own. This card has presets: a
   service you have set up can be remembered under a name, and the dropdown
   switches between them.
-- **A local model** — through an OpenAI-compatible address (LM Studio, Ollama).
-  No key, no money, and **no content filter** — the only way to finish a book whose
-  chunks a cloud model refuses.
-- **OpenAI-compatible (your own address)** — anything else reachable by that
-  protocol.
+- **Your own computer** — a local model through an OpenAI-compatible address (LM
+  Studio, Ollama). No key, no money, and **no content filter** — the only way to
+  finish a book whose chunks a cloud model refuses.
+- **OpenAI-compatible (own address)** — anything else reachable by that protocol.
 
 Every card has a **Test** — it checks that the key and address work and shows the
 latency. And **↓ Load models** — which pulls the list of available models with
