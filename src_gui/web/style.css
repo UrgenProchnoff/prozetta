@@ -559,7 +559,7 @@ table.glossary .del { text-align: center; }
    drawGrid(): a continuous hue ramp anchored at the pipeline thresholds. */
 .cell-score { font-size: 8px; font-weight: 700; }
 .legend-scores { font-family: ui-monospace, Consolas, monospace; }
-.legend-scores .cell-score { font-size: 11px; }
+.legend-scores .cell-score { font-size: 12px; }
 /* Corner marker: terms extracted (Stage 1). Composes with status colour. */
 /* Inverted on purpose. This marked "terms extracted" and fired on 96% of cells
    across five books — a mark that nearly everything carries says nothing by being
@@ -587,7 +587,7 @@ table.glossary .del { text-align: center; }
     position: absolute;
     top: 0;
     right: 0;
-    border-width: 0 6px 6px 0;
+    border-width: 0 7px 7px 0;
     border-style: solid;
     border-color: transparent var(--red) transparent transparent;
 }
@@ -613,7 +613,7 @@ table.glossary .del { text-align: center; }
     position: absolute;
     top: 0;
     left: 0;
-    border-width: 6px 6px 0 0;
+    border-width: 7px 7px 0 0;
     border-style: solid;
     border-color: var(--red) transparent transparent transparent;
 }
@@ -653,9 +653,25 @@ table.glossary .del { text-align: center; }
     position: absolute;
     bottom: 0;
     left: 0;
-    border-width: 0 0 6px 6px;
+    border-width: 0 0 7px 7px;
     border-style: solid;
     border-color: transparent transparent var(--violet) transparent;
+}
+/* Its legend sample. The map had drawn this corner for weeks with nothing in the
+   legend to say what it was, so it was read as the nearest thing that was there. */
+.dot.disputed-dot {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    position: relative;
+}
+.dot.disputed-dot::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    border-width: 0 7px 7px 0;
+    border-style: solid;
+    border-color: transparent var(--yellow) transparent transparent;
 }
 .badge.b-disputed { color: var(--yellow); border-color: var(--yellow); }
 .badge.b-blocked { color: var(--red); border-color: var(--red); }
@@ -752,8 +768,33 @@ table.glossary .del { text-align: center; }
     font-size: 13px;
 }
 
-.legend { display: flex; gap: 14px; margin: 10px 0; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
-.legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }
+/* Stacked, one frame per step, in the roadmap's order. Side by side would be
+   shorter, but the map's column is half the page — about 650px — and the three
+   only share a row if Assess comes before Translation, which is the confusion
+   being fixed in another form. Frames of equal width, because ragged ones read
+   as an accident. */
+.legend { display: grid; gap: 12px; margin: 16px 0 18px; color: var(--muted); font-size: 13px; }
+.legend .dot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 7px; vertical-align: -2px; }
+/* The step's name set into the border. A fieldset because that is exactly what
+   one draws; min-width because a fieldset otherwise refuses to be narrower than
+   its content, and its entries have to wrap on a narrow screen. */
+.legend-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 22px;
+    min-width: 0;
+    margin: 0;
+    padding: 6px 16px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.legend-group > legend {
+    padding: 0 7px;
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 600;
+}
 
 /* --- Chunk view --- */
 

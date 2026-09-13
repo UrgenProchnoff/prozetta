@@ -75,25 +75,46 @@ The grid of numbered cells is the whole book. One cell is one chunk of text,
 around four thousand characters. **Every cell is clickable**: it opens a page with
 the original, the editable translation, and that chunk's history.
 
-The colour says what became of the chunk:
+The legend above the map is split by step — the same steps as the roadmap at the
+top. The same words mean different things depending on which step left the mark:
+"refused by filter" during Extraction and during Translation are two different
+refusals and two different marks. The rule is simple: **the top corners are set by
+Extraction; the colour and the bottom corners by Translation and what came after
+it.**
+
+**Extraction** — the top corners, both red:
+
+- **top left** — refused by filter: the content filter refused this text, and its
+  terms never reached the glossary;
+- **top right** — never got here: Extraction did not finish on this chunk, it has
+  no terms, and the translator will get it without a cheat sheet.
+
+**Translation** — the colour of the cell, and one corner:
 
 - **green** — approved: the translation passed its check;
 - **yellow** — best effort: never approved, the best of the attempts kept;
 - **blue** — in progress right now;
-- **red** — refused by the content filter;
-- **grey** — queued, not translated yet.
-
-The corners are marks that are not about colour:
-
-- **red corner** — the content filter refused this text during Extraction, so its
-  terms never reached the glossary;
-- **violet corner** — the chunk was fixed on the review's advice, or is waiting to
-  be;
-- **flag** — translator and reviewer could not agree; a human should look.
+- **red** — refused by filter, this time during Translation;
+- **grey** — queued, not translated yet;
+- **yellow corner, bottom right** — disputed: translator and reviewer could not
+  agree, and a human should look.
 
 The number under the index is the checker's score, and it **shows only when it is
 below ten**. An empty cell means ten. A marker should mark the exception, not the
 rule: a map of 129 tens would say nothing at all.
+
+**Assess translation** — the violet marks:
+
+- **violet frame** around the cell — waiting for a fix: advice from the review
+  sits on the chunk, and the next Translation run will act on it;
+- **violet corner, bottom left** — corrected: the chunk has already been rewritten
+  on that advice.
+
+The frame means work ahead, the corner means work done. A chunk can carry both
+when a second finding lands on it.
+
+When in doubt about a mark, hover over the cell: its tooltip names every one of
+them in words.
 
 ## Translation review
 
@@ -103,7 +124,7 @@ open, 35 closed by editing, 14 rejected · 7 queued`.
 Inside is the list of findings. Each one is **a decision, not a notification**:
 
 - **Accept** — the advice is queued on that chunk, and the next Translation run
-  fixes it. The chunk gets a violet corner.
+  fixes it. The chunk's cell gets a violet frame.
 - **Dismiss** — the finding is wrong; hide it.
 - **Done** — you dealt with it yourself, by hand.
 

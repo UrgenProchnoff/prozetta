@@ -1389,17 +1389,34 @@ async function renderMonitor(prefix) {
         </div>
         <div class="monitor-grid">
             <div>
+                <!-- Grouped by the step that made the mark, named as the roadmap
+                     names it. As one line it put "refused by filter" (the cell's
+                     colour, from Translation) beside "refused by the content
+                     filter" (a corner, from Extraction), and a reader who knew a
+                     chunk had been refused took the wrong one of the two. The
+                     groups also show the rule the corners follow: the top two
+                     belong to Extraction, the bottom two to what came after. -->
                 <div class="legend">
-                    <span><span class="dot" style="background:#1e5e41"></span>${esc(t('status.success'))}</span>
-                    <span><span class="dot" style="background:#6b5320"></span>${esc(t('status.best_effort'))}</span>
-                    <span><span class="dot" style="background:#29456e"></span>${esc(t('status.in_progress'))}</span>
-                    <span><span class="dot" style="background:#5e2020"></span>${esc(t('status.blocked'))}</span>
-                    <span><span class="dot" style="background:#1f242e"></span>${esc(t('status.pending'))}</span>
-                    <span><span class="dot noterms-dot"></span>${esc(t('legend.noTerms'))}</span>
-                    <span><span class="dot blocked-dot"></span>${esc(t('legend.blocked'))}</span>
-                    <span><span class="dot advice-dot"></span>${esc(t('legend.advice'))}</span>
-                    <span><span class="dot fixed-dot"></span>${esc(t('legend.fixed'))}</span>
-                    <span><span class="legend-scores"><span class="cell-score" data-score="7">7</span>/<span class="cell-score" data-score="8.5">8.5</span>/<span class="cell-score" data-score="9.5">9.5</span></span> ${esc(t('legend.score'))}</span>
+                    <fieldset class="legend-group">
+                        <legend>${esc(t('mon.stepExtract'))}</legend>
+                        <span><span class="dot blocked-dot"></span>${esc(t('legend.blocked'))}</span>
+                        <span><span class="dot noterms-dot"></span>${esc(t('legend.noTerms'))}</span>
+                    </fieldset>
+                    <fieldset class="legend-group">
+                        <legend>${esc(t('mon.stepTranslate'))}</legend>
+                        <span><span class="dot" style="background:#1e5e41"></span>${esc(t('status.success'))}</span>
+                        <span><span class="dot" style="background:#6b5320"></span>${esc(t('status.best_effort'))}</span>
+                        <span><span class="dot" style="background:#29456e"></span>${esc(t('status.in_progress'))}</span>
+                        <span><span class="dot" style="background:#5e2020"></span>${esc(t('status.blocked'))}</span>
+                        <span><span class="dot" style="background:#1f242e"></span>${esc(t('status.pending'))}</span>
+                        <span><span class="dot disputed-dot"></span>${esc(t('legend.disputed'))}</span>
+                        <span><span class="legend-scores"><span class="cell-score" data-score="7">7</span>/<span class="cell-score" data-score="8.5">8.5</span>/<span class="cell-score" data-score="9.5">9.5</span></span> ${esc(t('legend.score'))}</span>
+                    </fieldset>
+                    <fieldset class="legend-group">
+                        <legend>${esc(t('mon.stepAssess'))}</legend>
+                        <span><span class="dot advice-dot"></span>${esc(t('legend.advice'))}</span>
+                        <span><span class="dot fixed-dot"></span>${esc(t('legend.fixed'))}</span>
+                    </fieldset>
                 </div>
                 <div class="grid-hint">${esc(t('mon.gridHint'))}</div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
