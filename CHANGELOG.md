@@ -9,6 +9,18 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-15**
+
+- `ef8b377` — Saving waits out a Windows file lock instead of crashing the run.
+  Windows will not replace a file someone holds open, and a freshly written file
+  nearly always has someone: Defender, a sync client, our own server re-reading
+  `state.json` for the map. A translation writes its state twice at the end, and
+  a finished run died with "EPERM: operation not permitted, rename". The rename
+  is now retried for up to two seconds — for the state, the passport, the
+  glossary, the settings and the presets — and if the file is never let go, the
+  error says what usually holds it and that the new content is beside it in the
+  `.tmp`.
+
 **2026-09-13**
 
 - `8ad4cb2` — Links in the help go where they point: to another article inside
