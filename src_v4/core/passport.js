@@ -15,6 +15,7 @@
  */
 
 import fs from 'fs';
+import { writeFileAtomic } from '../utils/atomic_write.js';
 import { wholeWordRegex } from './text_stats.js';
 import { countTokens } from './tokenizer.js';
 import config from '../config.js';
@@ -176,9 +177,7 @@ export function loadPassport(passportPath) {
 /** Write the passport atomically, the way project state is written. */
 export function savePassport(passportPath, passport) {
     const data = { ...passport, version: PASSPORT_VERSION, updatedAt: new Date().toISOString() };
-    const tempFile = `${passportPath}.tmp`;
-    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2));
-    fs.renameSync(tempFile, passportPath);
+    writeFileAtomic(passportPath, JSON.stringify(data, null, 2));
     return data;
 }
 

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { usageTracker } from './usage_tracker.js';
 import { projectPaths, ensureProjectDir } from './paths.js';
+import { writeFileAtomic } from '../utils/atomic_write.js';
 
 /**
  * What the translation writes onto a chunk. Everything else — the source text, its token
@@ -100,12 +101,9 @@ export class ProjectState {
         // The folder may not exist yet: a fresh project writes its state before
         // anything else has had reason to create it.
         ensureProjectDir(this.workDir, this.filePrefix);
-        const tempFile = this.stateFile + '.tmp';
 
         try {
-            fs.writeFileSync(tempFile, JSON.stringify(this.data, null, 2));
-            fs.renameSync(tempFile, this.stateFile);
-            // console.log(`[State] Saved state atomically.`);
+            writeFileAtomic(this.stateFile, JSON.stringify(this.data, null, 2));
         } catch (e) {
             console.error(`[State] Error saving state: ${e.message}`);
             throw e;

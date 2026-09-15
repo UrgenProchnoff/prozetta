@@ -18,6 +18,7 @@ import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/
 import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages/04_glossary_review.js';
 import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_passport.js';
 import { extractJson, describeJsonError } from '../src_v4/utils/parsers.js';
+import { writeFileAtomic } from '../src_v4/utils/atomic_write.js';
 import { outstandingFindings as reviewOutstanding, findingKey, adviceQueue } from '../src_v4/core/translation_review.js';
 import { locateQuote } from '../src_v4/core/quoted_spans.js';
 import { wordDiff, condense, diffSize } from '../src_v4/core/text_diff.js';
@@ -418,9 +419,7 @@ function readJson(file) {
 }
 
 function writeJsonAtomic(file, data) {
-    const tmp = file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-    fs.renameSync(tmp, file);
+    writeFileAtomic(file, JSON.stringify(data, null, 2));
 }
 
 function validPrefix(req, res) {
@@ -2226,9 +2225,7 @@ function readOverrides() {
 }
 
 function writeOverrides(overrides) {
-    const tmp = OVERRIDES_PATH + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(overrides, null, 2));
-    fs.renameSync(tmp, OVERRIDES_PATH);
+    writeFileAtomic(OVERRIDES_PATH, JSON.stringify(overrides, null, 2));
 }
 
 // --- Settings presets: a named copy of one card's settings ---
@@ -2248,9 +2245,7 @@ function readPresets() {
 }
 
 function writePresets(presets) {
-    const tmp = PRESETS_PATH + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(presets, null, 2));
-    fs.renameSync(tmp, PRESETS_PATH);
+    writeFileAtomic(PRESETS_PATH, JSON.stringify(presets, null, 2));
 }
 
 const PRESET_LIMIT = 30;

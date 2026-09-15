@@ -26,6 +26,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { HumanMessage } from '@langchain/core/messages';
 import { extractJson } from '../utils/parsers.js';
+import { writeFileAtomic } from '../utils/atomic_write.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const LEARNED_PROFILES_PATH = path.join(__dirname, '..', 'language_profiles.json');
@@ -169,8 +170,6 @@ export function loadLearnedProfiles() {
 export function saveLearnedProfile(lang, profile) {
     const all = loadLearnedProfiles();
     all[lang] = { ...profile, learnedAt: new Date().toISOString() };
-    const tmp = `${LEARNED_PROFILES_PATH}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(all, null, 2));
-    fs.renameSync(tmp, LEARNED_PROFILES_PATH);
+    writeFileAtomic(LEARNED_PROFILES_PATH, JSON.stringify(all, null, 2));
     return all[lang];
 }
