@@ -240,12 +240,21 @@ function isOversizedPrompt(quotaId) {
  * Deliberately excludes 4xx other than 408/429: a bad key, a bad model name or
  * a malformed request will fail identically no matter how long we wait.
  */
+const TEXT_STATUS_RE = new RegExp(
+    String.raw`(?:\[|\bHTTP\/?[\d.]*\s*|\bstatus(?:\s*code)?\s*[:=]?\s*|\bcode\s*[:=]?\s*)(?:500|502|503|504)\b` +
+    String.raw`|\b(?:500|502|503|504)\s+(?:status code|internal|bad gateway|service unavailable|gateway)`, 'i');
+
 export function isTransientServerError(error) {
     const status = Number(error?.status ?? error?.response?.status);
     const msg = String(error?.message || '');
     if ([500, 502, 503, 504, 408].includes(status)) return true;
-    // Some clients surface the status only inside the message text.
-    if (/\b(500|502|503|504)\b|service unavailable|internal (server )?error|bad gateway|gateway time-?out|overloaded|experiencing high demand/i.test(msg)) return true;
+    // Some clients surface the status only inside the message text — but only as
+    // a status: "[503 Service Unavailable]", "HTTP 502", "500 status code". A bare
+    // number used to be enough, so "max_tokens must be at most 500" or "input of
+    // 503 tokens" read as an outage and a request that could never succeed was
+    // retried for over a minute.
+    if (TEXT_STATUS_RE.test(msg)) return true;
+    if (/service unavailable|internal (server )?error|bad gateway|gateway time-?out|overloaded|experiencing high demand/i.test(msg)) return true;
     // Network-level blips that never reached the provider.
     return ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'EPIPE'].includes(error?.code);
 }
@@ -531,9 +540,15 @@ class LLMClient {
                         // than waiting — especially on book-level calls, where an
                         // abort costs one of 20 daily slots.
                         const MAX_TRANSIENT_RETRIES = 4;
+                        //
+                        // Each kind of failure counts against its own budget.
+                        // They used to share the loop counter, so two 503s
+                        // spent two of the three rate-limit retries as well, and
+                        // a 429 that followed an outage was given up on early.
+                        let rateAttempts = 0;
                         let transientAttempts = 0;
                         let response;
-                        for (let attempt = 0; ; attempt++) {
+                        for (;;) {
                             await limiter.waitForToken();
                             try {
                                 response = await target.invoke(...args);
@@ -546,10 +561,11 @@ class LLMClient {
                                 // Morphotrophic cost eight minutes to learn
                                 // nothing the first attempt had not already said.
                                 if (error.oversizedPrompt) throw error;
-                                if (error.rateLimited && attempt < MAX_RATE_RETRIES) {
-                                    const waitMs = error.retryDelayMs ?? (attempt + 1) * 10000;
+                                if (error.rateLimited && rateAttempts < MAX_RATE_RETRIES) {
+                                    const waitMs = error.retryDelayMs ?? (rateAttempts + 1) * 10000;
                                     if (waitMs <= MAX_WAIT_MS) {
-                                        console.warn(`[LLM] ${error.message} Waiting ${Math.round(waitMs / 1000)}s, retry ${attempt + 1}/${MAX_RATE_RETRIES}...`);
+                                        rateAttempts++;
+                                        console.warn(`[LLM] ${error.message} Waiting ${Math.round(waitMs / 1000)}s, retry ${rateAttempts}/${MAX_RATE_RETRIES}...`);
                                         await new Promise(r => setTimeout(r, waitMs));
                                         continue;
                                     }
