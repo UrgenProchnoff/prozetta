@@ -11,6 +11,17 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `459e1b3` — Smarter retries. An error that merely mentions a number like 500
+  ("max_tokens must be at most 500") is no longer taken for a server outage and
+  retried for over a minute before the real error shows. And outages and rate
+  limits now have separate retry budgets: two brief outages used to use up the
+  retries a following rate limit needed.
+
+- `16e5c0f` — The glossary, the review files, the exported book, an uploaded book
+  and a cover are now written whole or not at all, like the project state
+  already was: a crash mid-write no longer leaves half a file, and on Windows the
+  write waits out a file briefly held open instead of failing with "EPERM".
+
 - `349a045` — The "disputed" mark on a chunk describes its latest translation
   run. A disputed chunk is retried on every run, and one that simply fell short
   the next time kept the old mark and its old reason, claiming a conflict of
