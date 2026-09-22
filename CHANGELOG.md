@@ -11,6 +11,14 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `c19f2ab` — A refused Google call is sent once, not seven times. The Google
+  client kept LangChain's default of six retries of its own, so every 429 and
+  server error was repeated inside it before the program's own retry logic saw
+  anything — and a whole-book prompt too large for the free tier's per-minute
+  input quota, which the program deliberately gives up on at once, went out seven
+  times and used seven of twenty daily requests. The timeout in the Google
+  settings now works as well; before, it was never passed to the request.
+
 - `0dd6034` — The server answers only its own interface. Listening on 127.0.0.1
   kept other computers out but not other websites: any page open in the same
   browser could reset the settings — deleting every saved API key — or stop,
