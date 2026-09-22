@@ -26,6 +26,15 @@ function reportUsage() {
 // spellings of a name, not as a numbering anyone has to learn.
 const STAGE_ALIASES = { '1': 'extract', '2': 'translate' };
 
+/**
+ * Everything after the first "=", however many more follow. split('=')[1]
+ * stopped at the second one: a book uploaded as "Book=1.txt" was run as "Book",
+ * so the pipeline worked on one project while the interface watched another.
+ */
+function argValue(arg) {
+    return arg.slice(arg.indexOf('=') + 1);
+}
+
 async function main() {
     const args = process.argv.slice(2);
     const stageArg = args.find(a => a.startsWith('--stage='));
@@ -48,7 +57,7 @@ async function main() {
 
     // Set LLM Provider if specified
     if (modelArg) {
-        const provider = modelArg.split('=')[1];
+        const provider = argValue(modelArg);
         // "custom" is what the card is called; "groq" is what the settings file
         // has called it since there was only one such service, and it still works.
         const named = provider === 'custom' ? 'groq' : provider;
@@ -59,8 +68,8 @@ async function main() {
         }
     }
 
-    const stage = STAGE_ALIASES[stageArg.split('=')[1]] || stageArg.split('=')[1];
-    const filePath = fileArg.split('=')[1];
+    const stage = STAGE_ALIASES[argValue(stageArg)] || argValue(stageArg);
+    const filePath = argValue(fileArg);
 
     // Derive prefix from filename: "txt/Sterling_Junk_DNA.txt" → "Sterling_Junk_DNA"
     const fileExt = path.extname(filePath);
@@ -86,8 +95,8 @@ async function main() {
     // Language settings precedence: CLI flag > existing metadata > config.js default.
     // A flag is persisted into metadata so the chosen value sticks for later stages.
     state.data.metadata = state.data.metadata || {};
-    if (langArg) state.data.metadata.targetLanguage = langArg.split('=').slice(1).join('=');
-    if (suffixArg) state.data.metadata.langSuffix = suffixArg.split('=')[1];
+    if (langArg) state.data.metadata.targetLanguage = argValue(langArg);
+    if (suffixArg) state.data.metadata.langSuffix = argValue(suffixArg);
 
     // Bootstrap a fresh project: read the source and split it into chunks.
     // Any LLM stage can do this, so translation works directly (translate without

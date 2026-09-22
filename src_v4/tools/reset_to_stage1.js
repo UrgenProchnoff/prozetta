@@ -19,7 +19,7 @@ async function resetToStage1() {
         process.exit(1);
     }
 
-    const filePath = fileArg.split('=')[1];
+    const filePath = fileArg.slice(fileArg.indexOf('=') + 1);
     const fileExt = path.extname(filePath);
     const filePrefix = path.basename(filePath, fileExt);
 
