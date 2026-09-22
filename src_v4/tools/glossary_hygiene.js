@@ -24,6 +24,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { ProjectState } from '../core/state_manager.js';
+import { writeFileAtomic } from '../utils/atomic_write.js';
 import { countOccurrences, genderFromPronouns } from '../core/text_stats.js';
 
 function normalizeGender(g) {
@@ -323,7 +324,7 @@ function main() {
     fs.copyFileSync(glossaryPath, backupPath);
 
     const { cleaned, merged, removed } = applySafeFixes(glossary, analysis);
-    fs.writeFileSync(glossaryPath, JSON.stringify(cleaned, null, 2));
+    writeFileAtomic(glossaryPath, JSON.stringify(cleaned, null, 2));
 
     console.log(`Применено: слито регистровых дублей ${merged}, удалено записей ${removed}.`);
     console.log(`Было ${glossary.length} записей, стало ${cleaned.length}.`);

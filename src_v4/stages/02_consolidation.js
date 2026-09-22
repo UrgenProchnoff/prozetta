@@ -3,6 +3,7 @@ import { llmManager } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractJson } from '../utils/parsers.js';
+import { writeFileAtomic } from '../utils/atomic_write.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
@@ -170,7 +171,7 @@ export async function runConsolidationStage(state) {
     }
 
     // 5. Save
-    fs.writeFileSync(glossaryPath, JSON.stringify(finalGlossary, null, 2));
+    writeFileAtomic(glossaryPath, JSON.stringify(finalGlossary, null, 2));
 
     console.log(`[Consolidation] Glossary saved to ${glossaryPath} (${finalGlossary.length} total, ${addedCount} new).`);
 

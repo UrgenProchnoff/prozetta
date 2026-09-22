@@ -13,6 +13,7 @@ import { usageTracker } from './core/usage_tracker.js';
 import { assembleBookText } from './core/book_assembler.js';
 import { initFileLog } from './utils/logger.js';
 import { exportFileName } from './core/paths.js';
+import { writeFileAtomic } from './utils/atomic_write.js';
 import config from './config.js';
 
 function reportUsage() {
@@ -194,7 +195,7 @@ function exportBook(state) {
     console.log(`[Export] Assembling ${chunks.length} chunks to: ${outputPath}`);
 
     const { text, missing } = assembleBookText(chunks, llmManager.getModelName());
-    fs.writeFileSync(outputPath, text);
+    writeFileAtomic(outputPath, text);
 
     console.log(`--- SYSTEM: Book Assembled to ${outputPath} ---`);
     if (missing > 0) {

@@ -816,7 +816,7 @@ app.post('/api/upload', express.raw({ type: () => true, limit: '100mb' }), (req,
     }
 
     fs.mkdirSync(TXT_DIR, { recursive: true });
-    fs.writeFileSync(target, decoded.text.replace(/^\uFEFF/, ''));
+    writeFileAtomic(target, decoded.text.replace(/^\uFEFF/, ''));
     res.json({ ok: true, prefix, file: path.join('txt', `${prefix}.txt`), encoding: decoded.encoding });
 });
 
@@ -2157,7 +2157,7 @@ app.post('/api/projects/:prefix/cover', express.raw({ type: () => true, limit: '
     for (const e of ['jpg', 'png']) {
         if (e !== ext) { try { fs.unlinkSync(coverPath(prefix, e)); } catch { /* none */ } }
     }
-    fs.writeFileSync(coverPath(prefix, ext), buf);
+    writeFileAtomic(coverPath(prefix, ext), buf);
     res.json({ ok: true, ext });
 });
 
@@ -2216,7 +2216,7 @@ app.get('/api/projects/:prefix/output', async (req, res) => {
             cover,
         });
         const outName = outputFileName(prefix, state.metadata || {}, 'fb2');
-        try { fs.writeFileSync(path.join(TXT_DIR, outName), xml); } catch { /* best effort */ }
+        try { writeFileAtomic(path.join(TXT_DIR, outName), xml); } catch { /* best effort */ }
         res.setHeader('Content-Type', 'application/x-fictionbook+xml; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${outName}"`);
         return res.send(xml);
@@ -2227,7 +2227,7 @@ app.get('/api/projects/:prefix/output', async (req, res) => {
     const outName = outputFileName(prefix, state.metadata || {});
 
     // Persist the assembled file too (so the CLI/txt dir stays in sync).
-    try { fs.writeFileSync(path.join(TXT_DIR, outName), text); } catch { /* best effort */ }
+    try { writeFileAtomic(path.join(TXT_DIR, outName), text); } catch { /* best effort */ }
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${outName}"`);

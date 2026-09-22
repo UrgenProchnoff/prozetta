@@ -16,6 +16,7 @@ import { HumanMessage } from '@langchain/core/messages';
 import { llmManager, bookModelEnabled, explainCallFailure } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
+import { writeFileAtomic } from '../utils/atomic_write.js';
 import { countTokens, chunkTokens } from '../core/tokenizer.js';
 import { glossaryEvidence, verifyFindings } from '../core/glossary_review.js';
 import { fingerprint, fingerprintMismatch } from '../core/book_call.js';
@@ -127,7 +128,7 @@ export function applyGlossaryReview(state, raw, meta) {
         rejectedFindings,
         rawAnswer: meta.answerText ? String(meta.answerText).slice(0, 400000) : undefined,
     };
-    fs.writeFileSync(reviewPath, JSON.stringify(review, null, 2));
+    writeFileAtomic(reviewPath, JSON.stringify(review, null, 2));
     return { review, findings, rejected, notes };
 }
 

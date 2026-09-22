@@ -20,6 +20,7 @@ import { HumanMessage } from '@langchain/core/messages';
 import { llmManager, bookModelEnabled, explainCallFailure } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
+import { writeFileAtomic } from '../utils/atomic_write.js';
 import { countTokens, chunkTokens } from '../core/tokenizer.js';
 import { verifyFindings } from '../core/translation_review.js';
 import { loadPassport, isEmptyPassport } from '../core/passport.js';
@@ -225,7 +226,7 @@ export function applyTranslationReview(state, raw, meta) {
         // and a runaway one should not become the largest file in the project.
         rawAnswer: meta.answerText ? String(meta.answerText).slice(0, 400000) : undefined,
     };
-    fs.writeFileSync(reviewPath, JSON.stringify(review, null, 2));
+    writeFileAtomic(reviewPath, JSON.stringify(review, null, 2));
     return { review, findings, rejected, notes };
 }
 
