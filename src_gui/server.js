@@ -7,7 +7,7 @@ import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER } from '../src_
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { outstandingFindings as glossaryOutstanding } from '../src_v4/core/glossary_review.js';
-import { projectPaths, projectDir, listProjects, PROJECTS_DIR, exportFileName } from '../src_v4/core/paths.js';
+import { projectPaths, projectDir, ensureProjectDir, listProjects, PROJECTS_DIR, exportFileName } from '../src_v4/core/paths.js';
 import { handEdited } from '../src_v4/core/passport.js';
 import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
@@ -1937,11 +1937,13 @@ app.post('/api/projects/:prefix/clone', (req, res) => {
 
     const now = new Date().toISOString();
     const clone = {
-        chunks: (src.chunks || []).map(c => ({
-            original: c.original,
-            extracted_terms: c.extracted_terms,
-            extraction_status: c.extraction_status,
-        })),
+        // Everything but the translation, through the same deny-list a reset
+        // uses. This was an allow-list of three fields, and it dropped what the
+        // rest of the pipeline had added since: `tokens`, so every budget check
+        // on the clone recounted the whole book or fell back to guessing, and
+        // `blocked_by`, so chunks a model had refused at extraction were sent to
+        // that same model again. See TRANSLATION_FIELDS in state_manager.js.
+        chunks: (src.chunks || []).map(withoutTranslation),
         metadata: {
             ...(src.metadata || {}),
             targetLanguage: String(language).trim(),
@@ -1955,6 +1957,10 @@ app.post('/api/projects/:prefix/clone', (req, res) => {
     delete clone.metadata.usage;
     delete clone.metadata.lastReset;
 
+    // A new project, so its folder does not exist yet. Since projects moved into
+    // folders of their own, nothing here created it, and every clone failed
+    // with ENOENT before writing a byte.
+    ensureProjectDir(ROOT, newPrefix);
     writeJsonAtomic(statePath(newPrefix), clone);
     // The cover is language-independent — share it with the clone.
     const cover = findCover(prefix);
