@@ -11,6 +11,12 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `349a045` — The "disputed" mark on a chunk describes its latest translation
+  run. A disputed chunk is retried on every run, and one that simply fell short
+  the next time kept the old mark and its old reason, claiming a conflict of
+  rules that run had not found. It is now cleared in that case, and the chunk
+  shows as an ordinary best effort.
+
 - `9149f69` — A book with "=" in its file name is run as the project the
   interface shows. The command line cut every value at its second "=", so
   `Book=1.txt` was processed as a project called "Book" while the screen watched
