@@ -36,7 +36,8 @@ Where to connect and with what. Filled in once.
   service you have set up can be remembered under a name, and the dropdown
   switches between them. A preset holds the whole card — address, key, model,
   timeout, temperature and requests per minute, including fields left at their
-  defaults.
+  defaults. The key only if it was entered here: one from an environment variable
+  is not written into the preset, and stays in force when it is applied.
 - **Your own computer** — a local model through an OpenAI-compatible address (LM
   Studio, Ollama). No key, no money, and **no content filter** — the only way to
   finish a book whose chunks a cloud model refuses.

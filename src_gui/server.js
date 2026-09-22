@@ -2349,9 +2349,16 @@ app.post('/api/config/presets', async (req, res) => {
     let cfg;
     try { cfg = await loadEffectiveConfig(); } catch (e) { return res.status(500).json({ error: e.message }); }
     const saved = { ...(cfg[target.group] || {}) };
-    // No key at all is not a value to remember: applying the preset keeps the
-    // key in place rather than wiping it (see /presets/apply).
-    if (!saved.apiKey) delete saved.apiKey;
+    // The key is the exception: only one typed into the settings. The default
+    // it would otherwise fall back to is the environment variable, and copying
+    // that into the preset did two things nobody asked for. It wrote to disk a
+    // key someone had kept out of files on purpose. And applying the preset put
+    // that copy into the saved settings, which outrank the environment — the
+    // key froze, and changing the variable afterwards did nothing. A preset
+    // without a key keeps whatever key is in force when it is applied.
+    const typedKey = readOverrides()[target.group]?.apiKey;
+    if (typedKey) saved.apiKey = typedKey;
+    else delete saved.apiKey;
     const presets = readPresets();
     presets[target.group] = presets[target.group] || {};
     if (!(target.name in presets[target.group]) && Object.keys(presets[target.group]).length >= PRESET_LIMIT) {
