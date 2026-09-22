@@ -11,6 +11,10 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `799844f` — Cyrillic in the live log no longer turns into "�". Output arrived
+  in pieces that could end in the middle of a two-byte letter, and each piece was
+  decoded on its own.
+
 - `57f1905` — Resetting or approving a chunk by hand clears its "disputed" mark
   and the review advice queued on it. A reset used to leave both behind: the map
   showed an untranslated chunk as disputed, and the next run judged a fresh draft
