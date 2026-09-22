@@ -11,6 +11,13 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `57f1905` — Resetting or approving a chunk by hand clears its "disputed" mark
+  and the review advice queued on it. A reset used to leave both behind: the map
+  showed an untranslated chunk as disputed, and the next run judged a fresh draft
+  against advice about the deleted text. Approval left them too, so queued advice
+  sent the next run to rework a text you had just accepted. The reset
+  confirmation now says when queued advice will be deleted with it.
+
 - `bf89d65` — Cloning a project for another language works again. Since projects
   moved into folders of their own, the clone's folder was never created and every
   clone failed with "ENOENT". The clone also used to copy only three fields of
