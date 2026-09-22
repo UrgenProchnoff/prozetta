@@ -42,6 +42,14 @@ class JobManager {
 
         const proc = spawn(process.execPath, args, { cwd, env: process.env });
         job.proc = proc;
+        // Decoded by the streams rather than chunk by chunk below. A pipe hands
+        // over bytes in whatever pieces it likes, and a Cyrillic letter is two of
+        // them: split across two pieces, each half decoded on its own became
+        // "�", and the log — nearly all Russian — came out speckled with them.
+        // A stream decoder holds an incomplete character back until the rest
+        // arrives.
+        proc.stdout.setEncoding('utf8');
+        proc.stderr.setEncoding('utf8');
 
         const pushLines = (buf) => {
             for (const line of buf.split('\n')) {
@@ -54,7 +62,7 @@ class JobManager {
 
         let stdoutRest = '';
         proc.stdout.on('data', (d) => {
-            stdoutRest += d.toString();
+            stdoutRest += d;
             const i = stdoutRest.lastIndexOf('\n');
             if (i >= 0) {
                 pushLines(stdoutRest.slice(0, i));
@@ -64,7 +72,7 @@ class JobManager {
 
         let stderrRest = '';
         proc.stderr.on('data', (d) => {
-            stderrRest += d.toString();
+            stderrRest += d;
             const i = stderrRest.lastIndexOf('\n');
             if (i >= 0) {
                 pushLines(stderrRest.slice(0, i));
