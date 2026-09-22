@@ -1979,6 +1979,25 @@ app.post('/api/projects/:prefix/delete', (req, res) => {
     const sp = statePath(prefix);
     if (!fs.existsSync(sp)) return res.status(404).json({ error: 'Project not found' });
 
+    // The exported files are named after the project's language suffix, and the
+    // suffix is in the state — so the names are worked out now, while there is
+    // a state to read. Asked after the folder had gone, outputFileName fell back
+    // to "rus", and a book exported as book_eng.txt, or a clone's book_de.fb2,
+    // stayed behind in txt/ after its project was deleted.
+    let meta = {};
+    try { meta = readJson(sp).metadata || {}; } catch { /* unreadable — fall back to the default suffix */ }
+    // The source is never an output, whatever the names say. They can coincide:
+    // a book called Foo_rus.txt translated with the suffix "rus" exports to
+    // Foo_rus.txt, and deleting the project would then delete the book. A
+    // project that is not a clone was made from txt/<prefix>.txt, which covers
+    // the ones old enough to have no sourceFile recorded; a clone was made from
+    // its original's book, and its own <prefix>.txt is a real export.
+    const sources = [meta.sourceFile && path.resolve(ROOT, meta.sourceFile),
+                     !meta.clonedFrom && path.join(TXT_DIR, `${prefix}.txt`)].filter(Boolean);
+    const outputs = ['txt', 'fb2']
+        .map(ext => path.join(TXT_DIR, outputFileName(prefix, meta.langSuffix, ext)))
+        .filter(f => !sources.includes(f));
+
     // The state is kept outside the folder about to go, so a delete can still be
     // undone by hand — but beside that folder, not in the repository root. It
     // used to land there under the flat name every project file had before they
@@ -2004,8 +2023,7 @@ app.post('/api/projects/:prefix/delete', (req, res) => {
 
     // The assembled translation lives in txt/, with the source the person put
     // there — so it is named explicitly rather than swept up with the folder.
-    for (const f of [path.join(TXT_DIR, outputFileName(prefix)),
-                     path.join(TXT_DIR, outputFileName(prefix, null, 'fb2'))]) {
+    for (const f of outputs) {
         try { if (fs.existsSync(f)) { fs.unlinkSync(f); removed.push(path.basename(f)); } } catch { /* best effort */ }
     }
 
