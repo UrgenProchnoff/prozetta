@@ -11,6 +11,14 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `94e6d75` — Deleting a project removes its exported files whatever the
+  language, and never the book itself. The file names depend on the language
+  suffix, which was looked up after the project was already gone, so the lookup
+  fell back to "rus": `book_eng.txt`, or a clone's `book_de.txt` and `.fb2`,
+  stayed behind in `txt/`. The same fallback meant that for a book named like
+  `Foo_rus.txt` the "export" was the source, and deleting the project deleted the
+  book. The source is now never touched.
+
 - `c19f2ab` — A refused Google call is sent once, not seven times. The Google
   client kept LangChain's default of six retries of its own, so every 429 and
   server error was repeated inside it before the program's own retry logic saw
