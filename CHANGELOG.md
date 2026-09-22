@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `b66d3be` — A preset stores the API key only if it was typed into the
+  settings. A key from the `CUSTOM_API_KEY` environment variable no longer goes
+  into the presets file, and applying a preset no longer freezes a copy of it
+  over the variable.
+
 - `0b05d87` — A settings preset holds the whole card: address, key, model,
   timeout, temperature and requests per minute, including fields left at their
   defaults. It used to store only fields changed at some point, so applying a
