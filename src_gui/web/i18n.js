@@ -450,6 +450,7 @@
             'chunk.saved': 'Сохранено',
             'chunk.savedApproved': 'Сохранено и принято',
             'chunk.resetConfirm': 'Сбросить чанк? Перевод и вся история попыток будут удалены, следующий Перевод переведёт его заново.',
+            'chunk.resetConfirmAdvice': 'Советов разбора в очереди на этом чанке: {n}. Они тоже будут удалены — они написаны про текст, который сбрасывается.',
             'chunk.resetDone': 'Чанк сброшен',
 
             'nav.settings': 'Настройки',
@@ -1031,6 +1032,7 @@
             'chunk.saved': 'Saved',
             'chunk.savedApproved': 'Saved and approved',
             'chunk.resetConfirm': 'Reset chunk? The translation and all attempt history will be deleted; the next Translation run will do it again.',
+            'chunk.resetConfirmAdvice': 'Review advice queued on this chunk: {n}. It will be deleted too — it was written about the text being reset.',
             'chunk.resetDone': 'Chunk reset',
 
             'nav.settings': 'Settings',

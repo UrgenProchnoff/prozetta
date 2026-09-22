@@ -20,9 +20,13 @@ human should look.
   line). On by default; clear it and each pane gets its own scrollbar.
 - **A− 15 A+** — text size in both panes. Clicking the number restores the default.
 - **Save** — write the edit.
-- **Save and approve** — write it and mark the chunk approved.
+- **Save and approve** — write it and mark the chunk approved. This clears the
+  "disputed" mark and any review advice queued on the chunk: the decision is made,
+  and the next Translation run will not "fix" a text you accepted. A finding whose
+  quote the edit left alone returns to the review list, undecided.
 - **Reset the chunk** — wipe this chunk's translation and history, to translate it
-  from scratch.
+  from scratch. The "disputed" mark and queued advice go with them, since they were
+  about the text being wiped; if there is advice, the confirmation says so.
 
 What you type lives in the browser until you press Save. Reloading the page loses
 it.

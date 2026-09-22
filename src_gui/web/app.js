@@ -3119,7 +3119,11 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
     document.getElementById('c-save').addEventListener('click', () => saveChunk(false));
     document.getElementById('c-approve').addEventListener('click', () => saveChunk(true));
     document.getElementById('c-reset').addEventListener('click', async () => {
-        if (!confirm(t('chunk.resetConfirm'))) return;
+        // Queued advice goes with the translation it was written about, and a
+        // person who queued it should hear that before it is gone.
+        const queued = chunk.advice?.length || 0;
+        const question = t('chunk.resetConfirm') + (queued ? '\n\n' + t('chunk.resetConfirmAdvice', { n: queued }) : '');
+        if (!confirm(question)) return;
         try {
             await api(`/api/projects/${encodeURIComponent(prefix)}/chunks/${i}`, { method: 'PUT', body: { reset: true } });
             toast(t('chunk.resetDone'), 'ok');

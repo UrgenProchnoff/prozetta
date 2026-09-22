@@ -1139,13 +1139,14 @@ app.put('/api/projects/:prefix/chunks/:i', (req, res) => {
     const { translation, translation_status, reset } = req.body || {};
 
     if (reset) {
-        delete chunk.translation;
-        delete chunk.translationTokens;
-        delete chunk.translation_status;
-        delete chunk.history;
-        // Goes with the status it belongs to: left behind, it would claim a
-        // block that the reset just erased.
-        delete chunk.translation_blocked_by;
+        // The same deny-list the whole-project reset uses. This used to delete
+        // five fields by hand and leave `advice` and `dispute` behind: the map
+        // then showed an untranslated chunk marked as a quarrel whose history
+        // had just been erased, and the next run judged a fresh draft — made
+        // without the advice — against a must_fix written about the wording of
+        // the text that was deleted, with redrafting switched off because advice
+        // was queued. The page warns first when there is advice to lose.
+        state.chunks[i] = withoutTranslation(chunk);
     } else {
         if (typeof translation === 'string') {
             chunk.translation = translation;
@@ -1154,6 +1155,17 @@ app.put('/api/projects/:prefix/chunks/:i', (req, res) => {
             chunk.translationTokens = countTokens(translation);
         }
         if (typeof translation_status === 'string') chunk.translation_status = translation_status;
+        // Approved by a person, which settles what the marks were waiting for —
+        // the same three the translation loop clears when its reviewer approves.
+        // Left in place, a dispute would outlive the human decision it asked for,
+        // and queued advice would send the next run to "fix" a text somebody has
+        // just accepted. A finding whose quote the edit left alone returns to the
+        // open list, undecided rather than silently queued.
+        if (translation_status === 'success') {
+            delete chunk.dispute;
+            delete chunk.advice;
+            delete chunk.translation_blocked_by;
+        }
         chunk.history = chunk.history || [];
         chunk.history.push({
             step: 'manual_edit',
