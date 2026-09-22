@@ -560,7 +560,9 @@ function projectSummary(prefix) {
             // Which model refused to translate it. Separate from the two above,
             // which are about extraction: the same chunk can be refused by one model
             // at extraction and by another at translation.
-            translationBlockedBy: c.translation_status === 'blocked' ? (c.translation_blocked_by || null) : null,
+            // Whatever the status: a chunk that already had a translation keeps
+            // it when a model refuses to rework it, and only this says so.
+            translationBlockedBy: c.translation_blocked_by || null,
             // Translator and reviewer could not agree (repeated rejection of a
             // fresh draft) — the loop stopped instead of burning budget, and a
             // human should settle it.

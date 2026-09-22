@@ -53,6 +53,7 @@ export async function runTranslationLoopStage(state) {
 
     let processedCount = 0;
     const blockedChunks = []; // 1-based numbers of chunks the content filter refused
+    const keptChunks = [];    // refused too, but they keep the translation they had
 
     // A content filter refuses a text, not a request: the same model refuses it
     // again, so retrying is pure waste. Another model may well accept it —
@@ -75,16 +76,23 @@ export async function runTranslationLoopStage(state) {
         if (chunk.translation && chunk.translation_status === 'success' && !advice) {
             continue;
         }
-        if (chunk.translation_status === 'blocked' && chunk.translation_blocked_by === modelSignature) {
+        // Whatever the status. A refusal is recorded without touching a
+        // translation the chunk already has (see the catch below), so a chunk
+        // can be "success" with advice waiting and a model that will not do it.
+        if (chunk.translation_blocked_by === modelSignature) {
             continue;
         }
-        if (chunk.translation_status === 'blocked') {
-            console.log(`[Translation] Chunk ${i + 1} was blocked by "${chunk.translation_blocked_by || 'unknown model'}" — retrying with "${modelSignature}"...`);
+        if (chunk.translation_blocked_by) {
+            console.log(`[Translation] Chunk ${i + 1} was blocked by "${chunk.translation_blocked_by}" — retrying with "${modelSignature}"...`);
+        } else if (chunk.translation_status === 'blocked') {
+            console.log(`[Translation] Chunk ${i + 1} was blocked by "unknown model" — retrying with "${modelSignature}"...`);
         }
 
         console.log(`[Translation] Processing Chunk ${i + 1}/${chunks.length}...`);
 
-        let history = chunk.history || [];
+        // A copy, so that a run which ends in a refusal can be left out of the
+        // record — see the catch below.
+        let history = [...(chunk.history || [])];
 
         try {
 
@@ -373,15 +381,31 @@ export async function runTranslationLoopStage(state) {
 
             console.warn(`   -> BLOCKED by the content filter of ${modelSignature} — skipping this chunk.`);
             console.warn(`      ${String(error.message).slice(0, 300)}`);
-            state.updateChunk(i, {
-                translation_status: 'blocked',
-                translation_blocked_by: modelSignature,
-                // Whatever was drafted before the refusal is kept. A block during
-                // the review would otherwise throw away a draft already paid for,
-                // and the next model resumes from it instead of buying it again.
-                history: history
-            });
-            blockedChunks.push(i + 1);
+            if (chunk.translation) {
+                // The chunk already has a translation — approved, or the best
+                // effort of an earlier run — and a refusal to rework it says
+                // nothing against it. This used to mark it "blocked", so an
+                // approved chunk refused while acting on review advice showed on
+                // the map as untranslated. Only the refusal is recorded: this
+                // model skips the chunk from now on, and queued advice waits for
+                // another.
+                //
+                // This run's steps are left out. None was approved, and an
+                // advice_fix among them would mark the review's findings as dealt
+                // with by a fix that never reached the text.
+                state.updateChunk(i, { translation_blocked_by: modelSignature });
+                keptChunks.push(i + 1);
+            } else {
+                state.updateChunk(i, {
+                    translation_status: 'blocked',
+                    translation_blocked_by: modelSignature,
+                    // Whatever was drafted before the refusal is kept. A block during
+                    // the review would otherwise throw away a draft already paid for,
+                    // and the next model resumes from it instead of buying it again.
+                    history: history
+                });
+                blockedChunks.push(i + 1);
+            }
         }
 
         processedCount++;
@@ -398,6 +422,11 @@ export async function runTranslationLoopStage(state) {
         console.warn(`[Translation] They are marked on the chunk map, and the exported book will be missing them. ` +
             `Switch to another provider or model in the settings — a local one has no such filter — and run the translation ` +
             `again: everything already translated is kept, only the blocked chunks are picked up.`);
+    }
+    if (keptChunks.length) {
+        console.warn(`\n[Translation] ${keptChunks.length} already translated chunk(s) were refused by the content filter of ` +
+            `${modelSignature} while being reworked: ${keptChunks.join(', ')}. They keep the translation they had, and ` +
+            `any review advice on them stays queued — another model will pick it up; this one skips them from now on.`);
     }
     console.log('--- SYSTEM: Translation completed ---');
 }
