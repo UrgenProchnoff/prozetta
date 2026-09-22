@@ -11,6 +11,15 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `0e4a3ab` — A model refusing to rework an already translated chunk no longer
+  marks it untranslated. When the content filter refused a fix on review advice,
+  the approved chunk was set to "blocked" and showed on the map as missing,
+  though its text was still in the book — and a fix that never reached the text
+  could mark the review's findings as done. Now the chunk keeps its status,
+  text and history; only the refusal is recorded, that model leaves the chunk
+  alone, and the queued advice waits for another model. The chunk's tooltip on
+  the map says so.
+
 - `799844f` — Cyrillic in the live log no longer turns into "�". Output arrived
   in pieces that could end in the middle of a two-byte letter, and each piece was
   decoded on its own.
