@@ -9,6 +9,17 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-22**
+
+- `0dd6034` — The server answers only its own interface. Listening on 127.0.0.1
+  kept other computers out but not other websites: any page open in the same
+  browser could reset the settings — deleting every saved API key — or stop,
+  reset and delete projects, and a site that re-pointed its own domain at
+  127.0.0.1 could make the settings test send the saved key to an address of its
+  choosing. Requests now have to come from `127.0.0.1` or `localhost` on the
+  server's own port. The interface is opened there anyway, so nothing changes
+  for it.
+
 **2026-09-15**
 
 - `ef8b377` — Saving waits out a Windows file lock instead of crashing the run.
