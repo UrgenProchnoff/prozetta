@@ -11,6 +11,15 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `4c3f573` — Exporting a book whose name ends in its language suffix no longer
+  writes the translation over it. The rule that names a clone's export
+  `book_de.txt` instead of `book_de_de.txt` applied to any name ending in
+  `_<suffix>`, so `Foo_rus.txt` translated with the suffix "rus" was exported to
+  `Foo_rus.txt` — its own source. It now applies only to clones; `Foo_rus`
+  exports to `Foo_rus_rus.txt`. If a book of yours was named that way, its file
+  in `txt/` may already hold the translation; the original text is still in the
+  project.
+
 - `94e6d75` — Deleting a project removes its exported files whatever the
   language, and never the book itself. The file names depend on the language
   suffix, which was looked up after the project was already gone, so the lookup
