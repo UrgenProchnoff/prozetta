@@ -7,7 +7,7 @@ import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER } from '../src_
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { outstandingFindings as glossaryOutstanding } from '../src_v4/core/glossary_review.js';
-import { projectPaths, projectDir, listProjects, PROJECTS_DIR } from '../src_v4/core/paths.js';
+import { projectPaths, projectDir, listProjects, PROJECTS_DIR, exportFileName } from '../src_v4/core/paths.js';
 import { handEdited } from '../src_v4/core/passport.js';
 import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
@@ -413,20 +413,15 @@ function runLogTail(prefix, maxLines = 500) {
     }
 }
 
-// The language suffix recorded for a project (e.g. "rus", "de"); defaults to
-// "rus" for legacy projects with no langSuffix in metadata.
-function projectSuffix(prefix) {
-    try { return readJson(statePath(prefix)).metadata?.langSuffix || 'rus'; }
-    catch { return 'rus'; }
-}
-
-// The assembled output filename for a project: <prefix>_<suffix>.<ext>.
-// Language clones carry the suffix inside the prefix (e.g. "book_de" + "de"), so
-// avoid doubling it: "book_de.txt" rather than "book_de_de.txt".
-function outputFileName(prefix, suffix, ext = 'txt') {
-    const s = suffix || projectSuffix(prefix);
-    if (prefix.endsWith(`_${s}`)) return `${prefix}.${ext}`;
-    return `${prefix}_${s}.${ext}`;
+// The assembled output filename for a project — see exportFileName. `metadata`
+// is the project's, read from its state when the caller does not have it; the
+// suffix defaults to "rus" for legacy projects that never recorded one.
+function outputFileName(prefix, metadata, ext = 'txt') {
+    let meta = metadata;
+    if (!meta) {
+        try { meta = readJson(statePath(prefix)).metadata || {}; } catch { meta = {}; }
+    }
+    return exportFileName(prefix, { suffix: meta.langSuffix || 'rus', clone: !!meta.clonedFrom }, ext);
 }
 
 // The book cover lives in the project folder as cover.jpg|png.
@@ -710,7 +705,7 @@ function runningStage(prefix) {
  * exists, but does it still match what is on screen?
  */
 function exportedState(prefix, state) {
-    const file = path.join(TXT_DIR, outputFileName(prefix, state.metadata?.langSuffix));
+    const file = path.join(TXT_DIR, outputFileName(prefix, state.metadata || {}));
     if (!fs.existsSync(file)) return null;
     try {
         const at = fs.statSync(file).mtime.toISOString();
@@ -761,7 +756,7 @@ app.get('/api/projects', (req, res) => {
     // project's <prefix>_<suffix>.txt (suffix from its metadata), plus a legacy
     // _rus.txt safety net for any output whose project state is unreadable.
     const known = new Set(projects.map(p => p.prefix));
-    const outputs = new Set(projects.map(p => outputFileName(p.prefix, p.metadata?.langSuffix)));
+    const outputs = new Set(projects.map(p => outputFileName(p.prefix, p.metadata || {})));
     const newBooks = [];
     if (fs.existsSync(TXT_DIR)) {
         for (const f of fs.readdirSync(TXT_DIR)) {
@@ -1995,7 +1990,7 @@ app.post('/api/projects/:prefix/delete', (req, res) => {
     const sources = [meta.sourceFile && path.resolve(ROOT, meta.sourceFile),
                      !meta.clonedFrom && path.join(TXT_DIR, `${prefix}.txt`)].filter(Boolean);
     const outputs = ['txt', 'fb2']
-        .map(ext => path.join(TXT_DIR, outputFileName(prefix, meta.langSuffix, ext)))
+        .map(ext => path.join(TXT_DIR, outputFileName(prefix, meta, ext)))
         .filter(f => !sources.includes(f));
 
     // The state is kept outside the folder about to go, so a delete can still be
@@ -2200,7 +2195,7 @@ app.get('/api/projects/:prefix/output', async (req, res) => {
             modelName,
             cover,
         });
-        const outName = outputFileName(prefix, state.metadata?.langSuffix, 'fb2');
+        const outName = outputFileName(prefix, state.metadata || {}, 'fb2');
         try { fs.writeFileSync(path.join(TXT_DIR, outName), xml); } catch { /* best effort */ }
         res.setHeader('Content-Type', 'application/x-fictionbook+xml; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${outName}"`);
@@ -2209,7 +2204,7 @@ app.get('/api/projects/:prefix/output', async (req, res) => {
 
     const { text } = assembleBookText(chunks, modelName);
 
-    const outName = outputFileName(prefix, state.metadata?.langSuffix);
+    const outName = outputFileName(prefix, state.metadata || {});
 
     // Persist the assembled file too (so the CLI/txt dir stays in sync).
     try { fs.writeFileSync(path.join(TXT_DIR, outName), text); } catch { /* best effort */ }

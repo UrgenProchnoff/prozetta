@@ -12,6 +12,7 @@ import { llmManager } from './core/llm_client.js';
 import { usageTracker } from './core/usage_tracker.js';
 import { assembleBookText } from './core/book_assembler.js';
 import { initFileLog } from './utils/logger.js';
+import { exportFileName } from './core/paths.js';
 import config from './config.js';
 
 function reportUsage() {
@@ -176,9 +177,9 @@ function exportBook(state) {
     const txtDir = path.join(state.workDir, 'txt');
     const prefix = state.filePrefix || 'RESULT_V4';
     const suffix = state.data.metadata?.langSuffix || config.translation.langSuffix;
-    // Language clones carry the suffix in the prefix (e.g. "book_de" + "de"); avoid
-    // doubling it so the filename matches what the GUI download produces.
-    const outName = prefix.endsWith(`_${suffix}`) ? `${prefix}.txt` : `${prefix}_${suffix}.txt`;
+    // The same name the GUI download produces — see exportFileName for why a
+    // clone is the one case that differs.
+    const outName = exportFileName(prefix, { suffix, clone: !!state.data.metadata?.clonedFrom });
     const outputPath = path.join(txtDir, outName);
 
     console.log(`[Export] Assembling ${chunks.length} chunks to: ${outputPath}`);

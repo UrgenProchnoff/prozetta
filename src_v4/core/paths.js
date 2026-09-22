@@ -48,6 +48,25 @@ export function projectPaths(workDir, prefix) {
     };
 }
 
+/**
+ * The name of the file a project's translation is exported to, in `txt/`.
+ *
+ * Normally <prefix>_<suffix>.<ext>. A language clone carries the suffix in its
+ * prefix already — "book_de" is book.txt translated into German — so it exports
+ * to book_de.txt rather than book_de_de.txt.
+ *
+ * Only a clone. The shortcut used to be taken for any prefix ending in
+ * _<suffix>, and a book called Foo_rus.txt, translated with the suffix "rus",
+ * exported to Foo_rus.txt: over its own source. The CLI and the server each
+ * held a copy of the rule, which is why it lives here now.
+ *
+ * @param {{suffix: string, clone?: boolean}} project
+ */
+export function exportFileName(prefix, { suffix, clone = false }, ext = 'txt') {
+    if (clone && prefix.endsWith(`_${suffix}`)) return `${prefix}.${ext}`;
+    return `${prefix}_${suffix}.${ext}`;
+}
+
 /** Create the folder if it is not there yet. Safe to call repeatedly. */
 export function ensureProjectDir(workDir, prefix) {
     const dir = projectDir(workDir, prefix);
