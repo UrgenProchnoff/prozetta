@@ -361,7 +361,12 @@ export async function runTranslationLoopStage(state) {
                 // a conflict of rules is distinguishable from a genuinely weak
                 // translation.
                 translation_status: 'failed_best_effort',
-                ...(dispute ? { dispute } : {}),
+                // This run's verdict, not the last one that had a quarrel. A
+                // disputed chunk is picked up by every run until approved, and
+                // a run that fails without deadlocking says the text is weak,
+                // not that the rules conflict — keeping the old mark, with its
+                // old reason, would claim a conflict this run did not find.
+                dispute: dispute || null,
                 history: history,
                 ...(chunk.translation_blocked_by ? { translation_blocked_by: null } : {})
             });
