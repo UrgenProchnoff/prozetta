@@ -11,6 +11,12 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `0b05d87` — A settings preset holds the whole card: address, key, model,
+  timeout, temperature and requests per minute, including fields left at their
+  defaults. It used to store only fields changed at some point, so applying a
+  preset could reset, say, the timeout to the default instead of the value the
+  service had been set up with.
+
 - `459e1b3` — Smarter retries. An error that merely mentions a number like 500
   ("max_tokens must be at most 500") is no longer taken for a server outage and
   retried for over a minute before the real error shows. And outages and rate
