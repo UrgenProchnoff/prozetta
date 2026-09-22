@@ -2336,13 +2336,22 @@ app.get('/api/config/presets', (req, res) => {
 // its field says "new key (empty — keep)" and starts empty — so a preset built
 // from the form would be a preset that cannot connect. The page saves first and
 // then asks for this, which makes the two the same thing.
-app.post('/api/config/presets', (req, res) => {
+//
+// Every field of the card, as it is in effect — the default where nothing was
+// saved over it. The snapshot used to be the saved overrides alone, which hold
+// only the fields someone once changed: a preset made while the timeout was
+// still the default carried no timeout, and applying it — which replaces the
+// card — set the timeout back to the default whatever the service had needed.
+// A preset is meant to bring a whole service back, so it holds all of it.
+app.post('/api/config/presets', async (req, res) => {
     const target = presetTarget(req, res);
     if (!target) return;
-    const saved = readOverrides()[target.group];
-    if (!saved || !Object.keys(saved).length) {
-        return res.status(400).json({ error: 'This card has nothing saved to remember yet' });
-    }
+    let cfg;
+    try { cfg = await loadEffectiveConfig(); } catch (e) { return res.status(500).json({ error: e.message }); }
+    const saved = { ...(cfg[target.group] || {}) };
+    // No key at all is not a value to remember: applying the preset keeps the
+    // key in place rather than wiping it (see /presets/apply).
+    if (!saved.apiKey) delete saved.apiKey;
     const presets = readPresets();
     presets[target.group] = presets[target.group] || {};
     if (!(target.name in presets[target.group]) && Object.keys(presets[target.group]).length >= PRESET_LIMIT) {

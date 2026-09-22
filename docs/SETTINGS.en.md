@@ -34,7 +34,9 @@ Where to connect and with what. Filled in once.
 - **Another service** — anything with an OpenAI-compatible interface:
   OpenRouter, Together, NVIDIA NIM, a vLLM of your own. This card has presets: a
   service you have set up can be remembered under a name, and the dropdown
-  switches between them.
+  switches between them. A preset holds the whole card — address, key, model,
+  timeout, temperature and requests per minute, including fields left at their
+  defaults.
 - **Your own computer** — a local model through an OpenAI-compatible address (LM
   Studio, Ollama). No key, no money, and **no content filter** — the only way to
   finish a book whose chunks a cloud model refuses.
