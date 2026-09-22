@@ -11,6 +11,13 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `bf89d65` — Cloning a project for another language works again. Since projects
+  moved into folders of their own, the clone's folder was never created and every
+  clone failed with "ENOENT". The clone also used to copy only three fields of
+  each chunk and lost the token counts — so whole-book size checks had to recount
+  the book — and the record of which model had refused a chunk at extraction. It
+  now keeps everything except the translation.
+
 - `4c3f573` — Exporting a book whose name ends in its language suffix no longer
   writes the translation over it. The rule that names a clone's export
   `book_de.txt` instead of `book_de_de.txt` applied to any name ending in
