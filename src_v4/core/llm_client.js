@@ -49,6 +49,22 @@ export function extractUsage(response) {
  * (SAFETY / RECITATION / MAX_TOKENS / ...) instead of a silent empty string.
  */
 class ChatGoogleGenerativeAIWithDiagnostics extends ChatGoogleGenerativeAI {
+    constructor(fields) {
+        super(fields);
+        // The constructor takes no timeout and passes none to the SDK, so the
+        // setting in google_model did nothing. Nor does a per-call timeout help:
+        // it becomes an abort signal, and _generate calls completionWithRetry
+        // without passing the signal on. So the signal is made here, at the one
+        // place every non-streaming request goes through.
+        this.requestTimeout = fields.requestTimeout;
+    }
+
+    completionWithRetry(request, options) {
+        const signal = options?.signal
+            ?? (this.requestTimeout ? AbortSignal.timeout(this.requestTimeout) : undefined);
+        return super.completionWithRetry(request, { ...options, signal });
+    }
+
     async _generate(messages, options, runManager) {
         const result = await super._generate(messages, options, runManager);
         const gen = result.generations?.[0];
@@ -359,6 +375,15 @@ export function createRawClient(provider, conf) {
             temperature: conf.temperature,
             maxOutputTokens: conf.maxOutputTokens || 8192,
             safetySettings: GEMINI_SAFETY_SETTINGS,
+            // Retrying is the invoke proxy's job, and it knows things this client
+            // does not: that a prompt larger than the per-minute input window
+            // fails however long one waits, and how long the API asked to wait.
+            // Left at LangChain's default of 6, every 429 and 5xx was retried
+            // here first, with its own backoff, before the proxy saw anything —
+            // an oversized whole-book call went out seven times and spent seven
+            // of twenty daily requests learning what the first one said.
+            maxRetries: 0,
+            requestTimeout: conf.timeout,
         });
     }
     if (provider === 'groq' || provider === BOOK_OWN_PROVIDER) {
