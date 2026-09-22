@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-09-22**
 
+- `9149f69` — A book with "=" in its file name is run as the project the
+  interface shows. The command line cut every value at its second "=", so
+  `Book=1.txt` was processed as a project called "Book" while the screen watched
+  "Book=1".
+
 - `0e4a3ab` — A model refusing to rework an already translated chunk no longer
   marks it untranslated. When the content filter refused a fix on review advice,
   the approved chunk was set to "blocked" and showed on the map as missing,
