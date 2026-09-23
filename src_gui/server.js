@@ -1440,7 +1440,7 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
         // whether it may: a stage already running, or an estimate that will not
         // fit one call.
         running: jobManager.isRunning(prefix),
-        estimate: { bookTokens, glossaryTokens, budget: config.pipeline.bookCallTokenBudget || 250000 },
+        estimate: { bookTokens, glossaryTokens, budget: config.pipeline.bookCallTokenBudget },
         bookModel: await bookModelInfo(),
     });
 });

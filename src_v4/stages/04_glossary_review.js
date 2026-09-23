@@ -27,7 +27,7 @@ import { getPrompts } from '../prompts.js';
 // The context window is not the binding constraint — measured on Gemini's free
 // tier, tokens per minute is, and it refuses the call outright rather than
 // truncating.
-const TOKEN_BUDGET = config.pipeline.bookCallTokenBudget || 250000;
+const TOKEN_BUDGET = config.pipeline.bookCallTokenBudget;
 
 /**
  * Everything the reviewer is to be given, and what it adds up to.

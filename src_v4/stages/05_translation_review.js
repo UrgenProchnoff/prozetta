@@ -31,7 +31,7 @@ import { getPrompts } from '../prompts.js';
 // What a free tier accepts in one minute. The context window is not the binding
 // constraint — measured on Gemini's free tier, tokens per minute is, and it
 // refuses the call outright rather than truncating.
-const TOKEN_BUDGET = config.pipeline.bookCallTokenBudget || 170000;
+const TOKEN_BUDGET = config.pipeline.bookCallTokenBudget;
 
 
 /** The glossary as a plain array, or empty when there is none to read. */

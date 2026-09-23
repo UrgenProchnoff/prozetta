@@ -382,7 +382,7 @@ export function createRawClient(provider, conf) {
             apiKey: conf.apiKey,
             model: conf.modelName, // @langchain/google-genai expects `model`, not `modelName`
             temperature: conf.temperature,
-            maxOutputTokens: conf.maxOutputTokens || 8192,
+            maxOutputTokens: conf.maxOutputTokens,
             safetySettings: GEMINI_SAFETY_SETTINGS,
             // Retrying is the invoke proxy's job, and it knows things this client
             // does not: that a prompt larger than the per-minute input window
@@ -425,7 +425,7 @@ export function createRawClient(provider, conf) {
         });
     }
     // local / openAI-compatible endpoint
-    const timeoutMs = conf.timeout || 4000000;
+    const timeoutMs = conf.timeout;
     return new ChatOpenAIWithDiagnostics({
         apiKey: conf.apiKey,
         configuration: {

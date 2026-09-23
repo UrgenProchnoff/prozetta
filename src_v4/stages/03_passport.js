@@ -32,7 +32,7 @@ import { getPrompts } from '../prompts.js';
 // The same number the other whole-book calls are held to: 200,000 stood here
 // while the measured ceiling turned out to be under 168,000, so the warning
 // would have stayed quiet through a refusal.
-const LARGE_BOOK_TOKENS = config.pipeline.bookCallTokenBudget || 165000;
+const LARGE_BOOK_TOKENS = config.pipeline.bookCallTokenBudget;
 
 function normalizeGender(value) {
     const s = String(value || '').trim().toLowerCase();
