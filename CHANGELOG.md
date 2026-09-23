@@ -9,6 +9,20 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-23**
+
+- `d13b954` — Internal: the whole-book token budget, the local timeout and the
+  Google output limit no longer carry fallback values in the code that disagreed
+  with `config.js` and could never apply.
+
+- `a14fd7f` — A fresh install starts on Google, with defaults that can finish a
+  book. The default provider used to be the local one, and the readiness card
+  called a new install ready for a server that was not there; now it says the
+  Google key is missing. The Google defaults move to `gemma-4-31b-it` — the free
+  Gemini Flash models allow 20 requests a day, a book takes hundreds — at 4
+  requests a minute, temperature 0.6, 32768 output tokens and a 10-minute
+  timeout. Settings you have saved are not affected.
+
 **2026-09-22**
 
 - `b66d3be` — A preset stores the API key only if it was typed into the
