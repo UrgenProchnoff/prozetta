@@ -8,7 +8,13 @@ const defaults = {
     // Active LLM provider used when no --model override is passed on the CLI.
     // One of: 'local' | 'google' | 'groq' (the other-service card). Set on the
     // settings page.
-    activeProvider: 'local',
+    //
+    // Google, because that is the road the README and the guide send a newcomer
+    // down: a free key and nothing to install. It was 'local', whose address and
+    // model come filled in by default — so the readiness card on a fresh install
+    // said "everything is filled in, you can translate" about a server that was
+    // not there. With Google it says the one true thing: the key is missing.
+    activeProvider: 'google',
 
     // --- The program itself, rather than the translation ---
     app: {
@@ -49,11 +55,26 @@ const defaults = {
     },
     google_model: {
         apiKey: process.env.GOOGLE_API_KEY,
-        modelName: 'gemini-3-flash-preview',
-        timeout: 1200000,
-        temperature: 0.9,
-        maxRPM: 10, // Conservative for Google Free/Pay-as-you-go
-        maxOutputTokens: 8192
+        // A book is hundreds of calls — 169 chunks at two or three each for
+        // Morphotrophic — and the free Gemini Flash models allow 20 a day. Gemma
+        // allows 14,400, which is what makes "the free tier is enough for a book"
+        // true. Its content filter cannot be switched off, so a book with rough
+        // scenes may have chunks refused; those are marked and can be finished
+        // on another model.
+        modelName: 'gemma-4-31b-it',
+        // A hung call waits this long before it is given up. Only enforced since
+        // the Google client was given the timeout at all, and twenty minutes for
+        // one chunk was long enough to look like a frozen run.
+        timeout: 600000,
+        // The same as the other providers. The same model writes the translation
+        // and grades it in JSON, and 0.9 was the highest setting anywhere here.
+        temperature: 0.6,
+        // Gemma's free tier allows 30 requests but only 16,000 tokens a minute,
+        // and a chunk call carries several thousand; the tokens run out first.
+        maxRPM: 4,
+        // Reasoning counts against this on models that think before answering,
+        // and 8192 cut answers off with MAX_TOKENS.
+        maxOutputTokens: 32768
     },
     // Any OpenAI-compatible endpoint: OpenRouter, Together, NVIDIA NIM, a vLLM
     // of your own. The default address is one such service rather than a

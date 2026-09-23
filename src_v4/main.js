@@ -65,7 +65,7 @@ async function main() {
         if (named === 'google' || named === 'local' || named === 'groq') {
             llmManager.setProvider(named);
         } else {
-            console.warn(`[Warning] Unknown model provider '${provider}'. Using default (local).`);
+            console.warn(`[Warning] Unknown model provider '${provider}'. Using the active one from the settings ('${llmManager.provider}').`);
         }
     }
 
