@@ -11,6 +11,15 @@ predates the practice and carries none.
 
 **2026-09-24**
 
+- `1c2b5cf` — The forms of a name are decided as a group. A "people: forms of
+  names" filter replaces the row-by-row "could be linked": one card per person,
+  where the prime, the clones (by ticks), the best note and one gender for all
+  are chosen. The shared note can be joined from the forms' notes or condensed
+  into one by the main model (only names and notes are sent, not the book); a
+  counter shows whether it fits the 120 characters the translator gets. A word
+  from several full names (Deborah beside Deborah One and Deborah Two) appears
+  in each group unticked.
+
 - `443c62e` — The glossary editor has a "could be linked" filter that offers to
   link a form of a name to the full one: "Johnson" and "Ms Johnson" to "Maria
   Johnson". It offers only when, without forms of address (Ms, Dr…), one word is
