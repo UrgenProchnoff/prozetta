@@ -2555,6 +2555,22 @@ app.post('/api/config/reset', async (req, res) => {
     }
 });
 
+/**
+ * Form values typed after a settings group: numbers as numbers, booleans as
+ * booleans, the rest as strings. A value that does not parse is left out, so the
+ * saved or default one stands, as it does when the form is saved. The API key is
+ * passed through untouched: empty means "keep the saved one".
+ */
+function typedValues(group, values) {
+    const out = {};
+    for (const [key, raw] of Object.entries(values)) {
+        if (key === 'apiKey' || !Object.prototype.hasOwnProperty.call(group, key)) { out[key] = raw; continue; }
+        const typed = coerce(fieldType(key, group[key]), raw);
+        if (typed !== null) out[key] = typed;
+    }
+    return out;
+}
+
 // Send a tiny prompt to a provider to verify it responds. Tests the values
 // from the form (merged over saved config); an empty apiKey keeps the saved one.
 app.post('/api/config/test', async (req, res) => {
@@ -2571,8 +2587,15 @@ app.post('/api/config/test', async (req, res) => {
     // block laid over whichever provider it names, so a test that passes means
     // a book pass will connect — testing the provider card alone would not,
     // since book_model may override the model or the address.
+    //
+    // The form sends every field as a string, so for this card they are typed
+    // first, against the card's own defaults. They used to be laid over the
+    // provider's settings raw, after which each field's type was read off the
+    // string itself: the timeout reached the OpenAI client as "1800000", which
+    // it refuses before sending anything — "timeout must be an integer" — so the
+    // test failed for every provider but Google.
     const { effective, provider: bookProvider } = isBook
-        ? bookEffective(cfg, values || {})
+        ? bookEffective(cfg, typedValues(cfg.book_model || {}, values || {}))
         : { effective: null, provider: null };
     if (isBook && !effective) {
         return res.status(400).json({ error: `Invalid provider in book_model: ${bookProvider}` });
