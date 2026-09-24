@@ -11,6 +11,14 @@ predates the practice and carries none.
 
 **2026-09-24**
 
+- `6834984` — Character names are matched with their case. A name that is also
+  an ordinary word used to fire on the word: in Crystal Society the narrator Face,
+  with her dossier, was given to the translator on 112 fragments that only said
+  "face". Now a glossary entry of type "name" is found only as written — with a
+  leading "the" in either case, and in all capitals, still counting — while other
+  terms match in any case as before. The same rule now serves the passport, the
+  glossary review and the glossary editor's counts.
+
 - `a89d6ae` — The Test button on the large-model card no longer fails with
   "timeout must be an integer" when the card uses a provider other than Google.
   The form's values reached the connection as text instead of numbers. Only the
