@@ -11,6 +11,14 @@ predates the practice and carries none.
 
 **2026-09-24**
 
+- `06e2101` — Forms of one name can be linked: an entry whose note is only
+  "= Maria Johnson" becomes a clone of that entry. A clone keeps its own
+  translation and takes gender and description from the prime, and a chunk
+  where several forms appear gives the translator one line about the person
+  instead of two or three. The surname "Johnson" used to reach the translator
+  with its own thin description ("участница событий") while the full one sat on
+  "Maria Johnson". A link that leads nowhere is ignored.
+
 - `3e1936f` — A reviewer's verdict written as text ("like": "1") or as true/false
   is understood. Such an answer used to leave a chunk unapproved however good its
   translation, with nothing in the log to say why.
