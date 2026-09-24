@@ -11,6 +11,10 @@ predates the practice and carries none.
 
 **2026-09-24**
 
+- `3e1936f` — A reviewer's verdict written as text ("like": "1") or as true/false
+  is understood. Such an answer used to leave a chunk unapproved however good its
+  translation, with nothing in the log to say why.
+
 - `6834984` — Character names are matched with their case. A name that is also
   an ordinary word used to fire on the word: in Crystal Society the narrator Face,
   with her dossier, was given to the translator on 112 fragments that only said
