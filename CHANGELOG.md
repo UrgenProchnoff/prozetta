@@ -11,6 +11,12 @@ predates the practice and carries none.
 
 **2026-09-24**
 
+- `a5c0cfe` — The glossary review's instructions are shorter and clearer, with
+  the same task and answer format: three sections (how the glossary works, what
+  to look for, the rules), each thing to look for tied to the label the answer
+  should use, and two rules the program already enforced — change only what
+  needs changing, spell a new entry as the book does — now stated up front.
+
 - `1cb5ddb` — The glossary review is told how entries reach the translator: by
   whole word, in any case, with no inflected forms or variant spellings. Without
   it the model kept proposing merges like "wards" into "ward" or "Mr Malka" into
