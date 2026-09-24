@@ -11,6 +11,14 @@ predates the practice and carries none.
 
 **2026-09-24**
 
+- `42a8878` — The glossary check watches the links between forms of a name: it
+  marks a "= …" link that did not take effect (no such entry, several of them,
+  or the target is a clone itself), and a clone translated differently from its
+  prime — say "Redman → Редмен" beside "Rex Redman → Рекс Редман". The older
+  nested-name check compared word stems and let that difference through. The
+  glossary review no longer proposes merging linked entries, and a clone's
+  gender is no longer compared, since it is not used.
+
 - `06e2101` — Forms of one name can be linked: an entry whose note is only
   "= Maria Johnson" becomes a clone of that entry. A clone keeps its own
   translation and takes gender and description from the prime, and a chunk
