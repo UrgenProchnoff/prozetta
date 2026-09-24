@@ -96,6 +96,13 @@ matches, and the prime is not a clone itself. Otherwise the entry works as an
 ordinary one. Do not link a surname several people share (Rex and Candy
 Redman) to any of them.
 
+The source-text check watches the links: it marks a link that did not take
+effect, and a clone translated differently from its prime. If the two share a
+word in the original, "Johnson" and "Maria Johnson", they must share a word in
+the translation, so «Редмен» beside «Рекс Редман» is marked. The glossary review
+no longer proposes merging linked entries: the link has already done what the
+merge was for.
+
 ## Deleting, and losing nothing by it
 
 The cross on the right removes a row. But if the term being deleted occurs where

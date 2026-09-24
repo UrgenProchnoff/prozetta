@@ -26,6 +26,7 @@ import { fileURLToPath } from 'url';
 import { ProjectState } from '../core/state_manager.js';
 import { writeFileAtomic } from '../utils/atomic_write.js';
 import { countOccurrences, genderFromPronouns } from '../core/text_stats.js';
+import { resolveLinks } from '../core/glossary_links.js';
 
 function normalizeGender(g) {
     const s = String(g || '').trim().toLowerCase();
@@ -54,6 +55,10 @@ export function analyzeGlossary(glossary, sourceText) {
             gender: normalizeGender(term.gender),
         };
     });
+
+    // --- prime and clone links: "Johnson" noted "= Maria Johnson" ---
+    const links = resolveLinks(glossary);
+    const isClone = e => links.prime[e.index] != null;
 
     // --- entries differing only by case: "ELAINE" vs "Elaine" ---
     const byLower = new Map();
@@ -91,6 +96,8 @@ export function analyzeGlossary(glossary, sourceText) {
     const inconsistentNested = [];
     for (const { outer, inner, bothNames } of nested) {
         if (!bothNames) continue;
+        // A linked pair is checked more strictly below.
+        if (links.prime[inner.index] === outer.index || links.prime[outer.index] === inner.index) continue;
         const o = String(outer.term.translation || '').toLowerCase();
         const i = String(inner.term.translation || '').toLowerCase();
         if (!o || !i) continue;
@@ -110,9 +117,31 @@ export function analyzeGlossary(glossary, sourceText) {
     const genderConflicts = [];
     for (const { outer, inner } of nested) {
         if (!isName(outer) || !isName(inner)) continue;
+        // A clone's own gender is never used — its prime's is.
+        if (isClone(outer) || isClone(inner)) continue;
         if (outer.gender && inner.gender && outer.gender !== inner.gender) {
             genderConflicts.push({ outer, inner });
         }
+    }
+
+    // --- a clone rendered differently from its prime ---
+    // A link says the two are one person, so the tolerance the nested check
+    // needs for strangers is out of place: the clone's translation must share a
+    // whole word with the prime's. The stem comparison above lets «Редмен» pass
+    // against «Рекс Редман» — one letter apart, and exactly the kind of drift the
+    // link exists to stop. Unlike nesting, this also covers forms that share no
+    // word in the original ("the Phoenix" = Maria Johnson), where it is simply
+    // not asked: a title translates on its own.
+    const words = s => String(s || '').toLowerCase().split(/[\s\-–—.,]+/u).filter(Boolean);
+    const inconsistentClones = [];
+    for (const e of entries) {
+        const p = links.prime[e.index];
+        if (p == null) continue;
+        const prime = entries[p];
+        const sharesOriginal = words(e.original).some(w => words(prime.original).includes(w));
+        if (!sharesOriginal) continue;
+        const primeWords = words(prime.term.translation);
+        if (!words(e.term.translation).some(w => primeWords.includes(w))) inconsistentClones.push({ clone: e, prime });
     }
 
     // Pronoun evidence is a hint for a human, never a verdict: it is solid on
@@ -123,13 +152,13 @@ export function analyzeGlossary(glossary, sourceText) {
     const byEvidence = (a, b) => (b.masculine + b.feminine) - (a.masculine + a.feminine);
 
     const missingGender = entries
-        .filter(e => e.term.type === 'name' && !e.gender && e.count > 0)
+        .filter(e => e.term.type === 'name' && !e.gender && e.count > 0 && !isClone(e))
         .map(e => ({ entry: e, ...genderFromPronouns(sourceText, e.original) }))
         .filter(x => x.gender)
         .sort(byEvidence);
 
     const wrongGender = entries
-        .filter(e => e.term.type === 'name' && e.gender && e.count > 0)
+        .filter(e => e.term.type === 'name' && e.gender && e.count > 0 && !isClone(e))
         .map(e => ({ entry: e, ...genderFromPronouns(sourceText, e.original) }))
         .filter(x => x.gender && x.gender !== x.entry.gender)
         .sort(byEvidence);
@@ -141,11 +170,21 @@ export function analyzeGlossary(glossary, sourceText) {
         caseDuplicates,
         nested,
         inconsistentNested,
+        inconsistentClones,
+        brokenLinks: links.broken.map(b => ({ ...b, entry: entries[b.index] })),
         genderConflicts,
         missingGender,
         wrongGender,
     };
 }
+
+const LINK_PROBLEM = {
+    notName: 'клоном может быть только запись с типом «имя»',
+    missing: 'нет записи-имени с таким оригиналом или переводом',
+    ambiguous: 'таких записей несколько',
+    self: 'запись ссылается на себя',
+    chain: 'главная запись сама клон — ссылайтесь на её главную',
+};
 
 /**
  * The same findings, flattened to one entry per glossary row so a table can
@@ -184,6 +223,12 @@ export function glossaryFindings(glossary, sourceText) {
         push(outer.index, 'inconsistent', detail);
         push(inner.index, 'inconsistent', detail);
     }
+    for (const { clone, prime } of a.inconsistentClones) {
+        const detail = `клон «${clone.original}» → «${clone.term.translation}», но главная «${prime.original}» → «${prime.term.translation}»`;
+        push(clone.index, 'inconsistent', detail);
+        push(prime.index, 'inconsistent', detail);
+    }
+    for (const b of a.brokenLinks) push(b.index, 'badLink', `ссылка «= ${b.target}» не работает: ${LINK_PROBLEM[b.reason]}`);
     for (const { outer, inner } of a.genderConflicts) {
         push(outer.index, 'genderConflict', `пол ${outer.gender} против ${inner.gender} у "${inner.original}"`);
         push(inner.index, 'genderConflict', `пол ${inner.gender} против ${outer.gender} у "${outer.original}"`);
@@ -218,6 +263,13 @@ function report(a, glossary) {
     for (const { outer, inner } of a.inconsistentNested.slice(0, 8)) {
         console.log(`      · «${outer.original}» → «${outer.term.translation}»  но  «${inner.original}» → «${inner.term.translation}»`);
     }
+
+    line('клон переведён не так, как главная', a.inconsistentClones.length);
+    for (const { clone, prime } of a.inconsistentClones.slice(0, 8)) {
+        console.log(`      · «${clone.original}» → «${clone.term.translation}»  но  «${prime.original}» → «${prime.term.translation}»`);
+    }
+    line('ссылки «= главная», которые не работают', a.brokenLinks.length);
+    for (const b of a.brokenLinks.slice(0, 8)) console.log(`      · ${b.entry.original}: = ${b.target} — ${LINK_PROBLEM[b.reason]}`);
 
     line('противоречие по полу внутри одного имени', a.genderConflicts.length);
     for (const { outer, inner } of a.genderConflicts) {

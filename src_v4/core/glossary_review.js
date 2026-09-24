@@ -25,6 +25,7 @@
 
 import { entryRegex } from './text_stats.js';
 import { locateQuote } from './quoted_spans.js';
+import { resolveLinks } from './glossary_links.js';
 
 /** Actions a finding may propose. Nothing is ever applied automatically. */
 const ACTIONS = new Set(['edit', 'add', 'merge', 'remove']);
@@ -94,6 +95,12 @@ function losesCoverage(entry, survivor, bookText) {
     return false;
 }
 
+/** Are entries a and b linked forms of one person — prime and clone, or two clones? */
+function linked(prime, a, b) {
+    const root = i => prime[i] ?? i;
+    return root(a) === root(b) && (prime[a] != null || prime[b] != null);
+}
+
 /**
  * Check every finding before it is shown to anyone.
  *
@@ -123,6 +130,7 @@ export function verifyFindings(raw, glossary, bookText) {
         unknownTarget: 0,    // merge into an entry that does not exist
         emptyFix: 0,         // nothing actually changes
         lossyMerge: 0,       // merging away an entry the survivor does not match
+        linkedForms: 0,      // merging a clone and its prime, already one person
     };
     const rejectedFindings = [];
     // Kept verbatim except for length: what the model actually wrote is the
@@ -148,6 +156,8 @@ export function verifyFindings(raw, glossary, bookText) {
         const key = String(term.original || '').trim().toLowerCase();
         if (key && !byOriginal.has(key)) byOriginal.set(key, { term, index });
     });
+
+    const { prime } = resolveLinks(glossary);
 
     const findings = [];
     for (const item of raw) {
@@ -177,6 +187,10 @@ export function verifyFindings(raw, glossary, bookText) {
             const intoKey = String(item.mergeInto || '').trim().toLowerCase();
             const into = byOriginal.get(intoKey);
             if (!into || into.index === target.index) { drop('unknownTarget', item); continue; }
+            // Already settled: the person linked the two forms, which keeps both
+            // spellings findable and gives them one dossier — what a merge was
+            // after, minus the lost spelling.
+            if (linked(prime, target.index, into.index)) { drop('linkedForms', item); continue; }
             // A merge deletes an entry, and the cheat sheet matches entries as
             // whole words. "Flourisher" therefore does not match "Flourishers",
             // so merging the plural away leaves every passage that only uses the
@@ -294,6 +308,7 @@ export function outstandingFindings(review, glossary, bookText = '') {
         if (key && !byOriginal.has(key)) byOriginal.set(key, { term, index });
     });
     const has = value => byOriginal.has(String(value || '').trim().toLowerCase());
+    const { prime } = resolveLinks(glossary);
 
     for (const f of review?.findings || []) {
         const key = findingKey(f);
@@ -321,6 +336,10 @@ export function outstandingFindings(review, glossary, bookText = '') {
 
         // A merge needs both halves; once one is gone there is nothing to merge.
         if (f.action === 'merge' && !has(f.mergeInto)) continue;
+
+        // Linked after the review ran: the person answered it that way.
+        if (f.action === 'merge'
+            && linked(prime, target.index, byOriginal.get(String(f.mergeInto).trim().toLowerCase()).index)) continue;
 
         let fix = f.fix;
         if (f.action === 'edit') {
