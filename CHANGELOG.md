@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-09-24**
 
+- `a89d6ae` — The Test button on the large-model card no longer fails with
+  "timeout must be an integer" when the card uses a provider other than Google.
+  The form's values reached the connection as text instead of numbers. Only the
+  test was affected; the passes themselves always read the saved settings.
+
 - `a5c0cfe` — The glossary review's instructions are shorter and clearer, with
   the same task and answer format: three sections (how the glossary works, what
   to look for, the rules), each thing to look for tied to the label the answer
