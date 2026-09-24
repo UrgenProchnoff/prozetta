@@ -11,6 +11,14 @@ predates the practice and carries none.
 
 **2026-09-24**
 
+- `443c62e` — The glossary editor has a "could be linked" filter that offers to
+  link a form of a name to the full one: "Johnson" and "Ms Johnson" to "Maria
+  Johnson". It offers only when, without forms of address (Ms, Dr…), one word is
+  left and it appears in exactly one fuller name, so a shared surname ("Redman",
+  Rex's and Candy's) is never guessed at. The Link button shows the note it will
+  replace, and renaming a prime updates its clones' links. Across six books this
+  offers from 1 to 52 links.
+
 - `42a8878` — The glossary check watches the links between forms of a name: it
   marks a "= …" link that did not take effect (no such entry, several of them,
   or the target is a clone itself), and a clone translated differently from its
