@@ -9,6 +9,14 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-24**
+
+- `e4e0299` — The glossary review now grades the glossary: a score from 1 to 10
+  and a sentence or two on why, shown above the findings in the glossary editor
+  and on the monitor. Both the glossary review and the translation review also
+  say which round they are — "#3" — since each new review replaces the last one's
+  file. A review made before this shows no number.
+
 **2026-09-23**
 
 - `d13b954` — Internal: the whole-book token budget, the local timeout and the
