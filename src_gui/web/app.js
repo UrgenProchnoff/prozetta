@@ -834,13 +834,15 @@ async function renderGlossary(prefix) {
     setCrumbs(`${crumbHome()} / ${crumbBook(prefix)} / ${esc(t('gloss.heading'))}`);
     app.innerHTML = `<div class="loading">${esc(t('common.loading'))}</div>`;
 
-    let terms, counts, findings, forms, review, estimate, running, bookModel;
+    let terms, counts, findings, forms, people, noteLimit, review, estimate, running, bookModel;
     try {
         const data = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary`);
         terms = data.terms;
         counts = data.counts;
         findings = data.findings || [];
         forms = data.forms || [];
+        people = data.people || [];
+        noteLimit = data.noteLimit || 120;
         review = data.review || null;
         estimate = data.estimate || {};
         running = !!data.running;
@@ -872,13 +874,13 @@ async function renderGlossary(prefix) {
     const countDefects = () => findings.filter(f => f && f.some(isDefect)).length;
     const countPolicy = () => findings.filter(f => f && f.length && f.every(isPolicy)).length;
     const countModel = () => findings.filter(f => f && f.some(isModel)).length;
-    const countHints = () => findings.filter(f => f && f.some(isHint)).length;
+
     // Counted from what is on screen rather than taken from the server, so that
     // applying or dismissing the last finding frees the "ask" button at once
     // instead of after a round trip.
     const countOutstanding = () =>
         findings.reduce((n, f) => n + (f || []).filter(isModel).length, 0) + (review?.additions?.length || 0);
-    let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated' | 'model' | 'forms' | 'links'
+    let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated' | 'model' | 'forms' | 'people'
     // Display order only. The file keeps the order somebody edited it into, and
     // saving writes `terms`, which this never touches — rows carry their own
     // index, so an edit lands on the entry it was made on however they are sorted.
@@ -974,15 +976,15 @@ async function renderGlossary(prefix) {
     function renderFilter() {
         const box = document.getElementById('g-issues');
         if (!box) return;
-        const defects = countDefects(), policy = countPolicy(), model = countModel(), hints = countHints();
+        const defects = countDefects(), policy = countPolicy(), model = countModel();
         const formCount = new Set(forms.filter(Boolean).map(f => f.group)).size;
-        box.hidden = !(defects || policy || model || formCount || hints);
+        box.hidden = !(defects || policy || model || formCount || people.length);
         const keep = box.value || rowFilter;
         box.innerHTML = `<option value="all">${esc(t('gloss.filterAll'))}</option>`
             + (model ? `<option value="model">${esc(t('gloss.filterModel', { n: model }))}</option>` : '')
             + (defects ? `<option value="defects">${esc(t('gloss.filterDefects', { n: defects }))}</option>` : '')
             + (formCount ? `<option value="forms">${esc(t('gloss.filterForms', { n: formCount }))}</option>` : '')
-            + (hints ? `<option value="links">${esc(t('gloss.filterLinks', { n: hints }))}</option>` : '')
+            + (people.length ? `<option value="people">${esc(t('gloss.filterPeople', { n: people.length }))}</option>` : '')
             + (policy ? `<option value="untranslated">${esc(t('gloss.filterUntranslated', { n: policy }))}</option>` : '');
         // A filter whose category just emptied falls back to showing everything.
         box.value = [...box.options].some(o => o.value === keep) ? keep : 'all';
@@ -991,6 +993,11 @@ async function renderGlossary(prefix) {
 
     function renderRows() {
         const q = filter.toLowerCase();
+        // The cards carry their own headings; the table's would sit over them
+        // naming columns they do not have.
+        const thead = tbody.closest('table').querySelector('thead');
+        if (thead) thead.hidden = rowFilter === 'people';
+        if (rowFilter === 'people') { renderPeople(q); return; }
         const rows = terms.map((t, idx) => ({ t, idx }))
             .filter(({ idx }) => {
                 if (rowFilter === 'all') return true;
@@ -998,7 +1005,6 @@ async function renderGlossary(prefix) {
                 if (rowFilter === 'model') return f.some(isModel);
                 if (rowFilter === 'defects') return f.some(isDefect);
                 if (rowFilter === 'forms') return !!forms[idx];
-                if (rowFilter === 'links') return f.some(isHint);
                 return f.some(isPolicy);
             })
             .filter(({ t }) => !q
@@ -1056,10 +1062,7 @@ async function renderGlossary(prefix) {
                 <td><div class="grow" data-val="${esc(term.notes)}"><textarea data-f="notes" rows="1">${esc(term.notes)}</textarea></div></td>
                 <td class="cnt ${cnt === 0 ? 'zero' : ''}">${cnt ?? ''}</td>
                 <td class="del"><button class="danger" data-del="${idx}" title="${esc(t('gloss.delTitle'))}">✕</button></td>
-            </tr>` + modelIssues.map((m, mi) => reviewRow(m, idx, mi)).join('')
-                // Offers only under their own filter: shown on every page load
-                // they would nag about each surname someone chose to leave alone.
-                + (rowFilter === 'links' ? issues.filter(isHint).map(h => linkRow(h, idx)).join('') : '');
+            </tr>` + modelIssues.map((m, mi) => reviewRow(m, idx, mi)).join('');
         }).join('');
 
         // Every path that changes a finding ends here, so the guard on the
@@ -1090,12 +1093,167 @@ async function renderGlossary(prefix) {
         </td></tr>`;
     }
 
-    function linkRow(h, idx) {
-        return `<tr class="rv-row"><td colspan="7">
-            <div class="rv-head">${esc(t('gloss.linkOffer', { prime: h.prime }))}</div>
-            <div class="rv-acts"><button data-link="${idx}" data-prime="${esc(h.prime)}">${esc(t('gloss.linkBtn'))}</button></div>
-        </td></tr>`;
+    // --- People: the forms of one name, decided together ---
+    //
+    // One card per person: the prime and every form that is linked to it or
+    // looks like it (see core/glossary_links.js personGroups). Deciding form by
+    // form was the first version, and it was unusable: which entry speaks for
+    // the person, which note is best and which gender is right are questions
+    // about the whole group, and a row shows one entry at a time.
+    //
+    // What the person picks on a card is kept here, keyed by the group's
+    // prime, until "Apply" writes it into the entries; Save then writes the
+    // glossary as usual. The groups themselves come from the server and are
+    // refreshed on save, like every other analysis on this screen.
+    const cards = new Map();
+
+    const trimmed = v => String(v || '').trim();
+    const groupIdx = g => [g.prime, ...g.members.map(m => m.index)];
+
+    function cardState(g) {
+        const key = trimmed(terms[g.prime]?.original);
+        if (!cards.has(key)) {
+            const idxs = groupIdx(g);
+            const own = i => (linkOf(terms[i].notes) === null ? trimmed(terms[i].notes) : '');
+            cards.set(key, {
+                prime: g.prime,
+                // A form that could belong to several people starts unticked.
+                include: new Set([g.prime, ...g.members.filter(m => m.state !== 'ambiguous').map(m => m.index)]),
+                note: own(g.prime) || idxs.map(own).find(Boolean) || '',
+                gender: terms[g.prime].gender || idxs.map(i => terms[i].gender).find(Boolean) || '',
+            });
+        }
+        return cards.get(key);
     }
+
+    /** Where a member's link points, if not into this group. */
+    function linkedElsewhere(term, idxs) {
+        const target = linkOf(term.notes);
+        if (target === null) return null;
+        return idxs.some(j => trimmed(terms[j].original) === target || trimmed(terms[j].translation) === target) ? null : target;
+    }
+
+    function renderPeople(q) {
+        const shown = people
+            .map((g, gi) => ({ g, gi }))
+            .filter(({ g }) => terms[g.prime] && (!q || groupIdx(g).some(i =>
+                trimmed(terms[i]?.original).toLowerCase().includes(q) || trimmed(terms[i]?.translation).toLowerCase().includes(q))));
+        countEl.textContent = `${shown.length} / ${people.length}`;
+        tbody.innerHTML = shown.map(({ g, gi }) => personCard(g, gi)).join('')
+            || `<tr><td colspan="7" class="empty-note">${esc(t('gloss.pcNone'))}</td></tr>`;
+        updateAsk();
+    }
+
+    function personCard(g, gi) {
+        const st = cardState(g);
+        const idxs = groupIdx(g).filter(i => terms[i]);
+        const head = terms[st.prime];
+        const genderName = { m: t('gloss.genderM'), f: t('gloss.genderF'), n: t('gloss.genderN') };
+        let anyLinked = false;
+
+        const rows = idxs.map(i => {
+            const term = terms[i];
+            const member = g.members.find(m => m.index === i);
+            const elsewhere = linkedElsewhere(term, idxs);
+            const link = linkOf(term.notes);
+            if (link !== null && !elsewhere) anyLinked = true;
+            const isPrime = i === st.prime;
+            const on = isPrime || st.include.has(i);
+
+            // What a person should look at before applying: a form rendered
+            // apart from the prime, or a gender the card is about to overrule.
+            const trWarn = !isPrime && sameWord(term.original, head.original) && !sameWord(term.translation, head.translation)
+                ? ` <span class="pc-warn" title="${esc(t('gloss.pcTrWarn'))}">⚠</span>` : '';
+            const gWarn = term.gender && st.gender && term.gender !== st.gender
+                ? ` <span class="pc-warn" title="${esc(t('gloss.pcGenderWarn'))}">⚠</span>` : '';
+            const tags = (member?.state === 'ambiguous' ? ` <span class="pc-tag" title="${esc(t('gloss.pcAmbiguous'))}">?</span>` : '')
+                + (elsewhere ? ` <span class="pc-tag" title="${esc(t('gloss.pcElsewhere'))}">→ ${esc(elsewhere)}</span>` : '');
+            const note = link === null && trimmed(term.notes)
+                ? `<label class="pc-pick"><input type="radio" name="pn-${gi}" data-pnote="${gi}:${i}" ${trimmed(term.notes) === st.note ? 'checked' : ''}> ${esc(term.notes)}</label>`
+                : `<span class="pc-muted">${esc(term.notes || '')}</span>`;
+
+            return `<tr class="${on ? '' : 'pc-off'}">
+                <td><input type="radio" name="pp-${gi}" data-pprime="${gi}:${i}" ${isPrime ? 'checked' : ''} ${elsewhere ? 'disabled' : ''}></td>
+                <td><input type="checkbox" data-pinc="${gi}:${i}" ${on ? 'checked' : ''} ${isPrime || elsewhere ? 'disabled' : ''}></td>
+                <td>${esc(term.original)}${tags}</td>
+                <td>${esc(term.translation)}${trWarn}</td>
+                <td>${esc(genderName[term.gender] || '')}${gWarn}</td>
+                <td class="cnt">${counts[i] ?? ''}</td>
+                <td>${note}</td>
+            </tr>`;
+        }).join('');
+
+        const len = st.note.length;
+        const genderOpts = [['', t('gloss.genderNone')], ['m', t('gloss.genderM')], ['f', t('gloss.genderF')], ['n', t('gloss.genderN')]]
+            .map(([v, label]) => `<option value="${v}" ${st.gender === v ? 'selected' : ''}>${esc(label)}</option>`).join('');
+
+        return `<tr class="pc-row"><td colspan="7"><div class="pc">
+            <table class="pc-table"><thead><tr>
+                <th>${esc(t('gloss.pcPrime'))}</th><th>${esc(t('gloss.pcClone'))}</th>
+                <th>${esc(t('gloss.colOriginal'))}</th><th>${esc(t('gloss.colTranslation'))}</th>
+                <th>${esc(t('gloss.colGender'))}</th><th>#</th><th>${esc(t('gloss.colNotes'))}</th>
+            </tr></thead><tbody>${rows}</tbody></table>
+            <div class="pc-note">
+                <textarea data-pnotebox="${gi}" rows="2" placeholder="${esc(t('gloss.pcNote'))}">${esc(st.note)}</textarea>
+                <span class="pc-len${len > noteLimit ? ' over' : ''}" data-plen="${gi}" title="${esc(t('gloss.pcLenTitle', { n: noteLimit }))}">${len}/${noteLimit}</span>
+            </div>
+            <div class="pc-acts">
+                <label>${esc(t('gloss.colGender'))} <select data-pgender="${gi}">${genderOpts}</select></label>
+                <button data-pjoin="${gi}">${esc(t('gloss.pcJoin'))}</button>
+                <button data-pllm="${gi}" title="${esc(t('gloss.pcLlmTitle'))}">${esc(t('gloss.pcLlm'))}</button>
+                <span class="spacer"></span>
+                ${anyLinked ? `<button data-punlink="${gi}">${esc(t('gloss.pcUnlink'))}</button>` : ''}
+                <button class="primary" data-papply="${gi}">${esc(t('gloss.pcApply'))}</button>
+            </div>
+        </div></td></tr>`;
+    }
+
+    // Case aside, do two strings share a whole word? The same test the server
+    // uses to mark a clone rendered apart from its prime.
+    function sameWord(a, b) {
+        const words = v => String(v || '').toLowerCase().split(/[\s\-–—.,]+/u).filter(Boolean);
+        const wb = words(b);
+        return words(a).some(w => wb.includes(w));
+    }
+
+    function applyCard(gi) {
+        const g = people[gi];
+        const st = cardState(g);
+        const idxs = groupIdx(g).filter(i => terms[i]);
+        const head = terms[st.prime];
+        const inGroup = i => linkOf(terms[i].notes) !== null && !linkedElsewhere(terms[i], idxs);
+        head.notes = st.note.trim();
+        head.gender = st.gender || null;
+        for (const i of idxs) {
+            if (i === st.prime || linkedElsewhere(terms[i], idxs)) continue;
+            if (st.include.has(i)) terms[i].notes = `= ${trimmed(head.original)}`;
+            else if (inGroup(i)) terms[i].notes = '';     // unticked: no longer this person
+            if (findings[i]) findings[i] = findings[i].filter(x => !isHint(x));
+        }
+        markDirty();
+        renderRows();
+        toast(t('gloss.pcApplied', { name: trimmed(head.original) }), 'ok');
+    }
+
+    // Rows are addressed by index, so a row added or deleted in the table has
+    // to move the groups with it — the same reason findings are spliced.
+    function reindexPeople(map) {
+        people = people
+            .filter(g => map(g.prime) >= 0)
+            .map(g => ({ prime: map(g.prime), members: g.members.filter(m => map(m.index) >= 0).map(m => ({ ...m, index: map(m.index) })) }));
+        cards.clear();
+    }
+
+    tbody.addEventListener('change', (e) => {
+        const d = e.target.dataset;
+        const [gi, i] = String(d.pprime || d.pinc || d.pnote || '').split(':').map(Number);
+        if (d.pprime !== undefined) { const st = cardState(people[gi]); st.prime = i; st.include.add(i); }
+        else if (d.pinc !== undefined) { const st = cardState(people[gi]); if (e.target.checked) st.include.add(i); else st.include.delete(i); }
+        else if (d.pnote !== undefined) cardState(people[gi]).note = trimmed(terms[i].notes);
+        else if (d.pgender !== undefined) cardState(people[+d.pgender]).gender = e.target.value;
+        else return;
+        renderRows();
+    });
 
     // The review banner: when it was made and by which model, plus the
     // proposals that belong to no existing row — terms the book uses that the
@@ -1158,6 +1316,7 @@ async function renderGlossary(prefix) {
         });
         counts.unshift(null);
         findings.unshift([]);
+        reindexPeople(j => j + 1);
         review.additions.splice(+i, 1);
         markDirty();
         renderReview();
@@ -1201,6 +1360,15 @@ async function renderGlossary(prefix) {
     if (sortBox) sortBox.addEventListener('change', () => { rowSort = sortBox.value; renderRows(); });
 
     tbody.addEventListener('input', (e) => {
+        if (e.target.dataset.pnotebox !== undefined) {
+            // One line, like any note: it becomes one line of the cheat sheet.
+            const gi = +e.target.dataset.pnotebox;
+            const st = cardState(people[gi]);
+            st.note = e.target.value.replace(/[\r\n]+/g, ' ');
+            const len = tbody.querySelector(`[data-plen="${gi}"]`);
+            if (len) { len.textContent = `${st.note.length}/${noteLimit}`; len.classList.toggle('over', st.note.length > noteLimit); }
+            return;
+        }
         const tr = e.target.closest('tr');
         const f = e.target.dataset.f;
         if (!tr || !f) return;
@@ -1242,24 +1410,51 @@ async function renderGlossary(prefix) {
 
     // Enter would grow the field by a line that is about to be stripped anyway.
     tbody.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && e.target.dataset.f === 'notes') e.preventDefault();
+        if (e.key === 'Enter' && (e.target.dataset.f === 'notes' || e.target.dataset.pnotebox !== undefined)) e.preventDefault();
     });
 
     tbody.addEventListener('click', (e) => {
-        const { del, apply, dismiss, find, link } = e.target.dataset;
+        const { del, apply, dismiss, find, pjoin, pllm, papply, punlink } = e.target.dataset;
 
-        if (link !== undefined) {
-            const term = terms[+link];
-            const prime = e.target.dataset.prime;
-            const note = String(term.notes || '').trim();
-            // The clone's own note is replaced by the link and stops reaching the
-            // translator. Usually it is a thin echo of the prime's, but not always,
-            // so it is shown before it goes. Nothing is saved until Save.
-            if (note && !confirm(t('gloss.linkConfirm', { note, prime }))) return;
-            term.notes = `= ${prime}`;
-            findings[+link] = (findings[+link] || []).filter(x => !isHint(x));
+        if (papply !== undefined) { applyCard(+papply); return; }
+
+        if (pjoin !== undefined) {
+            // Free and immediate: every distinct note of the ticked forms, the
+            // chosen one first. Usually too long, but a start to cut down from.
+            const g = people[+pjoin];
+            const st = cardState(g);
+            const notes = [st.note, ...groupIdx(g).filter(i => st.include.has(i) || i === st.prime)
+                .map(i => (linkOf(terms[i].notes) === null ? trimmed(terms[i].notes) : ''))];
+            st.note = [...new Set(notes.filter(Boolean))].join('; ');
+            renderRows();
+            return;
+        }
+
+        if (pllm !== undefined) {
+            const g = people[+pllm];
+            const st = cardState(g);
+            const entries = groupIdx(g).filter(i => st.include.has(i) || i === st.prime)
+                .map(i => ({ original: terms[i].original, translation: terms[i].translation,
+                    notes: linkOf(terms[i].notes) === null ? terms[i].notes : '' }))
+                .filter(x => trimmed(x.notes));
+            if (!entries.length) { toast(t('gloss.pcNoNotes'), 'error'); return; }
+            e.target.disabled = true;
+            e.target.textContent = t('gloss.pcLlmBusy');
+            api(`/api/projects/${encodeURIComponent(prefix)}/glossary/merge-note`, { method: 'POST', body: { entries } })
+                .then(r => { st.note = r.note; })
+                .catch(err => toast(t('gloss.pcLlmError', { msg: err.message }), 'error'))
+                .finally(() => renderRows());
+            return;
+        }
+
+        if (punlink !== undefined) {
+            const g = people[+punlink];
+            const idxs = groupIdx(g);
+            for (const i of idxs) {
+                if (linkOf(terms[i].notes) !== null && !linkedElsewhere(terms[i], idxs)) terms[i].notes = '';
+            }
+            cards.delete(trimmed(terms[g.prime].original));
             markDirty();
-            renderFilter();
             renderRows();
             return;
         }
@@ -1271,6 +1466,7 @@ async function renderGlossary(prefix) {
             // it — otherwise every marker below a deleted row points one entry
             // too far down.
             findings.splice(+del, 1);
+            reindexPeople(i => (i === +del ? -1 : i > +del ? i - 1 : i));
             markDirty();
             renderFilter();
             renderRows();
@@ -1372,6 +1568,8 @@ async function renderGlossary(prefix) {
     document.getElementById('g-add').addEventListener('click', () => {
         terms.unshift({ original: '', translation: '', type: 'name', gender: null, notes: '' });
         counts.unshift(null);
+        findings.unshift([]);
+        reindexPeople(j => j + 1);
         markDirty();
         renderRows();
         tbody.querySelector('input')?.focus();
@@ -1392,6 +1590,8 @@ async function renderGlossary(prefix) {
                 terms.length = 0; terms.push(...fresh.terms);
                 counts.length = 0; counts.push(...(fresh.counts || []));
                 findings.length = 0; findings.push(...(fresh.findings || []));
+                people = fresh.people || [];
+                cards.clear();
                 // Findings resolve against the saved glossary, so the ones just
                 // acted on drop out here and the rest stay outstanding.
                 review = fresh.review || null;

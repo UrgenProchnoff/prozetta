@@ -96,13 +96,26 @@ matches, and the prime is not a clone itself. Otherwise the entry works as an
 ordinary one. Do not link a surname several people share (Rex and Candy
 Redman) to any of them.
 
-A link can be typed by hand, or picked from the **"could be linked"** filter:
-it lists names that, without forms of address (Ms, Dr and so on), are one word,
-and that word appears in exactly one fuller name. "Johnson" and "Ms Johnson"
-will be offered to "Maria Johnson"; "Redman", beside two Redmans, will not. The
-Link button replaces the note with the link, and if there was a note it shows it
-first so anything important can be moved to the prime. Renaming the prime
-updates its clones' links by itself.
+A link can be typed by hand, but the **"people: forms of names"** filter is
+easier. It shows one card per person: the full name and every form that looks
+like it — names that, without forms of address (Ms, Dr and so on), are one word
+found in that full name. On a card:
+
+- **prime** — which entry speaks for the person (the fullest one by default);
+- **clone** — a tick for whether the form belongs to the group. A word found in
+  several full names (Deborah beside Deborah One and Deborah Two) appears in
+  each such group unticked and marked "?": the call is yours;
+- **notes** — pick the best one and it goes into the shared-note field, which
+  you can edit. The counter shows its length: the translator gets at most 120
+  characters. "Join notes" strings together the notes of the ticked forms;
+  "Combine with LLM" asks the main model to condense them into one (only names
+  and notes are sent, not the book);
+- **gender** — one per group, kept on the prime. A ⚠ marks forms whose gender or
+  translation differs from the chosen one.
+
+"Apply" writes the choice into the glossary rows, "Save" writes it to disk.
+"Unlink" removes the group's links. Renaming the prime in the table updates its
+clones' links by itself.
 
 The source-text check watches the links: it marks a link that did not take
 effect, and a clone translated differently from its prime. If the two share a

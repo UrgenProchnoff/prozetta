@@ -6,6 +6,8 @@ import { jobManager } from './jobs.js';
 import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER } from '../src_v4/core/llm_client.js';
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
+import { personGroups, MAX_NOTE_CHARS } from '../src_v4/core/glossary_links.js';
+import { getPrompts } from '../src_v4/prompts.js';
 import { outstandingFindings as glossaryOutstanding } from '../src_v4/core/glossary_review.js';
 import { projectPaths, projectDir, ensureProjectDir, listProjects, PROJECTS_DIR, exportFileName } from '../src_v4/core/paths.js';
 import { handEdited } from '../src_v4/core/passport.js';
@@ -17,7 +19,7 @@ import { countTokens } from '../src_v4/core/tokenizer.js';
 import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/stages/05_translation_review.js';
 import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages/04_glossary_review.js';
 import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_passport.js';
-import { extractJson, describeJsonError } from '../src_v4/utils/parsers.js';
+import { extractJson, describeJsonError, extractFromTags } from '../src_v4/utils/parsers.js';
 import { writeFileAtomic } from '../src_v4/utils/atomic_write.js';
 import { outstandingFindings as reviewOutstanding, findingKey, adviceQueue } from '../src_v4/core/translation_review.js';
 import { locateQuote } from '../src_v4/core/quoted_spans.js';
@@ -1468,6 +1470,10 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
         // and put the widest disagreement first. The warning before the translation
         // promised this list opens here, and for a while it did not.
         forms: formGroups(terms),
+        // Forms of one name gathered around a prime, for the editor's people
+        // view — see core/glossary_links.js. Indices into `terms`, like forms.
+        people: personGroups(terms),
+        noteLimit: MAX_NOTE_CHARS,
         review: reviewMeta,
         // The editor offers to run the review itself, and both of these decide
         // whether it may: a stage already running, or an estimate that will not
@@ -1517,6 +1523,54 @@ app.put('/api/projects/:prefix/glossary', (req, res) => {
     if (!Array.isArray(terms)) return res.status(400).json({ error: 'Expected an array of terms' });
     writeJsonAtomic(glossaryPath(prefix), terms);
     res.json({ ok: true, count: terms.length });
+});
+
+// One note for the forms of one name, written by the regular model from the
+// notes the forms already have. Only the names and notes are sent, never the
+// book: the notes are what is being condensed, and a call this size should cost
+// nothing worth mentioning. The answer only fills the editor's field — the
+// person reads it and decides.
+app.post('/api/projects/:prefix/glossary/merge-note', async (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    const entries = (Array.isArray(req.body?.entries) ? req.body.entries : [])
+        .slice(0, 30)
+        .map(e => ({
+            original: String(e?.original || '').slice(0, 120),
+            translation: String(e?.translation || '').slice(0, 120),
+            notes: String(e?.notes || '').slice(0, 1000),
+        }))
+        .filter(e => e.notes.trim());
+    if (!entries.length) return res.status(400).json({ error: 'No notes to combine' });
+
+    let cfg;
+    try { cfg = await loadEffectiveConfig(); } catch (e) { return res.status(500).json({ error: e.message }); }
+    const provider = cfg.activeProvider;
+    const conf = cfg[PROVIDER_CONFIG_KEY[provider]];
+    if (!conf) return res.status(400).json({ error: `Invalid provider: ${provider}` });
+
+    let targetLang = cfg.translation?.targetLanguage;
+    try { targetLang = readJson(statePath(prefix)).metadata?.targetLanguage || targetLang; } catch { /* no state yet */ }
+    const prompts = getPrompts(cfg.translation?.promptLang);
+
+    try {
+        const client = createRawClient(provider, conf);
+        const result = await Promise.race([
+            client.invoke([
+                { role: 'system', content: prompts.glossaryNote.system(targetLang, MAX_NOTE_CHARS) },
+                { role: 'user', content: prompts.glossaryNote.user(entries) },
+            ]),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 180000)),
+        ]);
+        const content = result?.content;
+        const text = typeof content === 'string' ? content
+            : Array.isArray(content) ? content.map(p => p?.text || '').join('') : '';
+        const note = (extractFromTags(text, 'note') ?? text).replace(/\s+/g, ' ').trim();
+        if (!note) return res.status(502).json({ error: 'The model returned an empty note' });
+        res.json({ note, model: conf.modelName });
+    } catch (e) {
+        res.status(502).json({ error: e.message || String(e) });
+    }
 });
 
 // --- API: jobs (run pipeline stages) ---

@@ -24,6 +24,8 @@ const userBuilders = {
 ${bookText}
 </book>`,
     consolidation: (items) => JSON.stringify(items),
+    // Заметки форм одного имени для редактора глоссария (src_gui/server.js).
+    glossaryNote: (entries) => JSON.stringify(entries, null, 1),
     // Ревизия глоссария книжной моделью: весь текст плюс весь глоссарий с
     // посчитанными по тексту фактами (см. core/glossary_review.js).
     glossaryReview: (bookText, entries) =>
@@ -432,6 +434,20 @@ ${withOriginal ? `
         ]
         \`\`\``,
         user: userBuilders.consolidation,
+    },
+
+    // --- Общая заметка для форм одного имени (редактор глоссария) ---
+    glossaryNote: {
+        system: (targetLang, limit) => `
+        Ниже записи глоссария: разные формы имени одного персонажа и их заметки.
+        Заметка уходит переводчику на ${targetLang} вместе с именем, чтобы он знал, кто это.
+
+        Сведи заметки в одну на ${targetLang}, не длиннее ${limit} символов.
+        Оставь то, что помогает понять, кто это: роль, связи, важные факты.
+        Не добавляй того, чего нет в заметках. Не повторяй само имя.
+
+        Ответ - только заметка в тегах: <note>...</note>`,
+        user: userBuilders.glossaryNote,
     },
 
     // --- Перевод: черновик (translation_loop.js) ---
@@ -883,6 +899,20 @@ ${withOriginal ? `
         ]
         \`\`\``,
         user: userBuilders.consolidation,
+    },
+
+    // --- One note for the forms of one name (glossary editor) ---
+    glossaryNote: {
+        system: (targetLang, limit) => `
+        Below are glossary entries: different forms of one character's name, with their notes.
+        The note goes to the translator into ${targetLang} along with the name, so they know who it is.
+
+        Combine the notes into one, in ${targetLang}, no longer than ${limit} characters.
+        Keep what tells who this is: role, relations, key facts.
+        Add nothing the notes do not say. Do not repeat the name itself.
+
+        Answer with the note only, in tags: <note>...</note>`,
+        user: userBuilders.glossaryNote,
     },
 
     // --- Translation: draft (translation_loop.js) ---

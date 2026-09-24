@@ -1137,6 +1137,30 @@ table.glossary .del { text-align: center; }
 .rv-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .rv-acts button { font-size: 12px; padding: 3px 10px; }
 
+/* People: one card per person, the forms of a name decided together. */
+.glossary tr.pc-row > td { padding: 8px 0 12px; border-bottom: none; }
+.pc { border: 1px solid var(--border); border-left: 3px solid var(--blue); border-radius: 6px; background: var(--panel2); padding: 8px 12px 10px; }
+.pc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pc-table th { text-align: left; font-weight: normal; color: var(--muted); font-size: 12px; padding: 2px 6px; }
+.pc-table td { padding: 4px 6px; vertical-align: top; border-top: 1px solid var(--border); }
+.pc-table td:nth-child(-n+2), .pc-table th:nth-child(-n+2) { width: 44px; text-align: center; }
+.pc-table tr.pc-off td:nth-child(n+3) { opacity: .45; }
+/* The table's own rule stretches every input and select to the cell; here the
+   radios, ticks and the gender list keep their natural size. */
+table.glossary .pc input[type="radio"], table.glossary .pc input[type="checkbox"], table.glossary .pc select { width: auto; }
+.pc-pick { cursor: pointer; display: flex; gap: 6px; align-items: baseline; }
+.pc-acts label { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.pc-muted { color: var(--muted); }
+.pc-tag { color: var(--muted); font-size: 11px; border: 1px solid var(--border); border-radius: 9px; padding: 0 6px; cursor: help; }
+.pc-warn { color: var(--yellow); cursor: help; }
+.pc-note { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 6px; }
+.pc-note textarea { flex: 1; resize: vertical; }
+.pc-len { font-size: 12px; color: var(--muted); white-space: nowrap; padding-top: 6px; }
+.pc-len.over { color: var(--red); }
+.pc-acts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pc-acts button, .pc-acts select { font-size: 12px; padding: 3px 10px; }
+.pc-acts .spacer { flex: 1; }
+
 /* Passport: the point-of-view map as a strip. The question a person asks of it
    is "does the alternation look right and where are the gaps", which a bar
    answers at a glance and a table of indices does not. */

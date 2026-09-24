@@ -26,6 +26,11 @@
  * ordinary note.
  */
 
+// A note long enough to be a paragraph is a dossier, not a cheat-sheet entry:
+// the cheat sheet cuts a note at this length. Measured on real glossaries:
+// median note 32 characters, 90th percentile 51.
+export const MAX_NOTE_CHARS = 120;
+
 const LINK_RE = /^=\s*(\S[\s\S]*?)\s*$/;
 
 /** The text a note links to, or null when the note is not a link. */
@@ -74,4 +79,65 @@ export function resolveLinks(glossary) {
     });
 
     return { prime, broken };
+}
+
+// Forms of address, which make "Ms Johnson" the same surname as "Johnson".
+// Lower-case, without the full stop. English only, like the article allowance
+// in the matcher: that is the source language every book so far has had.
+const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'mx', 'dr', 'doctor', 'prof', 'professor',
+    'sir', 'dame', 'lady', 'lord', 'madam', 'madame', 'captain', 'capt', 'detective',
+    'sergeant', 'sgt', 'inspector', 'officer', 'agent', 'uncle', 'aunt']);
+
+const words = s => String(s || '').toLowerCase().split(/[\s\-–—.,]+/u).filter(Boolean);
+
+/** The words of a name that are not forms of address. */
+function coreWords(original) {
+    return words(original).filter(w => !TITLES.has(w));
+}
+
+/** Do two strings share a whole word, case aside? */
+export function shareWord(a, b) {
+    const wb = words(b);
+    return words(a).some(w => wb.includes(w));
+}
+
+/**
+ * The people of a glossary as the editor groups them: a prime and its forms.
+ *
+ * A group gathers the clones already linked to an entry and the forms that
+ * look like it: names that, without forms of address, are one word found in a
+ * fuller name. When exactly one fuller name has that word the form is
+ * `suggested`; when several do — "Redman" beside Rex and Candy Redman — it is
+ * `ambiguous` and appears in each of their groups, so the choice is on screen
+ * and nothing is decided for the person.
+ *
+ * @returns {Array<{prime: number, members: Array<{index: number,
+ *            state: 'linked'|'suggested'|'ambiguous'}>}>}
+ */
+export function personGroups(glossary) {
+    const terms = Array.isArray(glossary) ? glossary : [];
+    const { prime } = resolveLinks(terms);
+    const isName = i => terms[i]?.type === 'name' && String(terms[i].original || '').trim();
+    const primes = new Set(prime.filter(p => p != null));
+
+    const groups = new Map();
+    const add = (p, index, state) => {
+        if (!groups.has(p)) groups.set(p, []);
+        groups.get(p).push({ index, state });
+    };
+    prime.forEach((p, i) => { if (p != null) add(p, i, 'linked'); });
+
+    const core = terms.map(t => coreWords(t?.original));
+    terms.forEach((term, i) => {
+        if (!isName(i) || prime[i] != null || primes.has(i)) return;
+        if (linkTarget(term.notes) !== null) return;   // a broken link is reported as such
+        if (core[i].length !== 1) return;
+        const fuller = [];
+        terms.forEach((_, j) => {
+            if (j !== i && isName(j) && prime[j] == null && core[j].length >= 2 && core[j].includes(core[i][0])) fuller.push(j);
+        });
+        for (const j of fuller) add(j, i, fuller.length === 1 ? 'suggested' : 'ambiguous');
+    });
+
+    return [...groups].sort((a, b) => a[0] - b[0]).map(([p, members]) => ({ prime: p, members }));
 }

@@ -4,7 +4,7 @@ import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
 import { entryRegex } from '../core/text_stats.js';
-import { resolveLinks, linkTarget } from '../core/glossary_links.js';
+import { resolveLinks, linkTarget, MAX_NOTE_CHARS } from '../core/glossary_links.js';
 import { countTokens } from '../core/tokenizer.js';
 import { loadPassport, buildStyleBlock, isEmptyPassport } from '../core/passport.js';
 import { adviceForChunk } from '../core/translation_review.js';
@@ -465,9 +465,6 @@ function cachedTermRegex(term) {
     return re;
 }
 
-// A note long enough to be a paragraph is a dossier, not a cheat-sheet entry.
-// Measured on real glossaries: median note 32 characters, 90th percentile 51.
-const MAX_NOTE_CHARS = 120;
 
 /**
  * Names whose gender the glossary states two ways.
