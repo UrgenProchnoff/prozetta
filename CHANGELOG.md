@@ -11,6 +11,13 @@ predates the practice and carries none.
 
 **2026-09-24**
 
+- `1cb5ddb` — The glossary review is told how entries reach the translator: by
+  whole word, in any case, with no inflected forms or variant spellings. Without
+  it the model kept proposing merges like "wards" into "ward" or "Mr Malka" into
+  "Avram", which would take those spellings out of the translator's hints; 23
+  were thrown out across four books. It is also told that only the first 120
+  characters of a note reach the translator, not the whole note.
+
 - `e4e0299` — The glossary review now grades the glossary: a score from 1 to 10
   and a sentence or two on why, shown above the findings in the glossary editor
   and on the monitor. Both the glossary review and the translation review also
