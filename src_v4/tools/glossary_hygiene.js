@@ -26,7 +26,7 @@ import { fileURLToPath } from 'url';
 import { ProjectState } from '../core/state_manager.js';
 import { writeFileAtomic } from '../utils/atomic_write.js';
 import { countOccurrences, genderFromPronouns } from '../core/text_stats.js';
-import { resolveLinks } from '../core/glossary_links.js';
+import { resolveLinks, linkTarget } from '../core/glossary_links.js';
 
 function normalizeGender(g) {
     const s = String(g || '').trim().toLowerCase();
@@ -144,6 +144,26 @@ export function analyzeGlossary(glossary, sourceText) {
         if (!words(e.term.translation).some(w => primeWords.includes(w))) inconsistentClones.push({ clone: e, prime });
     }
 
+    // --- forms that could be linked to the person they name ---
+    // "Johnson" and "Ms Johnson" are both one surname, give or take a form of
+    // address; if exactly one fuller name carries that surname, they are almost
+    // certainly that person, and the editor offers to link them. Two fuller
+    // names — Rex and Candy Redman — mean a family, and nothing is offered:
+    // picking one would be a guess, and a wrong link hands one person's dossier
+    // to another. An offer, never an edit: the button is the person's call.
+    const core = e => words(e.original).filter(w => !TITLES.has(w.replace(/\.$/, '')));
+    const linkHints = [];
+    const hasClones = new Set(links.prime.filter(p => p != null));
+    for (const e of entries) {
+        if (!isName(e) || isClone(e) || hasClones.has(e.index)) continue;
+        if (linkTarget(e.term.notes) !== null) continue;   // a broken link is reported as such
+        const own = core(e);
+        if (own.length !== 1) continue;
+        const fuller = entries.filter(o => o !== e && isName(o) && !isClone(o)
+            && core(o).length >= 2 && core(o).includes(own[0]));
+        if (fuller.length === 1) linkHints.push({ entry: e, prime: fuller[0] });
+    }
+
     // Pronoun evidence is a hint for a human, never a verdict: it is solid on
     // frequently mentioned bare names and unreliable on titled forms
     // ("Ms. Barnaby") and place names ("Portobello"), where the pronouns it
@@ -171,12 +191,20 @@ export function analyzeGlossary(glossary, sourceText) {
         nested,
         inconsistentNested,
         inconsistentClones,
+        linkHints,
         brokenLinks: links.broken.map(b => ({ ...b, entry: entries[b.index] })),
         genderConflicts,
         missingGender,
         wrongGender,
     };
 }
+
+// Forms of address, which make "Ms Johnson" the same surname as "Johnson".
+// Lower-case, without the full stop. English only, like the article allowance
+// in the matcher: that is the source language every book so far has had.
+const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'mx', 'dr', 'doctor', 'prof', 'professor',
+    'sir', 'dame', 'lady', 'lord', 'madam', 'madame', 'captain', 'capt', 'detective',
+    'sergeant', 'sgt', 'inspector', 'officer', 'agent', 'uncle', 'aunt']);
 
 const LINK_PROBLEM = {
     notName: 'клоном может быть только запись с типом «имя»',
@@ -227,6 +255,9 @@ export function glossaryFindings(glossary, sourceText) {
         const detail = `клон «${clone.original}» → «${clone.term.translation}», но главная «${prime.original}» → «${prime.term.translation}»`;
         push(clone.index, 'inconsistent', detail);
         push(prime.index, 'inconsistent', detail);
+    }
+    for (const { entry, prime } of a.linkHints) {
+        findings[entry.index]?.push({ kind: 'linkHint', prime: prime.original, detail: `похоже на форму имени «${prime.original}» — можно связать` });
     }
     for (const b of a.brokenLinks) push(b.index, 'badLink', `ссылка «= ${b.target}» не работает: ${LINK_PROBLEM[b.reason]}`);
     for (const { outer, inner } of a.genderConflicts) {

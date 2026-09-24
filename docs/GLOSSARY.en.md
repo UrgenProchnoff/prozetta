@@ -96,6 +96,14 @@ matches, and the prime is not a clone itself. Otherwise the entry works as an
 ordinary one. Do not link a surname several people share (Rex and Candy
 Redman) to any of them.
 
+A link can be typed by hand, or picked from the **"could be linked"** filter:
+it lists names that, without forms of address (Ms, Dr and so on), are one word,
+and that word appears in exactly one fuller name. "Johnson" and "Ms Johnson"
+will be offered to "Maria Johnson"; "Redman", beside two Redmans, will not. The
+Link button replaces the note with the link, and if there was a note it shows it
+first so anything important can be moved to the prime. Renaming the prime
+updates its clones' links by itself.
+
 The source-text check watches the links: it marks a link that did not take
 effect, and a clone translated differently from its prime. If the two share a
 word in the original, "Johnson" and "Maria Johnson", they must share a word in

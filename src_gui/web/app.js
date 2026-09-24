@@ -864,15 +864,21 @@ async function renderGlossary(prefix) {
     // that needs fixing.
     const isPolicy = f => f.kind === 'untranslated';
     const isModel = f => f.kind === 'model';
-    const countDefects = () => findings.filter(f => f && f.some(x => !isPolicy(x) && !isModel(x))).length;
+    // An offer to link a form of a name to its fuller entry. Not a defect —
+    // leaving "Johnson" unlinked translates exactly as before — so it has its
+    // own filter and stays out of the defect count.
+    const isHint = f => f.kind === 'linkHint';
+    const isDefect = f => !isPolicy(f) && !isModel(f) && !isHint(f);
+    const countDefects = () => findings.filter(f => f && f.some(isDefect)).length;
     const countPolicy = () => findings.filter(f => f && f.length && f.every(isPolicy)).length;
     const countModel = () => findings.filter(f => f && f.some(isModel)).length;
+    const countHints = () => findings.filter(f => f && f.some(isHint)).length;
     // Counted from what is on screen rather than taken from the server, so that
     // applying or dismissing the last finding frees the "ask" button at once
     // instead of after a round trip.
     const countOutstanding = () =>
         findings.reduce((n, f) => n + (f || []).filter(isModel).length, 0) + (review?.additions?.length || 0);
-    let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated' | 'model' | 'forms'
+    let rowFilter = 'all';   // 'all' | 'defects' | 'untranslated' | 'model' | 'forms' | 'links'
     // Display order only. The file keeps the order somebody edited it into, and
     // saving writes `terms`, which this never touches — rows carry their own
     // index, so an edit lands on the entry it was made on however they are sorted.
@@ -958,20 +964,25 @@ async function renderGlossary(prefix) {
         if (manual) manual.classList.toggle('primary', !ok && !asking);
     }
 
+    // The same syntax src_v4/core/glossary_links.js reads: the whole note is
+    // "= <prime>".
+    const linkOf = notes => { const m = /^=\s*(\S[\s\S]*?)\s*$/.exec(String(notes || '').trim()); return m ? m[1] : null; };
+
     // The filter is rebuilt rather than written once: after a save the server
     // re-analyses the glossary, and the counts here have to follow — otherwise
     // the only way to see the effect of an edit is F5.
     function renderFilter() {
         const box = document.getElementById('g-issues');
         if (!box) return;
-        const defects = countDefects(), policy = countPolicy(), model = countModel();
+        const defects = countDefects(), policy = countPolicy(), model = countModel(), hints = countHints();
         const formCount = new Set(forms.filter(Boolean).map(f => f.group)).size;
-        box.hidden = !(defects || policy || model || formCount);
+        box.hidden = !(defects || policy || model || formCount || hints);
         const keep = box.value || rowFilter;
         box.innerHTML = `<option value="all">${esc(t('gloss.filterAll'))}</option>`
             + (model ? `<option value="model">${esc(t('gloss.filterModel', { n: model }))}</option>` : '')
             + (defects ? `<option value="defects">${esc(t('gloss.filterDefects', { n: defects }))}</option>` : '')
             + (formCount ? `<option value="forms">${esc(t('gloss.filterForms', { n: formCount }))}</option>` : '')
+            + (hints ? `<option value="links">${esc(t('gloss.filterLinks', { n: hints }))}</option>` : '')
             + (policy ? `<option value="untranslated">${esc(t('gloss.filterUntranslated', { n: policy }))}</option>` : '');
         // A filter whose category just emptied falls back to showing everything.
         box.value = [...box.options].some(o => o.value === keep) ? keep : 'all';
@@ -985,8 +996,9 @@ async function renderGlossary(prefix) {
                 if (rowFilter === 'all') return true;
                 const f = findings[idx] || [];
                 if (rowFilter === 'model') return f.some(isModel);
-                if (rowFilter === 'defects') return f.some(x => !isPolicy(x) && !isModel(x));
+                if (rowFilter === 'defects') return f.some(isDefect);
                 if (rowFilter === 'forms') return !!forms[idx];
+                if (rowFilter === 'links') return f.some(isHint);
                 return f.some(isPolicy);
             })
             .filter(({ t }) => !q
@@ -1016,7 +1028,7 @@ async function renderGlossary(prefix) {
         tbody.innerHTML = rows.map(({ t: term, idx }) => {
             const cnt = counts[idx];
             const issues = findings[idx] || [];
-            const defects = issues.filter(i => !isPolicy(i));
+            const defects = issues.filter(i => !isPolicy(i) && !isHint(i));
             const worst = defects.some(i => i.kind === 'genderConflict' || i.kind === 'absent' || i.kind === 'inconsistent' || i.kind === 'badLink')
                 ? 'bad' : defects.length ? 'warn' : issues.length ? 'note' : '';
             const modelIssues = issues.filter(isModel);
@@ -1044,7 +1056,10 @@ async function renderGlossary(prefix) {
                 <td><div class="grow" data-val="${esc(term.notes)}"><textarea data-f="notes" rows="1">${esc(term.notes)}</textarea></div></td>
                 <td class="cnt ${cnt === 0 ? 'zero' : ''}">${cnt ?? ''}</td>
                 <td class="del"><button class="danger" data-del="${idx}" title="${esc(t('gloss.delTitle'))}">✕</button></td>
-            </tr>` + modelIssues.map((m, mi) => reviewRow(m, idx, mi)).join('');
+            </tr>` + modelIssues.map((m, mi) => reviewRow(m, idx, mi)).join('')
+                // Offers only under their own filter: shown on every page load
+                // they would nag about each surname someone chose to leave alone.
+                + (rowFilter === 'links' ? issues.filter(isHint).map(h => linkRow(h, idx)).join('') : '');
         }).join('');
 
         // Every path that changes a finding ends here, so the guard on the
@@ -1072,6 +1087,13 @@ async function renderGlossary(prefix) {
             <div class="rv-quote">${esc(m.quote)}</div>
             ${fix ? `<div class="rv-fix">${fix}</div>` : ''}
             <div class="rv-acts">${buttons.join(' ')}</div>
+        </td></tr>`;
+    }
+
+    function linkRow(h, idx) {
+        return `<tr class="rv-row"><td colspan="7">
+            <div class="rv-head">${esc(t('gloss.linkOffer', { prime: h.prime }))}</div>
+            <div class="rv-acts"><button data-link="${idx}" data-prime="${esc(h.prime)}">${esc(t('gloss.linkBtn'))}</button></div>
         </td></tr>`;
     }
 
@@ -1198,6 +1220,22 @@ async function renderGlossary(prefix) {
             e.target.parentElement.dataset.val = e.target.value;
         }
 
+        // A clone names its prime by the prime's original or translation, so
+        // renaming the prime would silently cut every clone loose. The links
+        // follow the edit keystroke by keystroke, on screen too.
+        if ((f === 'original' || f === 'translation') && term.type === 'name') {
+            const was = String(term[f] || '').trim();
+            const now = e.target.value.trim();
+            if (was && now && was !== now) {
+                terms.forEach((other, j) => {
+                    if (other === term || linkOf(other.notes) !== was) return;
+                    other.notes = `= ${now}`;
+                    const box = tbody.querySelector(`tr[data-idx="${j}"] textarea[data-f="notes"]`);
+                    if (box) { box.value = other.notes; box.parentElement.dataset.val = other.notes; }
+                });
+            }
+        }
+
         term[f] = f === 'gender' && e.target.value === '' ? null : e.target.value;
         markDirty();
     });
@@ -1208,7 +1246,23 @@ async function renderGlossary(prefix) {
     });
 
     tbody.addEventListener('click', (e) => {
-        const { del, apply, dismiss, find } = e.target.dataset;
+        const { del, apply, dismiss, find, link } = e.target.dataset;
+
+        if (link !== undefined) {
+            const term = terms[+link];
+            const prime = e.target.dataset.prime;
+            const note = String(term.notes || '').trim();
+            // The clone's own note is replaced by the link and stops reaching the
+            // translator. Usually it is a thin echo of the prime's, but not always,
+            // so it is shown before it goes. Nothing is saved until Save.
+            if (note && !confirm(t('gloss.linkConfirm', { note, prime }))) return;
+            term.notes = `= ${prime}`;
+            findings[+link] = (findings[+link] || []).filter(x => !isHint(x));
+            markDirty();
+            renderFilter();
+            renderRows();
+            return;
+        }
 
         if (del !== undefined) {
             terms.splice(+del, 1);
