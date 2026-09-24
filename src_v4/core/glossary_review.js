@@ -179,10 +179,12 @@ export function verifyFindings(raw, glossary, bookText) {
             // plural with no note at all — measured on Morphotrophic, 4 chunks for
             // Flourishers and 72 for cytes, out of 169.
             //
-            // The model cannot know this: it reasons as a lexicographer, where
-            // listing a word twice is untidy, and it is right about tidiness and
-            // wrong about consequences. What it proposes is checkable, so it is
-            // checked. The article case passes the same test and survives it —
+            // The model reasons as a lexicographer, where listing a word twice is
+            // untidy, and it is right about tidiness and wrong about consequences.
+            // The prompt now tells it how entries are matched — before, it had no
+            // way to know, and 23 merges across four books were dropped here — but
+            // being told is not the same as complying. What it proposes is
+            // checkable, so it is still checked. The article case passes the same test and survives it —
             // "exchange" does match inside "the exchange", so deleting the longer
             // entry costs nothing.
             if (losesCoverage(target.term.original, into.term.original, bookText)) {

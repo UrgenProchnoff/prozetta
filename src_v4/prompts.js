@@ -205,9 +205,20 @@ const ru = {
         Подстановка регистронезависимая, поэтому запись "NICE" при occurrences 20 и
         exactCase 1 подставляется на 19 обычных слов "nice".
 
-        Поле "notes" - это ДОСЬЕ, которое дословно уезжает в подсказку переводчику на
-        каждом фрагменте с этим словом. Оно должно быть телеграфным и по делу: кто это,
-        род занятий, звание, связи. Не «главный герой» - таких в книге не бывает шесть.
+        Как запись доходит до переводчика: программа ищет её "original" в тексте
+        фрагмента целым словом, без учёта регистра; пробел в записи совпадает с любым
+        пробелом или переносом строки. Больше ничего не сопоставляется - ни словоформы,
+        ни варианты написания: "Flourisher" не находит "Flourishers", "mind-space" -
+        "mindspace", "Mr Malka" - просто "Malka". У каждого написания, которым
+        пользуется книга, должна быть своя запись. Слияние удаляет написание из
+        подстановки, поэтому сливать можно, только если оставшаяся запись находится
+        везде, где находилась удаляемая: "The Exchange" в "exchange" можно, "wards" в
+        "ward" нельзя.
+
+        Поле "notes" - это ДОСЬЕ, которое уезжает в подсказку переводчику - первые 120
+        символов - на каждом фрагменте с этим словом. Оно должно быть телеграфным и по
+        делу: кто это, род занятий, звание, связи. Не «главный герой» - таких в книге
+        не бывает шесть.
 
         Что искать, по убыванию вреда:
         1. Досье, которое неверно или бессодержательно. Это самое вредное: оно
@@ -666,10 +677,19 @@ const en = {
         case-insensitive, so an entry "NICE" with occurrences 20 and exactCase 1 is being
         substituted onto 19 ordinary uses of the word "nice".
 
-        The "notes" field is a DOSSIER, copied verbatim into the translator's cheat sheet
-        on every fragment that mentions the word. It has to be telegraphic and factual:
-        who this is, occupation, rank, connections. Not "the main character" — no book
-        has six of those.
+        How an entry reaches the translator: the program looks for its "original" in the
+        fragment's text as a whole word, ignoring case; a space in the entry matches any
+        space or line break. Nothing else is matched — no inflected forms, no variant
+        spellings: "Flourisher" does not find "Flourishers", "mind-space" does not find
+        "mindspace", "Mr Malka" does not find a bare "Malka". Every spelling the book
+        uses needs an entry of its own. A merge removes a spelling from matching, so
+        merge only when the surviving entry is found everywhere the removed one was:
+        "The Exchange" into "exchange" is fine, "wards" into "ward" is not.
+
+        The "notes" field is a DOSSIER, copied into the translator's cheat sheet — its
+        first 120 characters — on every fragment that mentions the word. It has to be
+        telegraphic and factual: who this is, occupation, rank, connections. Not "the
+        main character" — no book has six of those.
 
         What to look for, worst damage first:
         1. A dossier that is wrong or says nothing. This is the most harmful: it is
