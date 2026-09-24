@@ -30,6 +30,36 @@
  */
 
 import crypto from 'crypto';
+import fs from 'fs';
+
+/**
+ * The number the review about to be saved at `reviewPath` gets: one past the
+ * review it replaces.
+ *
+ * A review file is overwritten each time, so the count has to travel inside it.
+ * One written before the count existed says nothing about how many came before
+ * it, but it proves there was at least one — the next is the second. A file that
+ * cannot be read proves the same.
+ */
+export function nextReviewRound(reviewPath) {
+    if (!fs.existsSync(reviewPath)) return 1;
+    try {
+        const round = JSON.parse(fs.readFileSync(reviewPath, 'utf-8')).round;
+        return Number.isInteger(round) && round > 0 ? round + 1 : 2;
+    } catch {
+        return 2;
+    }
+}
+
+/**
+ * A model's overall grade, if it gave one that means anything: a number from 1
+ * to 10, kept as the model wrote it. Anything else is recorded as no grade
+ * rather than coerced into one.
+ */
+export function reviewScore(raw) {
+    const score = Number(raw?.score);
+    return Number.isFinite(score) && score >= 1 && score <= 10 ? score : null;
+}
 
 /** A short, stable name for the exact text a prompt was built from. */
 export function fingerprint(...parts) {

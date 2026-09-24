@@ -10,6 +10,12 @@ function esc(s) {
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// "#3 · " before a review's figures, or nothing for a review saved before they
+// were counted — its place in the sequence was never recorded.
+function roundPrefix(round) {
+    return round ? t('rev.round', { n: round }) + ' · ' : '';
+}
+
 async function api(url, opts = {}) {
     if (opts.body !== undefined) {
         opts.headers = { 'Content-Type': 'application/json', ...opts.headers };
@@ -1081,7 +1087,17 @@ async function renderGlossary(prefix) {
         const hidden = review.hidden
             ? ` ${esc(t('gloss.rvHidden', { n: review.hidden }))} <a href="#" id="rv-restore">${esc(t('gloss.rvRestore'))}</a>`
             : '';
-        const head = `<div class="rv-bar">${esc(t('gloss.rvBar', {
+        // Which review this is and what the model made of the glossary as a
+        // whole, above the findings. A review saved before either existed has
+        // neither, and the line is left out rather than filled with dashes.
+        const grade = [
+            review.round ? t('gloss.rvRound', { n: review.round }) : null,
+            review.score != null ? t('gloss.rvScore', { score: review.score }) : null,
+        ].filter(Boolean).join(' · ');
+        const gradeLine = grade
+            ? `<div class="rv-grade"><b>${esc(grade)}</b>${review.summary ? ` — ${esc(review.summary)}` : ''}</div>`
+            : '';
+        const head = gradeLine + `<div class="rv-bar">${esc(t('gloss.rvBar', {
             n: countOutstanding(), total: review.total, model: review.model || '—', when }))}${hidden}</div>`;
         const adds = (review.additions || []).map((a, i) => `
             <div class="rv-add">
@@ -1621,7 +1637,9 @@ async function renderMonitor(prefix) {
             // 150 chunks.
             { stage: 'glossary', name: t('mon.stepReview'),
               sub: s?.glossaryReview ? (s.glossaryReview.broken ? t('mon.reviewBroken')
-                    : t('mon.reviewSub', { n: s.glossaryReview.findings })) : '—',
+                    : roundPrefix(s.glossaryReview.round) + (s.glossaryReview.score != null
+                        ? t('mon.reviewSubScore', { n: s.glossaryReview.findings, score: s.glossaryReview.score })
+                        : t('mon.reviewSub', { n: s.glossaryReview.findings }))) : '—',
               done: !!(s?.glossaryReview && !s.glossaryReview.broken) },
             { stage: 'passport', name: t('mon.stepPassport'),
               sub: s?.passport ? (s.passport.broken ? t('mon.passportBroken')
@@ -1634,7 +1652,7 @@ async function renderMonitor(prefix) {
             // on disappears by itself when its quote is no longer in the book.
             { stage: 'review', name: t('mon.stepAssess'),
               sub: s?.translationReview ? (s.translationReview.broken ? t('mon.assessBroken')
-                    : t('mon.assessSub', { n: s.translationReview.open.length, score: s.translationReview.score ?? '—' })) : '—',
+                    : roundPrefix(s.translationReview.round) + t('mon.assessSub', { n: s.translationReview.open.length, score: s.translationReview.score ?? '—' })) : '—',
               done: !!(s?.translationReview && !s.translationReview.broken) },
             // Was permanently unfinished, which read as "you are never done". The
             // file on disk is the state, and whether the translation has moved
@@ -1902,6 +1920,7 @@ async function renderMonitor(prefix) {
 
         const queued = (summary.adviceQueue || []).reduce((n, q) => n + q.items.length, 0);
         const verdict = [
+            r.round ? t('rev.round', { n: r.round }) : null,
             r.score != null ? t('rev.score', { score: r.score }) : null,
             t('rev.counts', { open: r.open.length, done: r.done, hidden: r.hidden }),
             queued ? t('rev.queued', { n: queued }) : null,

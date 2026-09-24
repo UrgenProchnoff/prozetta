@@ -19,7 +19,7 @@ import { extractJson } from '../utils/parsers.js';
 import { writeFileAtomic } from '../utils/atomic_write.js';
 import { countTokens, chunkTokens } from '../core/tokenizer.js';
 import { glossaryEvidence, verifyFindings } from '../core/glossary_review.js';
-import { fingerprint, fingerprintMismatch } from '../core/book_call.js';
+import { fingerprint, fingerprintMismatch, nextReviewRound, reviewScore } from '../core/book_call.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
@@ -95,6 +95,8 @@ export function applyGlossaryReview(state, raw, meta) {
     if (stale) throw new Error(stale);
 
     const reviewPath = state.getGlossaryReviewPath();
+    // Counted before the file is replaced: the number lives inside it.
+    const round = nextReviewRound(reviewPath);
     let carriedDismissals = [];
     if (fs.existsSync(reviewPath)) {
         try {
@@ -117,6 +119,14 @@ export function applyGlossaryReview(state, raw, meta) {
         generatedAt: new Date().toISOString(),
         model: meta.model || null,
         source: meta.source || 'api',
+        // Which review of this glossary this is. The file is overwritten each
+        // time, so without it a sixth pass looked exactly like the first.
+        round,
+        // The model's overall grade and its reason in a sentence or two — an
+        // opinion from one call, stored as one. An answer in the older shape, a
+        // bare array of findings, carries neither and is still accepted.
+        score: reviewScore(raw),
+        summary: Array.isArray(raw) ? null : (String(raw?.summary || '').trim().slice(0, 1000) || null),
         glossarySize: glossary.length,
         returned: list.length,
         dismissed: carriedDismissals,
@@ -213,8 +223,11 @@ export async function runGlossaryReviewStage(state) {
 
     const { findings, rejected, review } = applied;
     const dropped = Object.values(rejected).reduce((a, b) => a + b, 0);
-    console.log(`[Review] ${review.returned} finding(s) returned, ${findings.length} passed verification` +
-        `${dropped ? `, ${dropped} dropped` : ''}.`);
+    console.log(`[Review] Glossary review #${review.round}: ${review.returned} finding(s) returned, ` +
+        `${findings.length} passed verification${dropped ? `, ${dropped} dropped` : ''}.`);
+    console.log(review.score != null
+        ? `[Review] The model grades the glossary ${review.score}/10${review.summary ? ` — ${review.summary}` : '.'}`
+        : `[Review] The model gave no overall grade.`);
     if (dropped) {
         const names = {
             malformed: 'malformed', unknownEntry: 'no such glossary entry', badQuote: 'quote not in the book',

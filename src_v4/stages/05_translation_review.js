@@ -24,7 +24,7 @@ import { writeFileAtomic } from '../utils/atomic_write.js';
 import { countTokens, chunkTokens } from '../core/tokenizer.js';
 import { verifyFindings } from '../core/translation_review.js';
 import { loadPassport, isEmptyPassport } from '../core/passport.js';
-import { fingerprint, fingerprintMismatch } from '../core/book_call.js';
+import { fingerprint, fingerprintMismatch, nextReviewRound, reviewScore } from '../core/book_call.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
 
@@ -169,6 +169,8 @@ export function applyTranslationReview(state, raw, meta) {
     // have to be carried across first. Keyed by what a finding says rather than
     // where it sat, so a model that repeats itself stays dismissed.
     const reviewPath = state.getTranslationReviewPath();
+    // Counted before the file is replaced: the number lives inside it.
+    const round = nextReviewRound(reviewPath);
     let carriedDismissals = [];
     let carriedHandled = [];
     if (fs.existsSync(reviewPath)) {
@@ -193,7 +195,6 @@ export function applyTranslationReview(state, raw, meta) {
             `Check that the whole answer was pasted, and that it is the answer to this book's prompt.`);
     }
 
-    const score = Number(raw?.score);
     const review = {
         generatedAt: new Date().toISOString(),
         model: meta.model || null,
@@ -201,6 +202,9 @@ export function applyTranslationReview(state, raw, meta) {
         // called, which is a lie about one a person carried by hand.
         source: meta.source || 'api',
         bilingual: !!meta.withOriginal,
+        // Which review of this translation this is — the file is overwritten
+        // each time, so the count has to travel inside it.
+        round,
         chunks: chunks.length,
         translated: chunks.filter(c => c.translation).length,
         returned: list.length,
@@ -208,7 +212,7 @@ export function applyTranslationReview(state, raw, meta) {
         // per-chunk reviewer's score has a median of 10 and never falls below 9,
         // so a number from a single call is not a metric and must not be shown as
         // though it were comparable between runs. The findings are.
-        score: Number.isFinite(score) ? score : null,
+        score: reviewScore(raw),
         // The prose around the JSON, when the JSON carries none. A model asked
         // for an overall verdict often writes it as text and puts only the
         // findings in the block; that verdict is what was asked for, and throwing
@@ -328,7 +332,7 @@ export async function runTranslationReviewStage(state) {
 
     const { findings, rejected, review } = applied;
     const dropped = Object.values(rejected).reduce((a, b) => a + b, 0);
-    console.log(`[Review] ${review.returned} finding(s) returned, ${findings.length} passed verification` +
+    console.log(`[Review] Translation review #${review.round}: ${review.returned} finding(s) returned, ${findings.length} passed verification` +
         `${dropped ? `, ${dropped} dropped` : ''}.`);
     if (dropped) {
         const names = {

@@ -24,8 +24,9 @@ finished answer but a draft worth reading through. The Glossary link at the top
 right opens it.
 
 **Glossary review** is one call for the whole book: the model reads the entire
-text and the entire list and says what is wrong with it. The line counts what it
-found: `59 findings`. Nothing is applied on its own.
+text and the entire list, says what is wrong with it, and grades the glossary as
+a whole. The line gives which review this is, what it found and the grade:
+`#2 · 59 findings, score 6`. Nothing is applied on its own.
 
 **Passport** holds the decisions that are made once for a whole book and cannot
 be made inside a single chunk: what person the narration is in, what tense, the
@@ -38,7 +39,9 @@ after drafting. Its line: `129/129`.
 
 **Translation review** is another whole-book call, this time over the finished
 text. It finds what cannot be seen from inside one chunk: a broken register,
-terms that disagree, a joke that went missing. Its line: `10 findings, score 7`.
+terms that disagree, a joke that went missing. Its line: `#2 · 10 findings, score
+7`. The number is which review this is; one made before reviews were counted has
+none.
 
 **Export** puts the chunks back together into a book. Its line says `built` or
 `stale` — stale meaning the text was edited after the file was assembled, so what
@@ -118,7 +121,7 @@ them in words.
 
 ## Translation review
 
-A folded section under the map. Its heading carries the verdict: `score 7/10 · 10
+A folded section under the map. Its heading carries the verdict: `#2 · score 7/10 · 10
 open, 35 closed by editing, 14 rejected · 7 queued`.
 
 Inside is the list of findings. Each one is **a decision, not a notification**:

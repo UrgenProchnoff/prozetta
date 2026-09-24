@@ -232,6 +232,9 @@ const ru = {
         подтверждающего места в книге нет - не выдумывай находку, её просто не должно
         быть.
 
+        Дай также общую оценку глоссария: балл от 1 до 10 и обоснование в одну-две
+        фразы - что в нём главное хорошее и главное плохое.
+
         Не перечисляй то, что в порядке. Начинай с самого вредного, не больше 80 находок.
 
         Рассуждай шаг за шагом.
@@ -239,39 +242,43 @@ const ru = {
 
         Пример ответа:
         \`\`\`json
-        [
-          {
-            "action": "edit",
-            "entry": "оригинал записи ровно как в глоссарии",
-            "issue": "note|translation|gender|surface|transliteration|latin|case|junk|missing",
-            "problem": "что именно не так - одной фразой",
-            "quote": "дословная цитата из книги",
-            "fix": { "translation": "…", "gender": "m|f|n", "type": "name|term", "notes": "…" }
-          },
-          {
-            "action": "add",
-            "entry": "",
-            "issue": "surface",
-            "problem": "книга зовёт её так, а записи нет",
-            "quote": "дословная цитата из книги",
-            "fix": { "original": "форма ИЗ КНИГИ", "translation": "…", "type": "name", "gender": "f", "notes": "…" }
-          },
-          {
-            "action": "merge",
-            "entry": "оригинал лишней записи",
-            "mergeInto": "оригинал записи, в которую сливать",
-            "issue": "transliteration",
-            "problem": "это один и тот же человек",
-            "quote": "дословная цитата из книги"
-          },
-          {
-            "action": "remove",
-            "entry": "оригинал записи",
-            "issue": "junk",
-            "problem": "обычное слово, а не термин",
-            "quote": "дословная цитата из книги"
-          }
-        ]
+        {
+          "score": 6,
+          "summary": "обоснование балла в одну-две фразы",
+          "findings": [
+            {
+              "action": "edit",
+              "entry": "оригинал записи ровно как в глоссарии",
+              "issue": "note|translation|gender|surface|transliteration|latin|case|junk|missing",
+              "problem": "что именно не так - одной фразой",
+              "quote": "дословная цитата из книги",
+              "fix": { "translation": "…", "gender": "m|f|n", "type": "name|term", "notes": "…" }
+            },
+            {
+              "action": "add",
+              "entry": "",
+              "issue": "surface",
+              "problem": "книга зовёт её так, а записи нет",
+              "quote": "дословная цитата из книги",
+              "fix": { "original": "форма ИЗ КНИГИ", "translation": "…", "type": "name", "gender": "f", "notes": "…" }
+            },
+            {
+              "action": "merge",
+              "entry": "оригинал лишней записи",
+              "mergeInto": "оригинал записи, в которую сливать",
+              "issue": "transliteration",
+              "problem": "это один и тот же человек",
+              "quote": "дословная цитата из книги"
+            },
+            {
+              "action": "remove",
+              "entry": "оригинал записи",
+              "issue": "junk",
+              "problem": "обычное слово, а не термин",
+              "quote": "дословная цитата из книги"
+            }
+          ]
+        }
         \`\`\``,
         user: userBuilders.glossaryReview,
     },
@@ -687,6 +694,9 @@ const en = {
         holds no passage that supports the claim, do not invent the finding — it simply
         should not exist.
 
+        Also give an overall grade for the glossary: a score from 1 to 10 and a reason
+        in one or two sentences — the main thing right with it and the main thing wrong.
+
         Do not list what is fine. Start with the most harmful, at most 80 findings.
 
         Think step by step.
@@ -694,39 +704,43 @@ const en = {
 
         Example answer:
         \`\`\`json
-        [
-          {
-            "action": "edit",
-            "entry": "the original exactly as it appears in the glossary",
-            "issue": "note|translation|gender|surface|transliteration|latin|case|junk|missing",
-            "problem": "what exactly is wrong — one phrase",
-            "quote": "verbatim quotation from the book",
-            "fix": { "translation": "…", "gender": "m|f|n", "type": "name|term", "notes": "…" }
-          },
-          {
-            "action": "add",
-            "entry": "",
-            "issue": "surface",
-            "problem": "the book calls her this, and there is no entry",
-            "quote": "verbatim quotation from the book",
-            "fix": { "original": "the form FROM THE BOOK", "translation": "…", "type": "name", "gender": "f", "notes": "…" }
-          },
-          {
-            "action": "merge",
-            "entry": "the original of the redundant entry",
-            "mergeInto": "the original of the entry to merge into",
-            "issue": "transliteration",
-            "problem": "this is the same person",
-            "quote": "verbatim quotation from the book"
-          },
-          {
-            "action": "remove",
-            "entry": "the original of the entry",
-            "issue": "junk",
-            "problem": "an ordinary word, not a term",
-            "quote": "verbatim quotation from the book"
-          }
-        ]
+        {
+          "score": 6,
+          "summary": "the reason for the score in one or two sentences",
+          "findings": [
+            {
+              "action": "edit",
+              "entry": "the original exactly as it appears in the glossary",
+              "issue": "note|translation|gender|surface|transliteration|latin|case|junk|missing",
+              "problem": "what exactly is wrong — one phrase",
+              "quote": "verbatim quotation from the book",
+              "fix": { "translation": "…", "gender": "m|f|n", "type": "name|term", "notes": "…" }
+            },
+            {
+              "action": "add",
+              "entry": "",
+              "issue": "surface",
+              "problem": "the book calls her this, and there is no entry",
+              "quote": "verbatim quotation from the book",
+              "fix": { "original": "the form FROM THE BOOK", "translation": "…", "type": "name", "gender": "f", "notes": "…" }
+            },
+            {
+              "action": "merge",
+              "entry": "the original of the redundant entry",
+              "mergeInto": "the original of the entry to merge into",
+              "issue": "transliteration",
+              "problem": "this is the same person",
+              "quote": "verbatim quotation from the book"
+            },
+            {
+              "action": "remove",
+              "entry": "the original of the entry",
+              "issue": "junk",
+              "problem": "an ordinary word, not a term",
+              "quote": "verbatim quotation from the book"
+            }
+          ]
+        }
         \`\`\``,
         user: userBuilders.glossaryReview,
     },

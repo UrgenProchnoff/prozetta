@@ -40,6 +40,10 @@ Edits are not saved on their own — press Save.
 One call for the whole book: the model reads the entire text and the entire list
 and says what is wrong with it. The button is in its own "Ask the model" card.
 
+Above the findings: which review this is and the model's grade — a score for the
+glossary from 1 to 10 and its reason in a sentence or two. It is one call's
+opinion, not a measurement: compare the scores of different reviews with care.
+
 Findings are not applied on their own. You decide each one: accept the correction,
 dismiss the finding, or mark that you dealt with it by hand. The bar at the top
 says how many are left to work through.

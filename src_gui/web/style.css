@@ -1076,6 +1076,12 @@ table.glossary .del { text-align: center; }
     font-size: 12px;
 }
 .rv-bar a { color: var(--blue); }
+/* The model's overall grade of the glossary, and which review this is — read
+   before the findings, so set in the text colour rather than muted. */
+.rv-grade {
+    margin: 0 0 6px;
+    font-size: 13px;
+}
 /* The changelog's own "this list ends here, the rest is over there". */
 .upd-bar {
     display: flex;

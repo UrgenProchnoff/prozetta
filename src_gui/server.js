@@ -641,6 +641,9 @@ function projectSummary(prefix) {
             translationReview = {
                 generatedAt: r.generatedAt || null,
                 model: r.model || null,
+                // Which review this is; null for one saved before reviews were
+                // counted, whose place in the sequence nobody recorded.
+                round: r.round ?? null,
                 score: r.score ?? null,
                 summary: r.summary || null,
                 returned: r.returned ?? null,
@@ -662,7 +665,10 @@ function projectSummary(prefix) {
     if (fs.existsSync(reviewPath(prefix))) {
         try {
             const r = readJson(reviewPath(prefix));
-            glossaryReview = { findings: (r.findings || []).length, generatedAt: r.generatedAt || null };
+            glossaryReview = {
+                findings: (r.findings || []).length, generatedAt: r.generatedAt || null,
+                round: r.round ?? null, score: r.score ?? null,
+            };
         } catch { glossaryReview = { broken: true }; }
     }
 
@@ -1409,6 +1415,9 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
         reviewMeta = {
             generatedAt: review.generatedAt,
             model: review.model,
+            round: review.round ?? null,
+            score: review.score ?? null,
+            summary: review.summary || null,
             total: (review.findings || []).length,
             outstanding,
             hidden,
