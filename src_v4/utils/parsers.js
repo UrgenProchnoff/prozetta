@@ -148,14 +148,25 @@ export function extractCheckResult(text) {
         comment: "Parse error"
     };
 
+    // The loop compares these strictly — like === 1, error === 0 — and a model
+    // writes "like": "1" or "like": true as readily as 1. Taken as given, such an
+    // answer could never approve a chunk however good the translation, and it
+    // would not even say why. Numbers, numeric strings and booleans all become
+    // numbers; anything else falls back to the default.
+    const asNumber = (value, fallback) => {
+        if (typeof value === 'boolean') return value ? 1 : 0;
+        const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+        return typeof n === 'number' && Number.isFinite(n) ? n : fallback;
+    };
+
     try {
         const data = extractJson(text);
         return {
-            error: data.error ?? defaults.error,
-            misspell: data.misspell ?? defaults.misspell,
-            correctness: data.correctness ?? defaults.correctness,
-            like: data.like ?? defaults.like,
-            score: data.score ?? defaults.score,
+            error: asNumber(data.error, defaults.error),
+            misspell: asNumber(data.misspell, defaults.misspell),
+            correctness: asNumber(data.correctness, defaults.correctness),
+            like: asNumber(data.like, defaults.like),
+            score: asNumber(data.score, defaults.score),
             comment: data.comment || defaults.comment
         };
     } catch (e) {
