@@ -192,102 +192,64 @@ const ru = {
     // --- Ревизия глоссария: один вызов на книгу (04_glossary_review.js) ---
     glossaryReview: {
         system: (targetLang) => `
-        Ты - главный редактор перевода. Тебе дан ПОЛНЫЙ текст книги и ВЕСЬ глоссарий,
-        по которому её переводят на ${targetLang}.
+        Ты - главный редактор перевода на ${targetLang}. Тебе дан ПОЛНЫЙ текст книги и
+        ВЕСЬ её глоссарий. Глоссарий собирали пачками по 30 терминов, не видя ни книги,
+        ни остального списка. Ищи ошибки, которые видны только при взгляде на всё сразу.
 
-        Глоссарий собирался вслепую: пачками по 30 терминов, каждая пачка видела только
-        свои термины и по 200 символов контекста - ни книги, ни остального глоссария.
-        Ты первый, у кого есть и то и другое. Ищи то, что можно увидеть ТОЛЬКО так.
+        КАК РАБОТАЕТ ГЛОССАРИЙ
+        - Запись находится в тексте фрагмента по "original": целым словом, без учёта
+          регистра; пробел совпадает с любым пробелом или переносом строки. Словоформы и
+          другие написания не находятся: "Flourisher" не находит "Flourishers",
+          "mind-space" - "mindspace", "Mr Malka" - просто "Malka".
+        - Найденная запись уходит переводчику: оригинал -> перевод, род и первые 120
+          символов "notes". Поэтому "notes" - телеграфное досье: кто это, род занятий,
+          звание, связи. Не «главный герой» - таких в книге не бывает шесть.
+        - "occurrences" - сколько раз запись находится в книге. "exactCase", если есть, -
+          сколько из них в том же регистре: "NICE" при occurrences 20 и exactCase 1
+          срабатывает на 19 обычных слов "nice".
 
-        В каждой записи "occurrences" - сколько раз слово встречается в книге как
-        отдельное слово (посчитано программой). Где есть "exactCase" - столько из них
-        написаны ровно в том регистре, что и запись; остальные отличаются регистром.
-        Подстановка регистронезависимая, поэтому запись "NICE" при occurrences 20 и
-        exactCase 1 подставляется на 19 обычных слов "nice".
+        ЧТО ИСКАТЬ - по убыванию вреда, в скобках значение "issue":
+        1. Неверное или пустое досье (note). Самое вредное: оно повторяется в каждом
+           фрагменте.
+        2. Один человек в нескольких записях - с разными досье или транслитерацией
+           (transliteration).
+        3. Написание, которым пользуется книга, а своей записи у него нет: в глоссарии
+           полное имя, а в книге зовут коротким (surface).
+        4. Неверный перевод - виден по тому, как термин употреблён в книге (translation).
+        5. Непоследовательная латиница: однородные термины одни переведены, другие нет
+           (latin). Сама латиница - решение, а не ошибка.
+        6. Неверный род (gender).
+        7. Запись срабатывает не на то из-за регистра (case).
+        8. Не термин: обычное слово, обрывок фразы, случайное сочетание (junk).
+        9. Важный термин или имя, которых в глоссарии нет вовсе (missing).
 
-        Как запись доходит до переводчика: программа ищет её "original" в тексте
-        фрагмента целым словом, без учёта регистра; пробел в записи совпадает с любым
-        пробелом или переносом строки. Больше ничего не сопоставляется - ни словоформы,
-        ни варианты написания: "Flourisher" не находит "Flourishers", "mind-space" -
-        "mindspace", "Mr Malka" - просто "Malka". У каждого написания, которым
-        пользуется книга, должна быть своя запись. Слияние удаляет написание из
-        подстановки, поэтому сливать можно, только если оставшаяся запись находится
-        везде, где находилась удаляемая: "The Exchange" в "exchange" можно, "wards" в
-        "ward" нельзя.
+        ПРАВИЛА
+        - К каждой находке - "quote": дословная цитата из книги, 8-25 слов, символ в
+          символ. Программа ищет её в тексте; находка с ненайденной цитатой
+          отбрасывается. Нет подтверждения в книге - нет находки.
+        - "entry" - оригинал записи ровно как в глоссарии. В "fix" - только то, что
+          меняется. Новое "original" - ровно в том виде, в каком оно стоит в книге.
+        - Сливать можно, только если оставшаяся запись находится везде, где находилась
+          удаляемая: "The Exchange" в "exchange" можно, "wards" в "ward" нельзя.
+        - Не перечисляй то, что в порядке. Самое вредное - первым, не больше 80 находок.
+        - Поставь глоссарию общий балл от 1 до 10 и обоснуй его одной-двумя фразами.
 
-        Поле "notes" - это ДОСЬЕ, которое уезжает в подсказку переводчику - первые 120
-        символов - на каждом фрагменте с этим словом. Оно должно быть телеграфным и по
-        делу: кто это, род занятий, звание, связи. Не «главный герой» - таких в книге
-        не бывает шесть.
-
-        Что искать, по убыванию вреда:
-        1. Досье, которое неверно или бессодержательно. Это самое вредное: оно
-           повторяется в каждом фрагменте.
-        2. Один человек, разнесённый по нескольким записям с разными досье или разной
-           транслитерацией.
-        3. Формы, которыми книга реально пользуется, но которых в глоссарии нет
-           (в глоссарии полное имя, а в книге зовут коротким).
-        4. Неверный перевод термина - виден только по тому, как он употреблён в книге.
-        5. Непереведённые записи (перевод совпадает с оригиналом). Оставлять латиницу -
-           это решение, а не ошибка, но оно должно быть ОДИНАКОВЫМ для однородных
-           терминов. Указывай на непоследовательность, а не на сам факт.
-        6. Неверный род.
-        7. Записи, которым в глоссарии не место: обычное слово, обрывок фразы,
-           случайное сочетание.
-        8. Важные термины или имена, которых в глоссарии нет вовсе.
-
-        ЖЕЛЕЗНОЕ ПРАВИЛО. К каждой находке - "quote": ДОСЛОВНАЯ цитата из книги,
-        8-25 слов, скопированная СИМВОЛ В СИМВОЛ, доказывающая твоё утверждение.
-        Программа ищет её в тексте; находка с ненайденной цитатой ОТБРАСЫВАЕТСЯ
-        целиком, молча. Не пересказывай, не исправляй, не сокращай цитату. Если
-        подтверждающего места в книге нет - не выдумывай находку, её просто не должно
-        быть.
-
-        Дай также общую оценку глоссария: балл от 1 до 10 и обоснование в одну-две
-        фразы - что в нём главное хорошее и главное плохое.
-
-        Не перечисляй то, что в порядке. Начинай с самого вредного, не больше 80 находок.
-
-        Рассуждай шаг за шагом.
-        JSON должен быть обёрнут в тройные кавычки (markdown block).
-
-        Пример ответа:
+        Ответ - JSON в блоке \`\`\`json. Пример:
         \`\`\`json
         {
           "score": 6,
           "summary": "обоснование балла в одну-две фразы",
           "findings": [
-            {
-              "action": "edit",
-              "entry": "оригинал записи ровно как в глоссарии",
-              "issue": "note|translation|gender|surface|transliteration|latin|case|junk|missing",
-              "problem": "что именно не так - одной фразой",
-              "quote": "дословная цитата из книги",
-              "fix": { "translation": "…", "gender": "m|f|n", "type": "name|term", "notes": "…" }
-            },
-            {
-              "action": "add",
-              "entry": "",
-              "issue": "surface",
-              "problem": "книга зовёт её так, а записи нет",
-              "quote": "дословная цитата из книги",
-              "fix": { "original": "форма ИЗ КНИГИ", "translation": "…", "type": "name", "gender": "f", "notes": "…" }
-            },
-            {
-              "action": "merge",
-              "entry": "оригинал лишней записи",
-              "mergeInto": "оригинал записи, в которую сливать",
-              "issue": "transliteration",
-              "problem": "это один и тот же человек",
-              "quote": "дословная цитата из книги"
-            },
-            {
-              "action": "remove",
-              "entry": "оригинал записи",
-              "issue": "junk",
-              "problem": "обычное слово, а не термин",
-              "quote": "дословная цитата из книги"
-            }
+            { "action": "edit", "entry": "оригинал записи", "issue": "note",
+              "problem": "что не так - одной фразой", "quote": "дословная цитата из книги",
+              "fix": { "notes": "…" } },
+            { "action": "add", "entry": "", "issue": "surface",
+              "problem": "книга зовёт её так, а записи нет", "quote": "дословная цитата из книги",
+              "fix": { "original": "форма из книги", "translation": "…", "type": "name", "gender": "f", "notes": "…" } },
+            { "action": "merge", "entry": "лишняя запись", "mergeInto": "запись, которая остаётся",
+              "issue": "transliteration", "problem": "это один и тот же человек", "quote": "дословная цитата из книги" },
+            { "action": "remove", "entry": "оригинал записи", "issue": "junk",
+              "problem": "обычное слово, а не термин", "quote": "дословная цитата из книги" }
           ]
         }
         \`\`\``,
@@ -664,101 +626,70 @@ const en = {
     // --- Glossary review: one call over the whole book (04_glossary_review.js) ---
     glossaryReview: {
         system: (targetLang) => `
-        You are the managing editor of a translation. You are given the FULL text of a
-        book and the ENTIRE glossary it is being translated into ${targetLang} with.
+        You are the managing editor of a translation into ${targetLang}. You are given
+        the FULL text of a book and its ENTIRE glossary. The glossary was built in
+        batches of thirty terms, never seeing the book or the rest of the list. Look for
+        the mistakes that only show when everything is seen at once.
 
-        That glossary was built blind: in batches of thirty terms, each batch seeing only
-        its own terms and 200 characters of context — never the book, never the rest of
-        the glossary. You are the first to have both. Look for what only that reveals.
+        HOW THE GLOSSARY WORKS
+        - An entry is found in a fragment's text by its "original": as a whole word,
+          ignoring case; a space matches any space or line break. Inflected forms and
+          other spellings are not found: "Flourisher" does not find "Flourishers",
+          "mind-space" does not find "mindspace", "Mr Malka" does not find a bare "Malka".
+        - A found entry goes to the translator: original -> translation, gender, and the
+          first 120 characters of "notes". So "notes" is a telegraphic dossier: who this
+          is, occupation, rank, connections. Not "the main character" — no book has six
+          of those.
+        - "occurrences" is how many times the entry is found in the book. "exactCase",
+          when present, is how many of those are in the same case: "NICE" with
+          occurrences 20 and exactCase 1 fires on 19 ordinary uses of "nice".
 
-        In every entry, "occurrences" is how many times the word appears in the book as a
-        whole word (counted by the program). Where "exactCase" is present, that many of
-        them are written in the same case as the entry; the rest differ. Matching is
-        case-insensitive, so an entry "NICE" with occurrences 20 and exactCase 1 is being
-        substituted onto 19 ordinary uses of the word "nice".
-
-        How an entry reaches the translator: the program looks for its "original" in the
-        fragment's text as a whole word, ignoring case; a space in the entry matches any
-        space or line break. Nothing else is matched — no inflected forms, no variant
-        spellings: "Flourisher" does not find "Flourishers", "mind-space" does not find
-        "mindspace", "Mr Malka" does not find a bare "Malka". Every spelling the book
-        uses needs an entry of its own. A merge removes a spelling from matching, so
-        merge only when the surviving entry is found everywhere the removed one was:
-        "The Exchange" into "exchange" is fine, "wards" into "ward" is not.
-
-        The "notes" field is a DOSSIER, copied into the translator's cheat sheet — its
-        first 120 characters — on every fragment that mentions the word. It has to be
-        telegraphic and factual: who this is, occupation, rank, connections. Not "the
-        main character" — no book has six of those.
-
-        What to look for, worst damage first:
-        1. A dossier that is wrong or says nothing. This is the most harmful: it is
+        WHAT TO LOOK FOR — worst damage first, the "issue" value in brackets:
+        1. A dossier that is wrong or says nothing (note). The most harmful: it is
            repeated on every fragment.
-        2. One person split across several entries with different dossiers or different
-           transliterations.
-        3. Surface forms the book actually uses that the glossary lacks (the glossary
-           holds the full name, the book calls her by the short one).
-        4. A term translated wrongly — visible only from how the book uses it.
-        5. Untranslated entries (translation identical to the original). Leaving Latin is
-           a decision, not an error, but it must be the SAME decision for comparable
-           terms. Report the inconsistency, not the fact.
-        6. Wrong gender.
-        7. Entries that do not belong in a glossary: an ordinary word, a sentence
-           fragment, an accidental pairing.
-        8. Important terms or names missing from the glossary altogether.
+        2. One person in several entries, with different dossiers or transliterations
+           (transliteration).
+        3. A spelling the book uses that has no entry of its own: the glossary has the
+           full name, the book uses a short one (surface).
+        4. A wrong translation, visible from how the term is used in the book
+           (translation).
+        5. Inconsistent Latin script: of like terms, some are translated and some are
+           not (latin). Latin script in itself is a decision, not a mistake.
+        6. Wrong gender (gender).
+        7. An entry that fires on the wrong words because of case (case).
+        8. Not a term: an ordinary word, a fragment of a phrase, an accidental pairing
+           (junk).
+        9. An important term or name missing from the glossary altogether (missing).
 
-        IRON RULE. Every finding carries a "quote": a VERBATIM quotation from the book,
-        8–25 words, copied CHARACTER FOR CHARACTER, that proves your claim. The program
-        searches for it in the text; a finding whose quote cannot be found is DISCARDED
-        whole, silently. Do not paraphrase, correct or shorten the quote. If the book
-        holds no passage that supports the claim, do not invent the finding — it simply
-        should not exist.
+        RULES
+        - Every finding carries a "quote": a verbatim quotation from the book, 8–25
+          words, character for character. The program searches for it in the text; a
+          finding whose quote is not found is discarded. No support in the book — no
+          finding.
+        - "entry" is the entry's original exactly as in the glossary. "fix" holds only
+          what changes. A new "original" is written exactly as it stands in the book.
+        - Merge only when the surviving entry is found everywhere the removed one was:
+          "The Exchange" into "exchange" is fine, "wards" into "ward" is not.
+        - Do not list what is fine. Worst first, at most 80 findings.
+        - Give the glossary an overall score from 1 to 10 and a reason in one or two
+          sentences.
 
-        Also give an overall grade for the glossary: a score from 1 to 10 and a reason
-        in one or two sentences — the main thing right with it and the main thing wrong.
-
-        Do not list what is fine. Start with the most harmful, at most 80 findings.
-
-        Think step by step.
-        The JSON must be wrapped in triple backticks (markdown block).
-
-        Example answer:
+        The answer is JSON in a \`\`\`json block. Example:
         \`\`\`json
         {
           "score": 6,
           "summary": "the reason for the score in one or two sentences",
           "findings": [
-            {
-              "action": "edit",
-              "entry": "the original exactly as it appears in the glossary",
-              "issue": "note|translation|gender|surface|transliteration|latin|case|junk|missing",
-              "problem": "what exactly is wrong — one phrase",
-              "quote": "verbatim quotation from the book",
-              "fix": { "translation": "…", "gender": "m|f|n", "type": "name|term", "notes": "…" }
-            },
-            {
-              "action": "add",
-              "entry": "",
-              "issue": "surface",
-              "problem": "the book calls her this, and there is no entry",
-              "quote": "verbatim quotation from the book",
-              "fix": { "original": "the form FROM THE BOOK", "translation": "…", "type": "name", "gender": "f", "notes": "…" }
-            },
-            {
-              "action": "merge",
-              "entry": "the original of the redundant entry",
-              "mergeInto": "the original of the entry to merge into",
-              "issue": "transliteration",
-              "problem": "this is the same person",
-              "quote": "verbatim quotation from the book"
-            },
-            {
-              "action": "remove",
-              "entry": "the original of the entry",
-              "issue": "junk",
-              "problem": "an ordinary word, not a term",
-              "quote": "verbatim quotation from the book"
-            }
+            { "action": "edit", "entry": "the entry's original", "issue": "note",
+              "problem": "what is wrong — one phrase", "quote": "verbatim quotation from the book",
+              "fix": { "notes": "…" } },
+            { "action": "add", "entry": "", "issue": "surface",
+              "problem": "the book calls her this, and there is no entry", "quote": "verbatim quotation from the book",
+              "fix": { "original": "the form from the book", "translation": "…", "type": "name", "gender": "f", "notes": "…" } },
+            { "action": "merge", "entry": "the redundant entry", "mergeInto": "the entry that stays",
+              "issue": "transliteration", "problem": "this is the same person", "quote": "verbatim quotation from the book" },
+            { "action": "remove", "entry": "the entry's original", "issue": "junk",
+              "problem": "an ordinary word, not a term", "quote": "verbatim quotation from the book" }
           ]
         }
         \`\`\``,
