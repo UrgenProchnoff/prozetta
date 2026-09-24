@@ -4,6 +4,7 @@ import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
 import { entryRegex } from '../core/text_stats.js';
+import { resolveLinks, linkTarget } from '../core/glossary_links.js';
 import { countTokens } from '../core/tokenizer.js';
 import { loadPassport, buildStyleBlock, isEmptyPassport } from '../core/passport.js';
 import { adviceForChunk } from '../core/translation_review.js';
@@ -41,9 +42,18 @@ export async function runTranslationLoopStage(state) {
         console.log(`[Translation] Passport loaded: narration ${n.person || '—'}/${n.tense || '—'}, ${passport.characters.length} POV character(s), ${passport.povMap.length} map span(s).`);
     }
 
+    // Clones (a note reading "= Maria Johnson") speak through their prime —
+    // see core/glossary_links.js. A link that does not resolve leaves its entry
+    // standing alone, which is how it behaved before links existed.
+    const links = resolveLinks(glossary);
+    if (links.broken.length) {
+        console.warn(`[Translation] ${links.broken.length} glossary link(s) lead nowhere and are ignored: ` +
+            links.broken.slice(0, 5).map(b => `${glossary[b.index].original} = ${b.target}`).join(', ') + '.');
+    }
+
     // Names the glossary genders two ways travel without a gender rather than
     // with a wrong one. Computed once: the glossary does not change mid-run.
-    const contradicted = contradictedNames(glossary);
+    const contradicted = contradictedNames(glossary, links.prime);
     if (contradicted.size) {
         console.warn(`[Translation] ${contradicted.size} name(s) carry contradictory genders in the glossary ` +
             `and will be sent without one — run tools/glossary_hygiene.js or open the glossary editor to settle them.`);
@@ -99,7 +109,7 @@ export async function runTranslationLoopStage(state) {
         // 1. DRAFTING
         let currentTranslation = "";
         let currentComment = ""; // New field
-        let globalContext = getLocalContextString(chunk.original, glossary, contradicted);
+        let globalContext = getLocalContextString(chunk.original, glossary, contradicted, links.prime);
         // Whole-book constraints for THIS chunk (narrator + gender come from the
         // POV map; other cast members named in the chunk bring their dossiers,
         // so the block differs between chapters and scenes).
@@ -469,15 +479,18 @@ const MAX_NOTE_CHARS = 120;
  * a human to settle, but the pipeline must stay safe on a glossary nobody has
  * cleaned yet, so a contradicted name simply travels without its gender.
  */
-function contradictedNames(glossary) {
+function contradictedNames(glossary, prime = []) {
+    // A clone's own gender is never sent — its prime's is — so it can contradict
+    // nothing.
+    const own = glossary.filter((_, i) => prime[i] == null);
     const singles = new Map();
-    for (const term of glossary) {
+    for (const term of own) {
         const name = String(term?.original || '').trim();
         if (term?.type === 'name' && name && !/\s/.test(name)) singles.set(name.toLowerCase(), term);
     }
 
     const contradicted = new Set();
-    for (const term of glossary) {
+    for (const term of own) {
         const name = String(term?.original || '').trim();
         if (term?.type !== 'name' || !name || !/\s/.test(name)) continue;
         for (const part of name.split(/\s+/)) {
@@ -501,26 +514,43 @@ const GENDER_WORD = { m: 'муж', f: 'жен', n: 'ср' };
  * any character named in the chunk ("Элейн сказала", not "сказал"), and the
  * note is what tells a translator which of two same-named people this is. Both
  * sat unused in the glossary while the prompt saw only "original -> translation".
+ *
+ * Forms of one person share a line: a chunk saying "Maria Johnson" also matches
+ * "Johnson", and listing both repeats the person, once with the thin note. The
+ * line names the forms found, and the gender and note are the prime's — so a
+ * chunk that says only "Johnson" still learns who she is.
  */
-function getLocalContextString(text, glossary, contradicted = new Set()) {
-    const hits = [];
-    glossary.forEach(term => {
+function getLocalContextString(text, glossary, contradicted = new Set(), prime = []) {
+    const groups = new Map(); // prime index -> indices of its forms found here
+    glossary.forEach((term, index) => {
         const original = String(term?.original || '').trim();
         if (!original) return;
         if (!cachedTermRegex({ original, type: term.type }).test(text)) return;
+        const root = prime[index] ?? index;
+        if (!groups.has(root)) groups.set(root, []);
+        groups.get(root).push(index);
+    });
 
-        let line = `${original} -> ${term.translation}`;
+    const hits = [];
+    for (const [root, found] of groups) {
+        // The prime first when it is among them: it is the full form.
+        found.sort((a, b) => (a === root ? -1 : b === root ? 1 : a - b));
+        const head = glossary[root];
+        const originals = found.map(i => String(glossary[i].original).trim());
+        let line = `${originals.join(' / ')} -> ${found.map(i => glossary[i].translation).join(' / ')}`;
+
         // Gender only for people: on a term it is the grammatical gender of the
         // translation, which the model can see for itself and which is wrong
         // often enough in the glossary to be worth leaving out.
-        const gender = term.type === 'name' ? GENDER_WORD[term.gender] : null;
-        if (gender && !contradicted.has(original.toLowerCase())) line += ` (${gender})`;
+        const gender = head.type === 'name' ? GENDER_WORD[head.gender] : null;
+        if (gender && !contradicted.has(String(head.original).trim().toLowerCase())) line += ` (${gender})`;
 
-        const note = String(term.notes || '').trim();
+        // A link that resolved to nothing tells the translator nothing either.
+        const note = linkTarget(head.notes) === null ? String(head.notes || '').trim() : '';
         if (note) line += ` — ${note.length > MAX_NOTE_CHARS ? note.slice(0, MAX_NOTE_CHARS) + '…' : note}`;
 
         hits.push(line);
-    });
+    }
     return hits.join('\n');
 }
 

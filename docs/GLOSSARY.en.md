@@ -72,6 +72,30 @@ disagreement first, and a person looks. A difference of case only is ranked high
 it is the one kind of disagreement that is certainly an error rather than
 morphology.
 
+## One person under several names
+
+A book calls one person several things: "Maria Johnson", "Johnson", "Ms
+Johnson". All three entries are needed, since each is found in the text by its
+own spelling, and "Ms Johnson → г-жа Джонсон" also shows how to render the form
+of address. What is not needed is three different descriptions of one person,
+with the thinnest one on the surname.
+
+So one entry can be made the **prime** and the others its **clones**. A clone's
+note holds only the link:
+
+    Johnson    Джонсон    note: = Maria Johnson
+
+After `=` comes the prime's original or its translation ("= Мария Джонсон"
+works too). A clone keeps its own translation and takes its gender and note from
+the prime. In a chunk where several forms appear, the translator gets one line:
+
+    Maria Johnson / Johnson -> Мария Джонсон / Джонсон (жен) — Верховный лидер…
+
+The link takes effect only if both entries are of type "name", exactly one prime
+matches, and the prime is not a clone itself. Otherwise the entry works as an
+ordinary one. Do not link a surname several people share (Rex and Candy
+Redman) to any of them.
+
 ## Deleting, and losing nothing by it
 
 The cross on the right removes a row. But if the term being deleted occurs where
