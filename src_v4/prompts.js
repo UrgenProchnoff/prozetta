@@ -197,16 +197,18 @@ const ru = {
         ни остального списка. Ищи ошибки, которые видны только при взгляде на всё сразу.
 
         КАК РАБОТАЕТ ГЛОССАРИЙ
-        - Запись находится в тексте фрагмента по "original": целым словом, без учёта
-          регистра; пробел совпадает с любым пробелом или переносом строки. Словоформы и
-          другие написания не находятся: "Flourisher" не находит "Flourishers",
-          "mind-space" - "mindspace", "Mr Malka" - просто "Malka".
+        - Запись находится в тексте фрагмента по "original" целым словом; пробел
+          совпадает с любым пробелом или переносом строки. Термин - без учёта регистра.
+          Имя (type "name") - с учётом регистра: "Face" не находит "face", но находит
+          "FACE", а "The Face" находит и "the Face". Словоформы и другие написания не
+          находятся: "Flourisher" не находит "Flourishers", "mind-space" -
+          "mindspace", "Mr Malka" - просто "Malka".
         - Найденная запись уходит переводчику: оригинал -> перевод, род и первые 120
           символов "notes". Поэтому "notes" - телеграфное досье: кто это, род занятий,
           звание, связи. Не «главный герой» - таких в книге не бывает шесть.
-        - "occurrences" - сколько раз запись находится в книге. "exactCase", если есть, -
-          сколько из них в том же регистре: "NICE" при occurrences 20 и exactCase 1
-          срабатывает на 19 обычных слов "nice".
+        - "occurrences" - сколько раз запись находится в книге. "exactCase" (только у
+          терминов) - сколько из них в том же регистре: "NICE" при occurrences 20 и
+          exactCase 1 срабатывает на 19 обычных слов "nice".
 
         ЧТО ИСКАТЬ - по убыванию вреда, в скобках значение "issue":
         1. Неверное или пустое досье (note). Самое вредное: оно повторяется в каждом
@@ -219,7 +221,8 @@ const ru = {
         5. Непоследовательная латиница: однородные термины одни переведены, другие нет
            (latin). Сама латиница - решение, а не ошибка.
         6. Неверный род (gender).
-        7. Запись срабатывает не на то из-за регистра (case).
+        7. Термин срабатывает на обычное слово из-за регистра (case). Если это имя -
+           исправь "type" на "name".
         8. Не термин: обычное слово, обрывок фразы, случайное сочетание (junk).
         9. Важный термин или имя, которых в глоссарии нет вовсе (missing).
 
@@ -632,16 +635,18 @@ const en = {
         the mistakes that only show when everything is seen at once.
 
         HOW THE GLOSSARY WORKS
-        - An entry is found in a fragment's text by its "original": as a whole word,
-          ignoring case; a space matches any space or line break. Inflected forms and
-          other spellings are not found: "Flourisher" does not find "Flourishers",
-          "mind-space" does not find "mindspace", "Mr Malka" does not find a bare "Malka".
+        - An entry is found in a fragment's text by its "original" as a whole word; a
+          space matches any space or line break. A term ignores case. A name (type
+          "name") keeps it: "Face" does not find "face" but does find "FACE", and "The
+          Face" also finds "the Face". Inflected forms and other spellings are not
+          found: "Flourisher" does not find "Flourishers", "mind-space" does not find
+          "mindspace", "Mr Malka" does not find a bare "Malka".
         - A found entry goes to the translator: original -> translation, gender, and the
           first 120 characters of "notes". So "notes" is a telegraphic dossier: who this
           is, occupation, rank, connections. Not "the main character" — no book has six
           of those.
-        - "occurrences" is how many times the entry is found in the book. "exactCase",
-          when present, is how many of those are in the same case: "NICE" with
+        - "occurrences" is how many times the entry is found in the book. "exactCase"
+          (terms only) is how many of those are in the same case: "NICE" with
           occurrences 20 and exactCase 1 fires on 19 ordinary uses of "nice".
 
         WHAT TO LOOK FOR — worst damage first, the "issue" value in brackets:
@@ -656,7 +661,8 @@ const en = {
         5. Inconsistent Latin script: of like terms, some are translated and some are
            not (latin). Latin script in itself is a decision, not a mistake.
         6. Wrong gender (gender).
-        7. An entry that fires on the wrong words because of case (case).
+        7. A term that fires on an ordinary word because of case (case). If it is a
+           name, set its "type" to "name".
         8. Not a term: an ordinary word, a fragment of a phrase, an accidental pairing
            (junk).
         9. An important term or name missing from the glossary altogether (missing).

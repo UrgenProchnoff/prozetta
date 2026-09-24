@@ -12,7 +12,7 @@ import { handEdited } from '../src_v4/core/passport.js';
 import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
 import { withoutTranslation, ProjectState } from '../src_v4/core/state_manager.js';
-import { wholeWordRegex } from '../src_v4/core/text_stats.js';
+import { wholeWordRegex, entryRegex } from '../src_v4/core/text_stats.js';
 import { countTokens } from '../src_v4/core/tokenizer.js';
 import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/stages/05_translation_review.js';
 import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages/04_glossary_review.js';
@@ -440,6 +440,14 @@ function readJson(file) {
     return JSON.parse(fs.readFileSync(file, 'utf-8'));
 }
 
+/** The project's glossary, or an empty one if there is none or it cannot be read. */
+function readGlossaryOrEmpty(prefix) {
+    try {
+        const g = readJson(glossaryPath(prefix));
+        return Array.isArray(g) ? g : [];
+    } catch { return []; }
+}
+
 function writeJsonAtomic(file, data) {
     writeFileAtomic(file, JSON.stringify(data, null, 2));
 }
@@ -466,8 +474,12 @@ function validPrefix(req, res) {
  * Whole words through the shared matcher, which knows that a boundary cannot be
  * required in Chinese, Japanese, Korean or Thai.
  */
-function chunksUsingTerm(chunks, term) {
-    const re = wholeWordRegex(String(term), 'giu');
+function chunksUsingTerm(chunks, term, glossary = []) {
+    // Matched as the cheat sheet will match it, so the count is the work the
+    // correction will actually cause: a name with its case.
+    const key = String(term).trim().toLowerCase();
+    const entry = glossary.find(t => String(t?.original || '').trim().toLowerCase() === key);
+    const re = entryRegex({ original: String(term), type: entry?.type }, true);
     const out = [];
     (chunks || []).forEach((c, i) => { if (c?.original && re.test(c.original)) out.push(i); });
     return out;
@@ -634,9 +646,11 @@ function projectSummary(prefix) {
             // that term. Fixing the glossary changes nothing already translated,
             // so this is the size of the work the finding actually implies, and
             // it has to be on screen before the button is pressed.
+            let glossary = null;
             for (const f of open) {
                 if (f.scope !== 'glossary' || !f.term) continue;
-                f.affects = chunksUsingTerm(chunks, f.term).length;
+                glossary = glossary || readGlossaryOrEmpty(prefix);
+                f.affects = chunksUsingTerm(chunks, f.term, glossary).length;
             }
             translationReview = {
                 generatedAt: r.generatedAt || null,
@@ -1376,18 +1390,28 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
     if (fs.existsSync(statePath(prefix))) {
         const chunks = readJson(statePath(prefix)).chunks || [];
         bookTokens = chunks.reduce((n, c) => n + (c.tokens || Math.round((c.original || '').length / 4)), 0);
-        // Whitespace collapsed on both sides before comparing. Books arrive
-        // hard-wrapped, so a two-word term sits across a line break — "Modelview
-        // Matrix" is "Modelview\nMatrix" in Sterling's Junk DNA, and a plain
-        // substring test called it absent. Eight of that book's entries were
-        // reported as occurring zero times while every one of them occurred,
-        // which is worse than a wrong number: the zero is what the junk filter
-        // offers to delete.
-        const flat = chunks.map(c => (c.original || '').toLowerCase().replace(/\s+/g, ' '));
+        // Counted the way the cheat sheet finds an entry (entryRegex): whole
+        // words, a name with its case, any whitespace between the words of a
+        // term. That last part matters because books arrive hard-wrapped —
+        // "Modelview Matrix" is "Modelview\nMatrix" in Sterling's Junk DNA, and
+        // a plain substring test called eight of that book's entries absent,
+        // which is what the junk filter then offers to delete. The count used to
+        // be a lower-cased substring, so it also credited "Face" with every
+        // "face" — the very chunks the cheat sheet no longer sends it to.
+        //
+        // Run as it was, the regex over every chunk for every entry took three
+        // seconds on Crystal Society (654 entries, 200 chunks) against one for
+        // the substring test it replaced. Anything the regex finds contains the
+        // entry's longest word in some case, so a lower-cased substring test on
+        // that word rules most chunks out first and cannot rule a match out.
+        const lowered = chunks.map(c => (c.original || '').toLowerCase());
         counts = terms.map(t => {
-            const needle = (t.original || '').toLowerCase().replace(/\s+/g, ' ').trim();
-            if (!needle) return 0;
-            return flat.reduce((n, text) => n + (text.includes(needle) ? 1 : 0), 0);
+            const original = String(t.original || '').trim();
+            if (!original) return 0;
+            const probe = original.toLowerCase().split(/\s+/).reduce((a, w) => (w.length > a.length ? w : a), '');
+            const re = entryRegex(t);
+            return chunks.reduce((n, c, i) =>
+                n + (lowered[i].includes(probe) && re.test(c.original || '') ? 1 : 0), 0);
         });
         source = chunks.map(c => c.original || '').join('\n');
         try {
@@ -1634,7 +1658,7 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
             return res.status(400).json({ error: 'This finding names no glossary entry, so there is nothing to look for' });
         }
         const k = String(key).toLowerCase();
-        const affected = chunksUsingTerm(state.chunks || [], finding.term);
+        const affected = chunksUsingTerm(state.chunks || [], finding.term, readGlossaryOrEmpty(prefix));
         for (const i of affected) {
             const chunk = state.chunks[i];
             chunk.advice = (chunk.advice || []).filter(a => a.key !== k);

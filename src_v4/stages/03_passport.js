@@ -15,7 +15,7 @@ import { HumanMessage } from '@langchain/core/messages';
 import { llmManager, bookModelEnabled, explainCallFailure } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
-import { detectNarrativePerson, characterCandidates, wholeWordRegex } from '../core/text_stats.js';
+import { detectNarrativePerson, characterCandidates, nameRegex } from '../core/text_stats.js';
 import { buildPovMap, describePovMap } from '../core/pov_map.js';
 import { spansFromQuotes } from '../core/quoted_spans.js';
 import { splitTextIntoChunks, chunkTokens, countTokens } from '../core/tokenizer.js';
@@ -317,7 +317,7 @@ export function applyPassportAnswer(state, answer, meta) {
     // the safe direction. Whole words matter more than they look: a bare
     // substring search finds "Egan" 92 times in Morphotrophic, 89 of them inside
     // the word "began".
-    const inText = authorName ? wholeWordRegex(authorName, 'giu').test(bookText) : false;
+    const inText = authorName ? nameRegex(authorName, 'u').test(bookText) : false;
     passport.author = (authorName || authorGender)
         ? {
             name: authorName || null,

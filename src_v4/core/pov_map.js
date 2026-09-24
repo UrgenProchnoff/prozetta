@@ -1,4 +1,4 @@
-import { wholeWordRegex } from './text_stats.js';
+import { nameRegex } from './text_stats.js';
 import { profileForText, quotedSpeechRegex, CJK_HEADING } from './language.js';
 
 /**
@@ -43,8 +43,10 @@ const P_OTHER = 0.08;
 // treating them as certain would let the 15% drag whole chapters with them.
 const P_ANCHOR_OK = 0.85;
 
+// With its case, like every name: the cast of Crystal Society is Face, Heart,
+// Growth, Safety, Dream — each one also a word the narration uses.
 function wholeWord(name) {
-    return wholeWordRegex(name, 'iu');
+    return nameRegex(name, 'u');
 }
 
 /**

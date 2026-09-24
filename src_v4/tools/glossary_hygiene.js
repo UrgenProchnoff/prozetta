@@ -50,7 +50,7 @@ export function analyzeGlossary(glossary, sourceText) {
             index,
             term,
             original,
-            count: original ? countOccurrences(sourceText, original) : 0,
+            count: original ? countOccurrences(sourceText, { original, type: term.type }) : 0,
             gender: normalizeGender(term.gender),
         };
     });

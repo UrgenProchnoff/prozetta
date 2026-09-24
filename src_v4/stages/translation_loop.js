@@ -3,7 +3,7 @@ import { llmManager } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
-import { wholeWordRegex } from '../core/text_stats.js';
+import { entryRegex } from '../core/text_stats.js';
 import { countTokens } from '../core/tokenizer.js';
 import { loadPassport, buildStyleBlock, isEmptyPassport } from '../core/passport.js';
 import { adviceForChunk } from '../core/translation_review.js';
@@ -439,16 +439,18 @@ export async function runTranslationLoopStage(state) {
 // --- HELPERS ---
 
 // Substring matching turned nearly half the cheat sheet into noise: "HA" fired
-// inside "charles", "M" inside "memory", "ICE" inside "noticed". wholeWordRegex
-// handles that, and handles the opposite case too — in Chinese or Japanese,
-// where nothing is space-separated, it falls back to a plain substring match.
+// inside "charles", "M" inside "memory", "ICE" inside "noticed". entryRegex
+// matches whole words, falls back to a plain substring in Chinese or Japanese,
+// where nothing is space-separated, and matches a name with its case, so the
+// narrator Face is not handed over for every "face".
 const termRegexCache = new Map();
 
 function cachedTermRegex(term) {
-    let re = termRegexCache.get(term);
+    const key = `${term.type === 'name' ? 'name' : 'term'}|${term.original}`;
+    let re = termRegexCache.get(key);
     if (!re) {
-        re = wholeWordRegex(term, 'iu');
-        termRegexCache.set(term, re);
+        re = entryRegex(term);
+        termRegexCache.set(key, re);
     }
     return re;
 }
@@ -505,7 +507,7 @@ function getLocalContextString(text, glossary, contradicted = new Set()) {
     glossary.forEach(term => {
         const original = String(term?.original || '').trim();
         if (!original) return;
-        if (!cachedTermRegex(original).test(text)) return;
+        if (!cachedTermRegex({ original, type: term.type }).test(text)) return;
 
         let line = `${original} -> ${term.translation}`;
         // Gender only for people: on a term it is the grammatical gender of the

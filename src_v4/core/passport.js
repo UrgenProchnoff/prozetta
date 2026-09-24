@@ -16,7 +16,7 @@
 
 import fs from 'fs';
 import { writeFileAtomic } from '../utils/atomic_write.js';
-import { wholeWordRegex } from './text_stats.js';
+import { nameRegex } from './text_stats.js';
 import { countTokens } from './tokenizer.js';
 import config from '../config.js';
 
@@ -426,7 +426,7 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
         for (const member of cast) {
             if (!member?.name || !member.dossier) continue;
             if (focal && member.name.toLowerCase() === focal.name.toLowerCase()) continue;
-            if (wholeWordRegex(member.name, 'iu').test(chunkText)) {
+            if (nameRegex(member.name, 'u').test(chunkText)) {
                 lines.push(words.other(member.name, fitToTokens(member.dossier, DOSSIER_TOKENS)));
                 dossiersShown++;
             }

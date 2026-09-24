@@ -15,7 +15,11 @@ Each row is a term:
 - **Original** — how the book writes it.
 - **Translation** — how it should read. This is the field you edit.
 - **Type** — name, place, thing, concept. It changes how the term is put in front
-  of the translator.
+  of the translator, and where it is found: a name is matched **with its case**,
+  anything else without. A character called Face does not fire on every "face"
+  as long as the entry's type is a name. Two allowances for a name: a leading
+  article may be in either case ("the Advocate" for an entry "The Advocate"), and
+  the name written entirely in capitals is found too ("FACE").
 - **Gender** — masculine, feminine, neuter. In an inflected target language this
   is not a detail: everything agreeing with the word depends on it.
 - **Notes** — what the model learned about the term from the book. Often more use

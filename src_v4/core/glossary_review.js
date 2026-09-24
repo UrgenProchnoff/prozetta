@@ -23,7 +23,7 @@
  * and reading does not.
  */
 
-import { wholeWordRegex } from './text_stats.js';
+import { entryRegex } from './text_stats.js';
 import { locateQuote } from './quoted_spans.js';
 
 /** Actions a finding may propose. Nothing is ever applied automatically. */
@@ -40,17 +40,19 @@ function normalizeGender(value) {
 /**
  * Per-entry facts, counted rather than asked for.
  *
- * `occurrences` tells the model which entries are real; `exactCase` separates a
- * proper noun from the common word it collides with, since the cheat sheet
- * matches case-insensitively. Measured on Halting State: "NICE" (an
- * organisation) fires 20 times of which 1 is the organisation, "M" fires 185
- * times of which 178 are the "m" in "I'm", "Hell" fires 52 times of which 45 are
- * the swear word. No amount of reading tells the model that; counting does.
+ * `occurrences` tells the model which entries are real, counted the way the
+ * cheat sheet finds them (entryRegex). `exactCase` separates a proper noun from
+ * the common word it collides with, for the entries matched in any case — terms;
+ * a name is matched with its case, so the collision cannot happen to it.
+ * Measured on Halting State: "NICE" (an organisation) fires 20 times of which 1
+ * is the organisation, "M" fires 185 times of which 178 are the "m" in "I'm",
+ * "Hell" fires 52 times of which 45 are the swear word. No amount of reading
+ * tells the model that; counting does.
  */
 export function glossaryEvidence(glossary, bookText) {
     return glossary.map(term => {
         const original = String(term.original || '').trim();
-        const all = original ? (bookText.match(wholeWordRegex(original, 'giu')) || []) : [];
+        const all = original ? (bookText.match(entryRegex({ original, type: term.type }, true)) || []) : [];
         const exact = all.filter(m => m === original).length;
         const row = {
             original,
@@ -62,7 +64,7 @@ export function glossaryEvidence(glossary, bookText) {
         };
         // Only worth the tokens when it says something: an entry that always
         // appears in its own case has nothing to report.
-        if (all.length && exact !== all.length) row.exactCase = exact;
+        if (term.type !== 'name' && all.length && exact !== all.length) row.exactCase = exact;
         return row;
     });
 }
@@ -70,19 +72,21 @@ export function glossaryEvidence(glossary, bookText) {
 /**
  * Would deleting `entry` in favour of `survivor` leave text uncovered?
  *
- * Both are matched the way the cheat sheet matches them, and the question is
- * whether the survivor reaches everywhere the doomed entry does.
+ * Both are glossary entries, matched the way the cheat sheet matches them — a
+ * name with its case — and the question is whether the survivor reaches
+ * everywhere the doomed entry does.
  */
 function losesCoverage(entry, survivor, bookText) {
     const text = String(bookText || '');
     if (!text) return false;
-    const doomed = wholeWordRegex(entry, 'giu');
-    const kept = wholeWordRegex(survivor, 'giu');
+    const doomed = entryRegex(entry, true);
+    const kept = entryRegex(survivor, true);
+    const reach = String(survivor.original || '').length;
     let match;
     while ((match = doomed.exec(text)) !== null) {
         // Around the hit, wide enough for the survivor to be a longer form of it.
-        const from = Math.max(0, match.index - survivor.length);
-        const window = text.slice(from, match.index + match[0].length + survivor.length);
+        const from = Math.max(0, match.index - reach);
+        const window = text.slice(from, match.index + match[0].length + reach);
         if (!kept.test(window)) return true;
         kept.lastIndex = 0;
         if (match.index === doomed.lastIndex) doomed.lastIndex++;
@@ -187,7 +191,7 @@ export function verifyFindings(raw, glossary, bookText) {
             // checkable, so it is still checked. The article case passes the same test and survives it —
             // "exchange" does match inside "the exchange", so deleting the longer
             // entry costs nothing.
-            if (losesCoverage(target.term.original, into.term.original, bookText)) {
+            if (losesCoverage(target.term, into.term, bookText)) {
                 drop('lossyMerge', item); continue;
             }
             finding.mergeInto = into.term.original;
@@ -209,7 +213,8 @@ export function verifyFindings(raw, glossary, bookText) {
             // A surface form the book never uses would sit in the glossary
             // firing on nothing — which is the defect the hygiene pass exists to
             // remove, not one to introduce.
-            if (!wholeWordRegex(newOriginal, 'giu').test(bookText)) { drop('absentOriginal', item); continue; }
+            const newType = String(proposed.type || target?.term.type || '').trim().toLowerCase();
+            if (!entryRegex({ original: newOriginal, type: newType }).test(bookText)) { drop('absentOriginal', item); continue; }
             fix.original = newOriginal;
         } else if (action === 'add') {
             drop('malformed', item); continue;
@@ -312,7 +317,7 @@ export function outstandingFindings(review, glossary, bookText = '') {
         // Applying the test here as well retires it without paying for a fresh
         // review, which is the only other way a person would ever be rid of it.
         if (f.action === 'merge' && bookText && has(f.mergeInto)
-            && losesCoverage(f.entry, f.mergeInto, bookText)) continue;
+            && losesCoverage(target.term, byOriginal.get(String(f.mergeInto).trim().toLowerCase()).term, bookText)) continue;
 
         // A merge needs both halves; once one is gone there is nothing to merge.
         if (f.action === 'merge' && !has(f.mergeInto)) continue;

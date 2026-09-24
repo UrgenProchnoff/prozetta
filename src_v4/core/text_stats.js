@@ -42,15 +42,84 @@ const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p
  */
 export function wholeWordRegex(term, flags = 'giu') {
     const text = String(term);
-    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        .replace(/\s+/g, '\\s+');
-    const left = UNSPACED_SCRIPT.test(text[0] || '') ? '' : `(?<!${WORD})`;
-    const right = UNSPACED_SCRIPT.test(text[text.length - 1] || '') ? '' : `(?!${WORD})`;
-    return new RegExp(`${left}${escaped}${right}`, flags);
+    return bounded(text, escapeTerm(text), flags);
 }
 
-export function countOccurrences(text, term) {
-    return (text.match(wholeWordRegex(term)) || []).length;
+/** `pattern` with the whole-word boundaries `text` calls for, per side. */
+function bounded(text, pattern, flags) {
+    const left = UNSPACED_SCRIPT.test(text[0] || '') ? '' : `(?<!${WORD})`;
+    const right = UNSPACED_SCRIPT.test(text[text.length - 1] || '') ? '' : `(?!${WORD})`;
+    return new RegExp(`${left}${pattern}${right}`, flags);
+}
+
+/** Literal text as a pattern, any run of whitespace standing for any other. */
+function escapeTerm(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+}
+
+/** The first character in either case, the rest literal: "the" → "[tT]he". */
+function eitherCaseFirst(text) {
+    const first = text[0] || '';
+    const lower = first.toLowerCase(), upper = first.toUpperCase();
+    const head = lower === upper ? escapeTerm(first) : `[${lower}${upper}]`;
+    return head + escapeTerm(text.slice(1));
+}
+
+// English articles only: every book so far is English. Another language's go
+// here when a book in it needs them.
+const LEADING_ARTICLE = /^(the|an?)\s+/i;
+
+/**
+ * A character's name, matched with its case.
+ *
+ * Case-insensitive matching made every name that is also a word fire on the
+ * word: in Crystal Society the narrator Face was handed to the translator, with
+ * her dossier, on 137 fragments — 112 of them only for "face". Heart, Safety,
+ * God and Dream went the same way. A name is written with its capitals, so its
+ * capitals decide.
+ *
+ * Three spellings still count as the name, because the text writes them for
+ * reasons that have nothing to do with the word:
+ * - a leading article in either case, since mid-sentence it is lower case: in
+ *   Crystal Society "The Advocate" is written so 3 times and "the Advocate" 4
+ *   more; in Morphotrophic "the Scavenger" 3 times against "The Scavenger" once;
+ * - a name the glossary starts in lower case, capitalised at a sentence start;
+ * - the whole name in capitals, as headings and text messages write it.
+ */
+export function nameRegex(name, flags = 'gu') {
+    const text = String(name).trim();
+    const article = LEADING_ARTICLE.exec(text);
+    const asWritten = article
+        ? eitherCaseFirst(article[1]) + '\\s+' + escapeTerm(text.slice(article[0].length))
+        : /^\p{Ll}/u.test(text) ? eitherCaseFirst(text) : escapeTerm(text);
+    const capitals = text.toUpperCase();
+    const pattern = capitals === text ? asWritten : `(?:${asWritten}|${escapeTerm(capitals)})`;
+    return bounded(text, pattern, flags.replace('i', ''));
+}
+
+/**
+ * How a glossary entry is found in text — the one rule for the cheat sheet and
+ * everything that counts, verifies or moves entries on its behalf. A name
+ * (type "name") by nameRegex, with its case; any other entry by wholeWordRegex,
+ * in any case.
+ *
+ * @param {{original: string, type?: string}} entry
+ * @param {boolean} [global]  for exec/match loops that walk every occurrence
+ */
+export function entryRegex(entry, global = false) {
+    const original = String(entry?.original ?? '').trim();
+    return entry?.type === 'name'
+        ? nameRegex(original, global ? 'gu' : 'u')
+        : wholeWordRegex(original, global ? 'giu' : 'iu');
+}
+
+/**
+ * How often a glossary entry is found in `text`, the way the cheat sheet finds
+ * it (see entryRegex). A bare string is counted as a term, in any case.
+ */
+export function countOccurrences(text, entry) {
+    const re = typeof entry === 'string' ? wholeWordRegex(entry) : entryRegex(entry, true);
+    return (text.match(re) || []).length;
 }
 
 /**
@@ -126,7 +195,8 @@ export function genderFromPronouns(text, name, maxScope = null) {
     }
     const scopeCap = maxScope ?? (profile.spaced ? 200 : 60);
 
-    const re = wholeWordRegex(name);
+    // With its case: pronouns near "face" say nothing about Face.
+    const re = nameRegex(name, 'gu');
     // Compiled once per name, not once per occurrence: a name mentioned 200
     // times used to build 400 regexes, and the pronoun tables are the largest
     // patterns in the file.
@@ -236,8 +306,9 @@ export function characterCandidates(text, glossary, limit = 25) {
 
     const scored = [...byName.values()]
         .map(entry => {
-            const total = countOccurrences(text, entry.name);
-            const inSpeech = countOccurrences(speech, entry.name);
+            const name = { original: entry.name, type: 'name' };
+            const total = countOccurrences(text, name);
+            const inSpeech = countOccurrences(speech, name);
             const { gender, masculine, feminine } = genderFromPronouns(text, entry.name);
             return {
                 ...entry,

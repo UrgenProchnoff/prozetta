@@ -16,7 +16,7 @@
  * and every offset past it would have been wrong by one.
  */
 
-import { wholeWordRegex } from './text_stats.js';
+import { entryRegex } from './text_stats.js';
 
 /** Half-open [start, end) character range of every chunk, on the shared axis. */
 function spans(chunks) {
@@ -102,7 +102,7 @@ export function carryExtraction(oldChunks, newChunks) {
 
             const targets = new Set();
             let match;
-            const re = wholeWordRegex(term.original, 'giu');
+            const re = entryRegex(term, true);
             while ((match = re.exec(text)) !== null) {
                 const at = chunkAt(newSpans, start + match.index);
                 if (at >= 0) targets.add(at);
