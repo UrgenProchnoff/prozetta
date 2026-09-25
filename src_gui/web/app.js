@@ -1062,7 +1062,9 @@ async function renderGlossary(prefix) {
                 <td><div class="grow" data-val="${esc(term.notes)}"><textarea data-f="notes" rows="1">${esc(term.notes)}</textarea></div></td>
                 <td class="cnt ${cnt === 0 ? 'zero' : ''}">${cnt ?? ''}</td>
                 <td class="del"><button class="danger" data-del="${idx}" title="${esc(t('gloss.delTitle'))}">✕</button></td>
-            </tr>` + modelIssues.map((m, mi) => reviewRow(m, idx, mi)).join('');
+            </tr>` + modelIssues.map((m, mi) => reviewRow(m, idx, mi)
+                // The card a "Duplicates" button opened, right under its finding.
+                + (openCard && openCard.row === idx && openCard.mi === mi && people[openCard.gi] ? personCard(people[openCard.gi], openCard.gi) : '')).join('');
         }).join('');
 
         // Every path that changes a finding ends here, so the guard on the
@@ -1084,11 +1086,7 @@ async function renderGlossary(prefix) {
         if (m.action === 'merge') buttons.push(`<button data-find="${esc(m.mergeInto || '')}">${esc(t('gloss.rvFind'))}</button>`);
         if (m.action === 'link') {
             buttons.push(`<button data-rvlink="${idx}:${mi}">${esc(t('gloss.rvLink'))}</button>`);
-            // The group is where the shared note and gender get decided; it
-            // exists once the prime has a clone or a suggested form.
-            if (people.some(g => trimmed(terms[g.prime]?.original) === trimmed(m.linkTo))) {
-                buttons.push(`<button data-group="${esc(m.linkTo)}">${esc(t('gloss.rvGroup'))}</button>`);
-            }
+            buttons.push(`<button data-rvcard="${idx}:${mi}" title="${esc(t('gloss.rvCardTitle'))}">${esc(t('gloss.rvCard'))}</button>`);
         }
         buttons.push(`<button data-dismiss="${idx}:${mi}" data-key="${esc(m.key || '')}" title="${esc(t('gloss.rvDismissTitle'))}">${esc(t('gloss.rvDismiss'))}</button>`);
 
@@ -1224,6 +1222,26 @@ async function renderGlossary(prefix) {
         return words(a).some(w => wb.includes(w));
     }
 
+    // A card opened from a link finding: the prime the finding names, its
+    // group if it has one, and the finding's entry ticked as a clone. A pair
+    // like "Captain Zephyr" and "Zephyr" has no group of its own — both are one
+    // word once the title is gone, and groups gather around a fuller name — so
+    // the card is made for it here rather than looked up.
+    let openCard = null;   // { row, mi, gi }
+
+    function openLinkCard(idx, mi) {
+        const m = (findings[idx] || []).filter(isModel)[mi];
+        const head = terms.findIndex(x => trimmed(x.original) === trimmed(m?.linkTo));
+        if (!m || head < 0) return;
+        let gi = people.findIndex(g => g.prime === head);
+        if (gi < 0) { people.push({ prime: head, members: [] }); gi = people.length - 1; }
+        const g = people[gi];
+        if (!g.members.some(x => x.index === idx)) g.members.push({ index: idx, state: 'suggested' });
+        cardState(g).include.add(idx);
+        openCard = { row: idx, mi, gi };
+        renderRows();
+    }
+
     function applyCard(gi) {
         const g = people[gi];
         const st = cardState(g);
@@ -1238,7 +1256,13 @@ async function renderGlossary(prefix) {
             else if (inGroup(i)) terms[i].notes = '';     // unticked: no longer this person
             if (findings[i]) findings[i] = findings[i].filter(x => !isHint(x));
         }
+        // Link findings about these forms are answered by the card.
+        for (const i of idxs) {
+            if (findings[i]) findings[i] = findings[i].filter(x => !(isModel(x) && x.action === 'link'));
+        }
+        if (openCard?.gi === gi) openCard = null;
         markDirty();
+        renderFilter();
         renderRows();
         toast(t('gloss.pcApplied', { name: trimmed(head.original) }), 'ok');
     }
@@ -1250,6 +1274,7 @@ async function renderGlossary(prefix) {
             .filter(g => map(g.prime) >= 0)
             .map(g => ({ prime: map(g.prime), members: g.members.filter(m => map(m.index) >= 0).map(m => ({ ...m, index: map(m.index) })) }));
         cards.clear();
+        openCard = null;
     }
 
     tbody.addEventListener('change', (e) => {
@@ -1422,7 +1447,7 @@ async function renderGlossary(prefix) {
     });
 
     tbody.addEventListener('click', (e) => {
-        const { del, apply, dismiss, find, pjoin, pllm, papply, punlink, rvlink, group } = e.target.dataset;
+        const { del, apply, dismiss, find, pjoin, pllm, papply, punlink, rvlink, rvcard } = e.target.dataset;
 
         if (rvlink !== undefined) {
             const [idx, mi] = rvlink.split(':').map(Number);
@@ -1446,14 +1471,10 @@ async function renderGlossary(prefix) {
             return;
         }
 
-        if (group !== undefined) {
-            const box = document.getElementById('g-search');
-            box.value = group;
-            filter = group;
-            rowFilter = 'people';
-            const sel = document.getElementById('g-issues');
-            if (sel) sel.value = 'people';
-            renderRows();
+        if (rvcard !== undefined) {
+            const [idx, mi] = rvcard.split(':').map(Number);
+            if (openCard && openCard.row === idx && openCard.mi === mi) { openCard = null; renderRows(); return; }
+            openLinkCard(idx, mi);
             return;
         }
 
@@ -1633,6 +1654,7 @@ async function renderGlossary(prefix) {
                 findings.length = 0; findings.push(...(fresh.findings || []));
                 people = fresh.people || [];
                 cards.clear();
+                openCard = null;
                 // Findings resolve against the saved glossary, so the ones just
                 // acted on drop out here and the rest stay outstanding.
                 review = fresh.review || null;

@@ -57,7 +57,9 @@ to **link** rather than merge: a merge would delete a spelling the book uses, an
 often the entry with the full dossier. Such a finding is tagged "link". The Link
 button makes the entry a clone of the one named after "=" (see "One person under
 several names" below). If that entry has no note or gender, it takes the clone's.
-"Open the group" goes to that person's card. Merges of name forms in older
+"Duplicates" opens that person's card under the finding — the
+same as in the "people" filter: all their forms, the choice of prime, a shared
+note and gender. Merges of name forms in older
 reviews are shown as links the same way, without a new model call.
 
 Beside the button there is always a **second route** — "Build prompt". It prepares
