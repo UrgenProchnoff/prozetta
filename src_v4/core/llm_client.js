@@ -266,8 +266,18 @@ export function isTransientServerError(error) {
     // retried for over a minute.
     if (TEXT_STATUS_RE.test(msg)) return true;
     if (/service unavailable|internal (server )?error|bad gateway|gateway time-?out|overloaded|experiencing high demand/i.test(msg)) return true;
-    // Network-level blips that never reached the provider.
-    return ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'EPIPE'].includes(error?.code);
+    // Network-level blips that never reached the provider, or lost the answer
+    // on its way back. Node's fetch reports every one of them as a bare
+    // TypeError "fetch failed" with the real code on `cause`, and the Google
+    // client throws that as it is — so it used to end the run outright: on
+    // Crystal Society, after five and a half minutes of waiting, with the retry
+    // for a 503 a minute earlier having worked. The OpenAI client wraps the same
+    // thing as APIConnectionError.
+    const code = error?.code || error?.cause?.code;
+    if (['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'EPIPE'].includes(code)) return true;
+    if (/^UND_ERR_(SOCKET|CONNECT_TIMEOUT|HEADERS_TIMEOUT|BODY_TIMEOUT|CLOSED)$/.test(String(code || ''))) return true;
+    if (error?.name === 'APIConnectionError') return true;
+    return /\bfetch failed\b/i.test(msg);
 }
 
 /**
