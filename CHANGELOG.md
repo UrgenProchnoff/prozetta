@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-09-26**
 
+- `2c4b797` — A dropped connection to the provider ("fetch failed") is now retried
+  like a brief outage instead of ending the run. It used to end the translation
+  at once: on Crystal Society, after five and a half minutes of waiting for an
+  answer, while a 503 a minute earlier had been got past by a retry.
+
 - `2e85e13` — When a provider is briefly unavailable and the request is retried, the
   log now shows the reason — "[503 Service Unavailable] This model is currently
   experiencing high demand", "fetch failed (ECONNRESET)", a timeout — rather than
