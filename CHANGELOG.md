@@ -11,6 +11,16 @@ predates the practice and carries none.
 
 **2026-09-25**
 
+- `57b8ad7` — A chunk on which the model reasoned until it ran out of output and
+  gave no answer no longer ends the translation. The call is asked again once;
+  if it is empty again, the chunk is left for the next run, a draft already made
+  is kept, and the end of the stage lists such chunks. Three in a row still stop
+  the stage — that is no longer chance. A local gemma-4 reasons about 12,000
+  tokens per draft and twice in the first 13 chunks of Crystal Society did not
+  stop before the server's context was full; each time, after 18 minutes, the
+  whole run died. The message no longer points a local model at a
+  maxOutputTokens it does not have: its ceiling is the server's context size.
+
 - `f573979` — The glossary editor's "flagged" filter is now "errors" and shows only
   what the text and the glossary prove: absent from the book, a case duplicate,
   one name translated two ways, a "= …" link that does not work. Gender is out of
