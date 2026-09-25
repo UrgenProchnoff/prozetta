@@ -9,6 +9,16 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-26**
+
+- `2e85e13` — When a provider is briefly unavailable and the request is retried, the
+  log now shows the reason — "[503 Service Unavailable] This model is currently
+  experiencing high demand", "fetch failed (ECONNRESET)", a timeout — rather than
+  the request address. The Google client opens its error with the full address,
+  the log kept the first 120 characters, and an overloaded model, a dropped
+  connection and a timeout all looked the same — "Error fetching from
+  https://…", as if Google were down altogether.
+
 **2026-09-25**
 
 - `57b8ad7` — A chunk on which the model reasoned until it ran out of output and
