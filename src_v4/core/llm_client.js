@@ -271,6 +271,30 @@ export function isTransientServerError(error) {
 }
 
 /**
+ * What went wrong, in one short line for the retry log.
+ *
+ * The Google client puts the whole request address first — "[GoogleGenerativeAI
+ * Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/
+ * models/gemini-3.7-flash:generateContent: [503 Service Unavailable] This model
+ * is currently experiencing high demand…" — and the log line used to keep its
+ * first 120 characters, which is the address and nothing else. An overloaded
+ * model, a dropped connection and a timeout all read the same: "Error fetching
+ * from https://…", which looks like Google not working at all.
+ */
+export function failureSummary(error) {
+    let msg = String(error?.message || error || '')
+        .replace(/^\[GoogleGenerativeAI Error\]:\s*/, '')
+        .replace(/^Error fetching from \S+?(?::(?:stream)?[gG]enerateContent(?:\?\S*)?)?:\s+/, '')
+        .replace(/^Error fetching from \S+\s*$/, '')
+        .trim();
+    const status = Number(error?.status ?? error?.response?.status);
+    if (status && !msg.includes(String(status))) msg = `HTTP ${status}${msg ? ` ${msg}` : ''}`;
+    const cause = error?.cause?.code || error?.code;
+    if (cause && !msg.includes(cause)) msg = `${msg || 'network error'} (${cause})`;
+    return (msg || 'no reason given').slice(0, 200);
+}
+
+/**
  * Rewrite a failed invoke() error so the log shows the real cause.
  *
  * The worst offender: when the Gemini API returns zero candidates (its content
@@ -588,7 +612,7 @@ class LLMClient {
                                 if (error.transient && transientAttempts < MAX_TRANSIENT_RETRIES) {
                                     const waitMs = 5000 * Math.pow(2, transientAttempts);
                                     transientAttempts++;
-                                    console.warn(`[LLM] [${model}] Provider is temporarily unavailable (${String(error.message).slice(0, 120)}). ` +
+                                    console.warn(`[LLM] [${model}] Provider is temporarily unavailable: ${failureSummary(error)}. ` +
                                         `Waiting ${Math.round(waitMs / 1000)}s, retry ${transientAttempts}/${MAX_TRANSIENT_RETRIES}...`);
                                     await new Promise(r => setTimeout(r, waitMs));
                                     continue;
