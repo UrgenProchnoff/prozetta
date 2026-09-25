@@ -9,6 +9,19 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-25**
+
+- `0372b6c` — The glossary review proposes linking forms of one name instead of
+  merging them. A merge of "Maria Johnson" into "Johnson" passed the lost-matches
+  check (the surname is inside the full name) and deleted the entry with the full
+  dossier; 24 of the 25 accepted merges in the Crystal Society review were of this
+  kind. Such a merge is now shown as a link — in new reviews and in those already
+  saved, without a new call. Which entry becomes the prime is the model's call:
+  length cannot decide it, since "Old Growth" is longer than "Growth" and is its
+  past version. A correction to a clone's note or gender is addressed to its
+  prime, and Link carries the clone's note and gender to the prime when the prime
+  has none.
+
 **2026-09-24**
 
 - `1c2b5cf` — The forms of a name are decided as a group. A "people: forms of
