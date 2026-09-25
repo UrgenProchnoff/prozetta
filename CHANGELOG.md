@@ -11,6 +11,16 @@ predates the practice and carries none.
 
 **2026-09-25**
 
+- `f573979` — The glossary editor's "flagged" filter is now "errors" and shows only
+  what the text and the glossary prove: absent from the book, a case duplicate,
+  one name translated two ways, a "= …" link that does not work. Gender is out of
+  it: on six glossaries the filter held almost nothing else, and it was nearly
+  all wrong — the pronoun count called José, Stewart and the hero of Ryuker
+  women on one to six pronouns a book, and the "conflicts" were surnames married
+  couples share (Yan and Sakura Yan). The console report keeps it. The cheat
+  sheet no longer drops gender from the full name beside such a surname either:
+  Kay Coolidge goes out as feminine again; only "Coolidge" goes without.
+
 - `6539030` — A "link" finding in the glossary review has a Duplicates button that
   opens the person's card right under it: the prime, its forms and the finding's
   entry already ticked as a clone, with the choice of note and gender and the
