@@ -36,7 +36,15 @@ Edits are not saved on their own — press Save.
 - **+ Term** — add a row by hand.
 - **513 / 513** — how many are shown out of how many.
 - **0 occurrences — junk?** — a quick filter for terms the text does not contain.
-- **Filter** — all entries, only those occurring, only edited ones, and so on.
+- **Filter** — all entries, or one group:
+  - "model review" — rows with findings of the glossary review;
+  - "errors" — what the text and the glossary prove: absent from the book, a case
+    duplicate, one name translated two ways, a "= …" link that does not work.
+    Gender is not in it: counting pronouns is wrong more often than it helps, and
+    a surname a married couple share is settled by the cheat sheet itself — the
+    full name keeps its gender, only the bare surname goes without;
+  - "forms of one word" and "people: forms of names" — see below;
+  - "untranslated" — entries left in Latin script: a decision, not a mistake.
 - **Order** — as in the file, alphabetical, by frequency.
 
 ## The glossary review

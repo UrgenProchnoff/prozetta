@@ -1035,7 +1035,7 @@ async function renderGlossary(prefix) {
             const cnt = counts[idx];
             const issues = findings[idx] || [];
             const defects = issues.filter(i => !isPolicy(i) && !isHint(i));
-            const worst = defects.some(i => i.kind === 'genderConflict' || i.kind === 'absent' || i.kind === 'inconsistent' || i.kind === 'badLink')
+            const worst = defects.some(i => i.kind === 'absent' || i.kind === 'inconsistent' || i.kind === 'badLink')
                 ? 'bad' : defects.length ? 'warn' : issues.length ? 'note' : '';
             const modelIssues = issues.filter(isModel);
             const issueTitle = issues.map(i => '• ' + i.detail).join('\n');

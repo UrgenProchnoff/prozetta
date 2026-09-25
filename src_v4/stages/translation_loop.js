@@ -475,6 +475,11 @@ function cachedTermRegex(term) {
  * agreement in a female narrator's chapters. The hygiene tool reports these for
  * a human to settle, but the pipeline must stay safe on a glossary nobody has
  * cleaned yet, so a contradicted name simply travels without its gender.
+ *
+ * Only the bare name loses it. "Kay Coolidge" is one person whatever "Coolidge"
+ * says — it is the surname that can belong to her or to her husband — and
+ * dropping the full name's gender too sent the translator a widow with no
+ * gender at all.
  */
 function contradictedNames(glossary, prime = []) {
     // A clone's own gender is never sent — its prime's is — so it can contradict
@@ -494,7 +499,6 @@ function contradictedNames(glossary, prime = []) {
             if (part.length <= 2) continue;
             const inner = singles.get(part.toLowerCase());
             if (inner && term.gender && inner.gender && term.gender !== inner.gender) {
-                contradicted.add(name.toLowerCase());
                 contradicted.add(String(inner.original).toLowerCase());
             }
         }

@@ -236,16 +236,15 @@ export function glossaryFindings(glossary, sourceText) {
         findings[entry.index]?.push({ kind: 'linkHint', prime: prime.original, detail: `похоже на форму имени «${prime.original}» — можно связать` });
     }
     for (const b of a.brokenLinks) push(b.index, 'badLink', `ссылка «= ${b.target}» не работает: ${LINK_PROBLEM[b.reason]}`);
-    for (const { outer, inner } of a.genderConflicts) {
-        push(outer.index, 'genderConflict', `пол ${outer.gender} против ${inner.gender} у "${inner.original}"`);
-        push(inner.index, 'genderConflict', `пол ${inner.gender} против ${outer.gender} у "${outer.original}"`);
-    }
-    for (const { entry, gender, masculine, feminine } of a.missingGender) {
-        push(entry.index, 'genderHint', `пол не указан, текст подсказывает ${gender} (муж ${masculine} / жен ${feminine})`);
-    }
-    for (const { entry, gender, masculine, feminine } of a.wrongGender) {
-        push(entry.index, 'genderMismatch', `указан ${entry.gender}, по тексту ${gender} (муж ${masculine} / жен ${feminine})`);
-    }
+    // Gender is left to the console report. Measured on six glossaries, the
+    // editor's list was almost all gender and almost all wrong: the pronoun
+    // count called José, Stewart and the hero of Ryuker feminine on one to six
+    // pronouns in a whole book, since the pronouns near a name are as often
+    // someone else's; and every "conflict" was a surname a married couple
+    // share — Yan beside Sakura Yan, Coolidge beside Kay Coolidge. The cheat
+    // sheet settles that case by itself (see contradictedNames), so a marker
+    // asked a person to fix what was not broken. What is marked now is only
+    // what the text or the glossary itself proves.
     return findings;
 }
 
