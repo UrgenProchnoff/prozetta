@@ -146,7 +146,18 @@ class ChatOpenAIWithDiagnostics extends ChatOpenAI {
             throw err;
         }
         if (/length|max[_ ]?tokens/i.test(reason)) {
-            throw new Error(`${what}. The answer ran into the output limit — raise maxOutputTokens in the settings.`);
+            // Nothing but the limit came back: a model that reasons before it
+            // answers can spend everything on the reasoning. Measured with
+            // gemma-4 on a local server, a draft normally reasons for ~12,000
+            // tokens, and 2 drafts in 13 went on until the server's context was
+            // full (n_ctx 32000) without writing a word. That is a matter of
+            // chance, not of the text — the stage retries it — and the ceiling
+            // is not always a setting of ours: a local server stops at its own
+            // context size.
+            const err = new Error(`${what}. The model used its whole output allowance without an answer — ` +
+                `usually reasoning that never finished. ${this.limitHint || 'The ceiling is maxOutputTokens in the settings.'}`);
+            err.outputExhausted = true;
+            throw err;
         }
         // Anything else: an ordinary empty answer, or a provider that says
         // nothing about why. Worth saying out loud, not worth calling final —
@@ -426,7 +437,7 @@ export function createRawClient(provider, conf) {
     }
     // local / openAI-compatible endpoint
     const timeoutMs = conf.timeout;
-    return new ChatOpenAIWithDiagnostics({
+    const local = new ChatOpenAIWithDiagnostics({
         apiKey: conf.apiKey,
         configuration: {
             baseURL: conf.baseUrl,
@@ -440,6 +451,10 @@ export function createRawClient(provider, conf) {
         modelName: conf.modelName,
         temperature: conf.temperature,
     });
+    // Nothing here asks for a maximum, so the server's own limit is the one
+    // that stops a runaway answer — for llama.cpp, the context size.
+    local.limitHint = 'For a local server the ceiling is its context size (n_ctx in llama.cpp), not a setting here.';
+    return local;
 }
 
 class LLMClient {

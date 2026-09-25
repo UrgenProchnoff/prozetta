@@ -64,6 +64,12 @@ export async function runTranslationLoopStage(state) {
     let processedCount = 0;
     const blockedChunks = []; // 1-based numbers of chunks the content filter refused
     const keptChunks = [];    // refused too, but they keep the translation they had
+    const exhaustedChunks = []; // no answer twice: left for the next run
+    // Several in a row are no longer chance: a server whose context is too
+    // small for the prompt fails every chunk alike, and skipping them all
+    // would bury that under a long list.
+    const MAX_EXHAUSTED_IN_A_ROW = 3;
+    let exhaustedInARow = 0;
 
     // A content filter refuses a text, not a request: the same model refuses it
     // again, so retrying is pure waste. Another model may well accept it —
@@ -103,6 +109,7 @@ export async function runTranslationLoopStage(state) {
         // A copy, so that a run which ends in a refusal can be left out of the
         // record — see the catch below.
         let history = [...(chunk.history || [])];
+        let exhausted = false;
 
         try {
 
@@ -392,36 +399,61 @@ export async function runTranslationLoopStage(state) {
             // Only a content block skips. A bad key, an exhausted quota or a dead
             // server fails identically on every chunk, and quietly marking all
             // 169 "blocked" would bury that under a plausible-looking report.
-            if (!error.contentBlocked) throw error;
-
-            console.warn(`   -> BLOCKED by the content filter of ${modelSignature} — skipping this chunk.`);
-            console.warn(`      ${String(error.message).slice(0, 300)}`);
-            if (chunk.translation) {
-                // The chunk already has a translation — approved, or the best
-                // effort of an earlier run — and a refusal to rework it says
-                // nothing against it. This used to mark it "blocked", so an
-                // approved chunk refused while acting on review advice showed on
-                // the map as untranslated. Only the refusal is recorded: this
-                // model skips the chunk from now on, and queued advice waits for
-                // another.
-                //
-                // This run's steps are left out. None was approved, and an
-                // advice_fix among them would mark the review's findings as dealt
-                // with by a fix that never reached the text.
-                state.updateChunk(i, { translation_blocked_by: modelSignature });
-                keptChunks.push(i + 1);
+            if (error.outputExhausted) {
+                // The model reasoned until the limit, and did so twice (see
+                // invokeRetryingRunaway). That is chance, not the text — unlike a
+                // filter's refusal nothing is recorded against the model, and the
+                // next run tries the chunk again. Until this, one such answer
+                // ended the run: twice in the first 13 chunks of Crystal Society,
+                // each after 18 minutes of reasoning.
+                exhausted = true;
+                exhaustedInARow++;
+                exhaustedChunks.push(i + 1);
+                console.warn(`   -> No answer twice — the model spent its whole output reasoning. ` +
+                    `Chunk ${i + 1} is left for the next run.`);
+                console.warn(`      ${String(error.message).slice(0, 300)}`);
+                // A draft already paid for is kept, and the next run resumes from
+                // it. Not for a chunk being reworked: its steps would include an
+                // advice_fix that never reached the text.
+                if (!chunk.translation) state.updateChunk(i, { history });
+                if (exhaustedInARow >= MAX_EXHAUSTED_IN_A_ROW) {
+                    state.save();
+                    throw new Error(`${exhaustedInARow} chunks in a row got no answer (${exhaustedChunks.slice(-exhaustedInARow).join(', ')}) — ` +
+                        `that is no longer chance. The prompt may not fit the model's limit. Last error: ${error.message}`);
+                }
+            } else if (!error.contentBlocked) {
+                throw error;
             } else {
-                state.updateChunk(i, {
-                    translation_status: 'blocked',
-                    translation_blocked_by: modelSignature,
-                    // Whatever was drafted before the refusal is kept. A block during
-                    // the review would otherwise throw away a draft already paid for,
-                    // and the next model resumes from it instead of buying it again.
-                    history: history
-                });
-                blockedChunks.push(i + 1);
+                console.warn(`   -> BLOCKED by the content filter of ${modelSignature} — skipping this chunk.`);
+                console.warn(`      ${String(error.message).slice(0, 300)}`);
+                if (chunk.translation) {
+                    // The chunk already has a translation — approved, or the best
+                    // effort of an earlier run — and a refusal to rework it says
+                    // nothing against it. This used to mark it "blocked", so an
+                    // approved chunk refused while acting on review advice showed on
+                    // the map as untranslated. Only the refusal is recorded: this
+                    // model skips the chunk from now on, and queued advice waits for
+                    // another.
+                    //
+                    // This run's steps are left out. None was approved, and an
+                    // advice_fix among them would mark the review's findings as dealt
+                    // with by a fix that never reached the text.
+                    state.updateChunk(i, { translation_blocked_by: modelSignature });
+                    keptChunks.push(i + 1);
+                } else {
+                    state.updateChunk(i, {
+                        translation_status: 'blocked',
+                        translation_blocked_by: modelSignature,
+                        // Whatever was drafted before the refusal is kept. A block during
+                        // the review would otherwise throw away a draft already paid for,
+                        // and the next model resumes from it instead of buying it again.
+                        history: history
+                    });
+                    blockedChunks.push(i + 1);
+                }
             }
         }
+        if (!exhausted) exhaustedInARow = 0;
 
         processedCount++;
         state.save();
@@ -442,6 +474,11 @@ export async function runTranslationLoopStage(state) {
         console.warn(`\n[Translation] ${keptChunks.length} already translated chunk(s) were refused by the content filter of ` +
             `${modelSignature} while being reworked: ${keptChunks.join(', ')}. They keep the translation they had, and ` +
             `any review advice on them stays queued — another model will pick it up; this one skips them from now on.`);
+    }
+    if (exhaustedChunks.length) {
+        console.warn(`\n[Translation] ${exhaustedChunks.length} chunk(s) got no answer twice — the model spent its whole ` +
+            `output reasoning: ${exhaustedChunks.join(', ')}. They are left as they were; run the translation again to ` +
+            `pick them up.`);
     }
     console.log('--- SYSTEM: Translation completed ---');
 }
@@ -579,6 +616,21 @@ function complaintsAlike(a, b) {
 
 // --- LLM FUNCTIONS (Prompts from index10.js) ---
 
+/**
+ * One call, asked again once if the model reasoned until the limit and wrote
+ * nothing. Sampling makes that a matter of chance — the next attempt at the
+ * same prompt usually finishes — so the second failure is the one that counts.
+ */
+async function invokeRetryingRunaway(client, label, messages) {
+    try {
+        return await client.invoke(messages);
+    } catch (error) {
+        if (!error.outputExhausted) throw error;
+        console.warn(`   [WARN] ${label}: no answer — the model spent its whole output reasoning. Asking once more...`);
+        return client.invoke(messages);
+    }
+}
+
 // How many times to re-ask when the answer comes back without a <translate> tag.
 const MISSING_TAG_RETRIES = 2;
 
@@ -592,7 +644,7 @@ const MISSING_TAG_RETRIES = 2;
 async function invokeForTranslation(client, label, messages) {
     let content = '';
     for (let attempt = 1; attempt <= MISSING_TAG_RETRIES + 1; attempt++) {
-        const response = await client.invoke(messages);
+        const response = await invokeRetryingRunaway(client, label, messages);
         content = response.content || '';
         const translation = extractFromTags(content, 'translate');
         if (translation !== null) {
@@ -621,7 +673,7 @@ async function checkTranslation(client, prompts, targetLang, original, translati
 
     const prompt = prompts.check.system(targetLang);
 
-    const response = await client.invoke([
+    const response = await invokeRetryingRunaway(client, 'check', [
         new HumanMessage(prompt),
         new HumanMessage(input)
     ]);
