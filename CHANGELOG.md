@@ -11,6 +11,13 @@ predates the practice and carries none.
 
 **2026-09-25**
 
+- `6539030` — A "link" finding in the glossary review has a Duplicates button that
+  opens the person's card right under it: the prime, its forms and the finding's
+  entry already ticked as a clone, with the choice of note and gender and the
+  shared-note tools. "Open the group" used to be missing for pairs like "Captain
+  Zephyr" and "Zephyr", which no group gathered, since without the title both are
+  one word.
+
 - `0372b6c` — The glossary review proposes linking forms of one name instead of
   merging them. A merge of "Maria Johnson" into "Johnson" passed the lost-matches
   check (the surname is inside the full name) and deleted the entry with the full
