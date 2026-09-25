@@ -25,10 +25,10 @@
 
 import { entryRegex } from './text_stats.js';
 import { locateQuote } from './quoted_spans.js';
-import { resolveLinks } from './glossary_links.js';
+import { resolveLinks, fullerForm } from './glossary_links.js';
 
 /** Actions a finding may propose. Nothing is ever applied automatically. */
-const ACTIONS = new Set(['edit', 'add', 'merge', 'remove']);
+const ACTIONS = new Set(['edit', 'add', 'merge', 'remove', 'link']);
 
 function normalizeGender(value) {
     const s = String(value || '').trim().toLowerCase();
@@ -95,6 +95,43 @@ function losesCoverage(entry, survivor, bookText) {
     return false;
 }
 
+/** Are a and b names, and forms of one name rather than one spelling twice? */
+function isNameForm(glossary, a, b) {
+    return glossary[a]?.type === 'name' && glossary[b]?.type === 'name'
+        && fullerForm(glossary[a].original, glossary[b].original) !== null;
+}
+
+/**
+ * The link two entries ask for: `a` becomes a clone of `b`.
+ *
+ * The direction is the model's, not the length of the names. "The fuller form
+ * speaks for the person" was tried and is wrong exactly where it matters: on
+ * Crystal Society the review said "Old Growth" — a former version of Growth —
+ * duplicates "Growth", the character with 121 mentions and the real dossier,
+ * and by length that made the main character a clone of its own past. Which
+ * entry is the person's is a judgement about the book; the model made it, and
+ * the person can still switch the prime on the group's card.
+ *
+ * A prime that is itself a clone is followed to the entry it speaks through,
+ * and an entry that other forms already speak through is not made a clone:
+ * that would make a chain.
+ *
+ * @returns {{clone: number, head: number} | {reason: 'badLink'|'linkedForms'}}
+ */
+function linkBetween(glossary, prime, a, b) {
+    if (glossary[a]?.type !== 'name' || glossary[b]?.type !== 'name') return { reason: 'badLink' };
+    const clone = a;
+    const head = prime[b] ?? b;
+    if (clone === head) return { reason: 'badLink' };
+    // Linked to anyone already: the person has answered. A form that could
+    // belong to two people ("Growth" beside Old Growth and New Growth) gets a
+    // proposal for each, and taking one must retire the other rather than
+    // offer to move the link.
+    if (prime[clone] != null) return { reason: 'linkedForms' };
+    if (prime.includes(clone)) return { reason: 'badLink' };
+    return { clone, head };
+}
+
 /** Are entries a and b linked forms of one person — prime and clone, or two clones? */
 function linked(prime, a, b) {
     const root = i => prime[i] ?? i;
@@ -130,7 +167,8 @@ export function verifyFindings(raw, glossary, bookText) {
         unknownTarget: 0,    // merge into an entry that does not exist
         emptyFix: 0,         // nothing actually changes
         lossyMerge: 0,       // merging away an entry the survivor does not match
-        linkedForms: 0,      // merging a clone and its prime, already one person
+        linkedForms: 0,      // merging or linking forms already linked
+        badLink: 0,          // a link that cannot be made: not names, or it would chain
     };
     const rejectedFindings = [];
     // Kept verbatim except for length: what the model actually wrote is the
@@ -146,6 +184,7 @@ export function verifyFindings(raw, glossary, bookText) {
             quote: String(item?.quote || '').slice(0, 600),
             fix: item?.fix && typeof item.fix === 'object' ? item.fix : undefined,
             mergeInto: item?.mergeInto ? String(item.mergeInto).slice(0, 120) : undefined,
+            linkTo: item?.linkTo ? String(item.linkTo).slice(0, 120) : undefined,
         });
     };
 
@@ -183,14 +222,32 @@ export function verifyFindings(raw, glossary, bookText) {
             quote: String(item.quote || '').trim(),
         };
 
-        if (action === 'merge') {
-            const intoKey = String(item.mergeInto || '').trim().toLowerCase();
+        if (action === 'link' || action === 'merge') {
+            const intoKey = String((action === 'link' ? item.linkTo : item.mergeInto) || '').trim().toLowerCase();
             const into = byOriginal.get(intoKey);
             if (!into || into.index === target.index) { drop('unknownTarget', item); continue; }
             // Already settled: the person linked the two forms, which keeps both
             // spellings findable and gives them one dossier — what a merge was
             // after, minus the lost spelling.
             if (linked(prime, target.index, into.index)) { drop('linkedForms', item); continue; }
+
+            // Forms of one name are linked, whatever the model called it. A merge
+            // of "Maria Johnson" into "Johnson" passes the coverage test below —
+            // the surname is inside the full name — and deletes the entry with
+            // the dossier; measured on Crystal Society, 24 of the review's 25
+            // accepted merges were of this kind (8 of 24 on Morphotrophic). Recast here, the finding keeps
+            // both spellings and asks for what the model actually meant.
+            if (action === 'link' || isNameForm(glossary, target.index, into.index)) {
+                const link = linkBetween(glossary, prime, target.index, into.index);
+                if (link.reason) { drop(link.reason, item); continue; }
+                finding.action = 'link';
+                finding.entry = glossary[link.clone].original;
+                finding.index = link.clone;
+                finding.linkTo = glossary[link.head].original;
+                if (action === 'merge') finding.recast = 'merge';
+                findings.push(finding);
+                continue;
+            }
             // A merge deletes an entry, and the cheat sheet matches entries as
             // whole words. "Flourisher" therefore does not match "Flourishers",
             // so merging the plural away leaves every passage that only uses the
@@ -253,6 +310,21 @@ export function verifyFindings(raw, glossary, bookText) {
                 String(current[field] || '').trim() !== String(value).trim());
             if (!changes.length) { drop('emptyFix', item); continue; }
             finding.fix = Object.fromEntries(changes);
+
+            // A clone's gender and note are its prime's — the clone's own note
+            // is the link, and writing a dossier over it would cut the link.
+            // So that part of the proposal is addressed to the prime.
+            const head = prime[target.index];
+            if (head != null) {
+                const moved = Object.entries(finding.fix).filter(([field, value]) =>
+                    (field === 'notes' || field === 'gender')
+                    && String(glossary[head][field] || '').trim() !== String(value).trim());
+                for (const field of ['notes', 'gender']) delete finding.fix[field];
+                if (moved.length) {
+                    findings.push({ ...finding, entry: glossary[head].original, index: head, fix: Object.fromEntries(moved) });
+                }
+                if (!Object.keys(finding.fix).length) continue;
+            }
         } else {
             if (byOriginal.has(fix.original.toLowerCase())) { drop('emptyFix', item); continue; }
             finding.fix = fix;
@@ -262,6 +334,23 @@ export function verifyFindings(raw, glossary, bookText) {
     }
 
     return { findings, rejected, rejectedFindings };
+}
+
+/**
+ * A merge recorded before merges of name forms became links, shown as the link.
+ *
+ * Reviews on disk still hold them — 24 on Crystal Society alone — and the
+ * advice is as wrong as it was the day it was recorded. Recasting it on the way
+ * to the screen fixes it without paying for a fresh review.
+ */
+function recastMerge(f, byOriginal, glossary) {
+    if (f.action !== 'merge') return f;
+    const a = byOriginal.get(String(f.entry || '').trim().toLowerCase());
+    const b = byOriginal.get(String(f.mergeInto || '').trim().toLowerCase());
+    if (!a || !b || !isNameForm(glossary, a.index, b.index)) return f;
+    // The entry the merge would have deleted becomes the clone of the one it
+    // kept: the same judgement, minus the lost spelling.
+    return { ...f, action: 'link', linkTo: f.mergeInto, mergeInto: undefined, recast: 'merge' };
 }
 
 /**
@@ -310,9 +399,12 @@ export function outstandingFindings(review, glossary, bookText = '') {
     const has = value => byOriginal.has(String(value || '').trim().toLowerCase());
     const { prime } = resolveLinks(glossary);
 
-    for (const f of review?.findings || []) {
-        const key = findingKey(f);
+    for (const recorded of review?.findings || []) {
+        // Keyed as recorded, so a dismissal made before a merge was recast as a
+        // link still holds.
+        const key = findingKey(recorded);
         if (dismissed.has(key)) { hidden++; continue; }
+        const f = recastMerge(recorded, byOriginal, glossary);
 
         // A proposed entry that is now in the glossary was accepted.
         if (f.action === 'add') {
@@ -341,6 +433,16 @@ export function outstandingFindings(review, glossary, bookText = '') {
         if (f.action === 'merge'
             && linked(prime, target.index, byOriginal.get(String(f.mergeInto).trim().toLowerCase()).index)) continue;
 
+        let linkTo;
+        if (f.action === 'link') {
+            const into = byOriginal.get(String(f.linkTo || '').trim().toLowerCase());
+            if (!into) continue;
+            const link = linkBetween(glossary, prime, target.index, into.index);
+            // Done, or no longer possible; either way nothing to show.
+            if (link.reason || link.clone !== target.index) continue;
+            linkTo = glossary[link.head].original;
+        }
+
         let fix = f.fix;
         if (f.action === 'edit') {
             // Only the fields that still differ. Applying half a proposal and
@@ -359,6 +461,7 @@ export function outstandingFindings(review, glossary, bookText = '') {
             quote: f.quote,
             fix,
             mergeInto: f.mergeInto,
+            linkTo,
             key,
         });
     }

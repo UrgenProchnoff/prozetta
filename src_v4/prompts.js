@@ -208,6 +208,8 @@ const ru = {
         - Найденная запись уходит переводчику: оригинал -> перевод, род и первые 120
           символов "notes". Поэтому "notes" - телеграфное досье: кто это, род занятий,
           звание, связи. Не «главный герой» - таких в книге не бывает шесть.
+        - Имя с заметкой "= X" - другая форма имени X (клон): род и досье для него
+          берутся у X. Правь их у X.
         - "occurrences" - сколько раз запись находится в книге. "exactCase" (только у
           терминов) - сколько из них в том же регистре: "NICE" при occurrences 20 и
           exactCase 1 срабатывает на 19 обычных слов "nice".
@@ -234,6 +236,8 @@ const ru = {
           отбрасывается. Нет подтверждения в книге - нет находки.
         - "entry" - оригинал записи ровно как в глоссарии. В "fix" - только то, что
           меняется. Новое "original" - ровно в том виде, в каком оно стоит в книге.
+        - Формы одного имени (полное, фамилия, с обращением) не сливай, а связывай:
+          "link", в "linkTo" - основная запись этого человека.
         - Сливать можно, только если оставшаяся запись находится везде, где находилась
           удаляемая: "The Exchange" в "exchange" можно, "wards" в "ward" нельзя.
         - Не перечисляй то, что в порядке. Самое вредное - первым, не больше 80 находок.
@@ -251,6 +255,8 @@ const ru = {
             { "action": "add", "entry": "", "issue": "surface",
               "problem": "книга зовёт её так, а записи нет", "quote": "дословная цитата из книги",
               "fix": { "original": "форма из книги", "translation": "…", "type": "name", "gender": "f", "notes": "…" } },
+            { "action": "link", "entry": "Johnson", "linkTo": "Maria Johnson",
+              "issue": "transliteration", "problem": "фамилия той же героини", "quote": "дословная цитата из книги" },
             { "action": "merge", "entry": "лишняя запись", "mergeInto": "запись, которая остаётся",
               "issue": "transliteration", "problem": "это один и тот же человек", "quote": "дословная цитата из книги" },
             { "action": "remove", "entry": "оригинал записи", "issue": "junk",
@@ -661,6 +667,8 @@ const en = {
           first 120 characters of "notes". So "notes" is a telegraphic dossier: who this
           is, occupation, rank, connections. Not "the main character" — no book has six
           of those.
+        - A name whose note is "= X" is another form of the name X (a clone): its
+          gender and dossier are taken from X. Correct them on X.
         - "occurrences" is how many times the entry is found in the book. "exactCase"
           (terms only) is how many of those are in the same case: "NICE" with
           occurrences 20 and exactCase 1 fires on 19 ordinary uses of "nice".
@@ -690,6 +698,8 @@ const en = {
           finding.
         - "entry" is the entry's original exactly as in the glossary. "fix" holds only
           what changes. A new "original" is written exactly as it stands in the book.
+        - Forms of one name (full, surname, with a form of address) are linked, not
+          merged: "link", with the person's main entry in "linkTo".
         - Merge only when the surviving entry is found everywhere the removed one was:
           "The Exchange" into "exchange" is fine, "wards" into "ward" is not.
         - Do not list what is fine. Worst first, at most 80 findings.
@@ -708,6 +718,8 @@ const en = {
             { "action": "add", "entry": "", "issue": "surface",
               "problem": "the book calls her this, and there is no entry", "quote": "verbatim quotation from the book",
               "fix": { "original": "the form from the book", "translation": "…", "type": "name", "gender": "f", "notes": "…" } },
+            { "action": "link", "entry": "Johnson", "linkTo": "Maria Johnson",
+              "issue": "transliteration", "problem": "the same heroine's surname", "quote": "verbatim quotation from the book" },
             { "action": "merge", "entry": "the redundant entry", "mergeInto": "the entry that stays",
               "issue": "transliteration", "problem": "this is the same person", "quote": "verbatim quotation from the book" },
             { "action": "remove", "entry": "the entry's original", "issue": "junk",

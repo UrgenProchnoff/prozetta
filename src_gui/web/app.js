@@ -1082,11 +1082,19 @@ async function renderGlossary(prefix) {
         if (m.action === 'edit' && m.fix) buttons.push(`<button data-apply="${idx}:${mi}">${esc(t('gloss.rvApply'))}</button>`);
         if (m.action === 'remove') buttons.push(`<button class="danger" data-del="${idx}">${esc(t('gloss.rvRemove'))}</button>`);
         if (m.action === 'merge') buttons.push(`<button data-find="${esc(m.mergeInto || '')}">${esc(t('gloss.rvFind'))}</button>`);
+        if (m.action === 'link') {
+            buttons.push(`<button data-rvlink="${idx}:${mi}">${esc(t('gloss.rvLink'))}</button>`);
+            // The group is where the shared note and gender get decided; it
+            // exists once the prime has a clone or a suggested form.
+            if (people.some(g => trimmed(terms[g.prime]?.original) === trimmed(m.linkTo))) {
+                buttons.push(`<button data-group="${esc(m.linkTo)}">${esc(t('gloss.rvGroup'))}</button>`);
+            }
+        }
         buttons.push(`<button data-dismiss="${idx}:${mi}" data-key="${esc(m.key || '')}" title="${esc(t('gloss.rvDismissTitle'))}">${esc(t('gloss.rvDismiss'))}</button>`);
 
         return `<tr class="rv-row"><td colspan="7">
             <div class="rv-head"><span class="rv-action rv-${esc(m.action)}">${esc(t('gloss.rv.' + m.action))}</span>
-                ${esc(m.detail)}${m.mergeInto ? ` → <b>${esc(m.mergeInto)}</b>` : ''}</div>
+                ${esc(m.detail)}${m.mergeInto ? ` → <b>${esc(m.mergeInto)}</b>` : ''}${m.linkTo ? ` = <b>${esc(m.linkTo)}</b>` : ''}</div>
             <div class="rv-quote">${esc(m.quote)}</div>
             ${fix ? `<div class="rv-fix">${fix}</div>` : ''}
             <div class="rv-acts">${buttons.join(' ')}</div>
@@ -1414,7 +1422,40 @@ async function renderGlossary(prefix) {
     });
 
     tbody.addEventListener('click', (e) => {
-        const { del, apply, dismiss, find, pjoin, pllm, papply, punlink } = e.target.dataset;
+        const { del, apply, dismiss, find, pjoin, pllm, papply, punlink, rvlink, group } = e.target.dataset;
+
+        if (rvlink !== undefined) {
+            const [idx, mi] = rvlink.split(':').map(Number);
+            const m = (findings[idx] || []).filter(isModel)[mi];
+            if (!m?.linkTo) return;
+            const term = terms[idx];
+            const head = terms.find(x => trimmed(x.original) === trimmed(m.linkTo));
+            const note = linkOf(term.notes) === null ? trimmed(term.notes) : '';
+            // The clone's note and gender become the prime's where the prime has
+            // none — the model often keeps the entry with the thinner dossier.
+            // Where both have a note, the clone's is shown before it goes: it
+            // stops reaching the translator.
+            if (head && note && !trimmed(head.notes)) head.notes = note;
+            else if (note && !confirm(t('gloss.rvLinkConfirm', { note, prime: m.linkTo }))) return;
+            if (head && !head.gender && term.gender) head.gender = term.gender;
+            term.notes = `= ${trimmed(m.linkTo)}`;
+            findings[idx] = findings[idx].filter(x => x !== m && !isHint(x));
+            markDirty();
+            renderFilter();
+            renderRows();
+            return;
+        }
+
+        if (group !== undefined) {
+            const box = document.getElementById('g-search');
+            box.value = group;
+            filter = group;
+            rowFilter = 'people';
+            const sel = document.getElementById('g-issues');
+            if (sel) sel.value = 'people';
+            renderRows();
+            return;
+        }
 
         if (papply !== undefined) { applyCard(+papply); return; }
 

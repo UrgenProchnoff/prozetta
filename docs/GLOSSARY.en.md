@@ -52,6 +52,14 @@ Findings are not applied on their own. You decide each one: accept the correctio
 dismiss the finding, or mark that you dealt with it by hand. The bar at the top
 says how many are left to work through.
 
+Forms of one person (full name, surname, a form with a title) the review proposes
+to **link** rather than merge: a merge would delete a spelling the book uses, and
+often the entry with the full dossier. Such a finding is tagged "link". The Link
+button makes the entry a clone of the one named after "=" (see "One person under
+several names" below). If that entry has no note or gender, it takes the clone's.
+"Open the group" goes to that person's card. Merges of name forms in older
+reviews are shown as links the same way, without a new model call.
+
 Beside the button there is always a **second route** — "Build prompt". It prepares
 text for a web console (Google AI Studio, for instance) where the window is bigger
 and no API key is needed. The answer is pasted back and goes through exactly the

@@ -1116,6 +1116,7 @@ table.glossary .del { text-align: center; }
 }
 .rv-action.rv-remove { color: var(--red); border-color: var(--red); }
 .rv-action.rv-merge { color: var(--yellow); border-color: var(--yellow); }
+.rv-action.rv-link { color: var(--blue); border-color: var(--blue); }
 .rv-action.rv-add-tag { color: var(--blue); border-color: var(--blue); }
 /* The quote is set apart and left unwrapped-looking on purpose: a person should
    be able to tell at a glance that these are the book's words, not the model's. */

@@ -234,6 +234,8 @@ export async function runGlossaryReviewStage(state) {
             absentOriginal: 'proposed a form the book never uses', unknownTarget: 'merge target does not exist',
             emptyFix: 'nothing would change',
             lossyMerge: 'the surviving entry does not reach where the deleted one does',
+            linkedForms: 'the two forms are already linked',
+            badLink: 'a link that cannot be made (not names, or it would chain)',
         };
         for (const [key, n] of Object.entries(rejected)) {
             if (n) console.log(`[Review]   ${n} × ${names[key]}`);
@@ -263,7 +265,7 @@ export async function runGlossaryReviewStage(state) {
         console.log(`\n[Review] By action:  ${Object.entries(byAction).map(([k, n]) => `${k} ${n}`).join(', ')}`);
         console.log(`[Review] By issue:   ${Object.entries(byIssue).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(', ')}\n`);
         for (const f of findings.slice(0, 15)) {
-            const to = f.mergeInto ? ` → «${f.mergeInto}»` : '';
+            const to = f.mergeInto ? ` → «${f.mergeInto}»` : f.linkTo ? ` = «${f.linkTo}»` : '';
             console.log(`  [${f.action}] ${f.entry || f.fix?.original || '—'}${to}: ${f.problem}`);
             if (f.fix) {
                 for (const [field, value] of Object.entries(f.fix)) {

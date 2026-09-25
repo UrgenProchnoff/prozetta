@@ -88,7 +88,7 @@ const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'mx', 'dr', 'doctor', 'prof',
     'sir', 'dame', 'lady', 'lord', 'madam', 'madame', 'captain', 'capt', 'detective',
     'sergeant', 'sgt', 'inspector', 'officer', 'agent', 'uncle', 'aunt']);
 
-const words = s => String(s || '').toLowerCase().split(/[\s\-–—.,]+/u).filter(Boolean);
+const words = s => String(s || '').toLowerCase().split(/[\s\-–—.,:;!?"«»“”()]+/u).filter(Boolean);
 
 /** The words of a name that are not forms of address. */
 function coreWords(original) {
@@ -140,4 +140,36 @@ export function personGroups(glossary) {
     });
 
     return [...groups].sort((a, b) => a[0] - b[0]).map(([p, members]) => ({ prime: p, members }));
+}
+
+const ARTICLES = new Set(['the', 'a', 'an']);
+
+/**
+ * Are two names forms of one name — and if so, which is the fuller?
+ *
+ * Which is fuller says nothing about which entry speaks for the person — "Old
+ * Growth" is fuller than "Growth" and is its past version — so callers use it
+ * to tell a form from a duplicate, not to pick a prime.
+ *
+ * "Maria Johnson" and "Johnson", "Mr Stephano" and "Stephano": the words of
+ * one, forms of address aside, are all in the other. Those want a link, not a
+ * merge — merging deletes a spelling the book uses and, more often than not,
+ * the entry that carried the full dossier. Two that differ only by an article
+ * or by case are a plain duplicate instead: "The Scavenger" and "Scavenger"
+ * are one spelling, and a merge loses nothing.
+ *
+ * @returns {'a'|'b'|'either'|null} which one is fuller; 'either' when they
+ *   differ only by forms of address; null when they are not forms of one name.
+ */
+export function fullerForm(a, b) {
+    const bare = s => words(s).filter(w => !ARTICLES.has(w));
+    const wa = bare(a), wb = bare(b);
+    if (wa.join(' ') === wb.join(' ')) return null;
+    const ca = wa.filter(w => !TITLES.has(w)), cb = wb.filter(w => !TITLES.has(w));
+    if (!ca.length || !cb.length) return null;
+    const aInB = ca.every(w => cb.includes(w)), bInA = cb.every(w => ca.includes(w));
+    if (aInB && bInA) return 'either';
+    if (aInB) return 'b';
+    if (bInA) return 'a';
+    return null;
 }
