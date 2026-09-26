@@ -11,6 +11,12 @@ predates the practice and carries none.
 
 **2026-09-26**
 
+- `5afe1c6` — Every line of the monitor's log starts with the local time it
+  appeared, in a muted colour. You can see how long a chunk took and how long the
+  model thought over one answer — eighteen minutes of waiting and a stage that
+  had just begun used to look the same. Lines restored from the file after a
+  restart get their time too (UTC turned into local).
+
 - `2c4b797` — A dropped connection to the provider ("fetch failed") is now retried
   like a brief outage instead of ending the run. It used to end the translation
   at once: on Crystal Society, after five and a half minutes of waiting for an
