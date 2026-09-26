@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { jobManager } from './jobs.js';
+import { jobManager, clockTime } from './jobs.js';
 import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER } from '../src_v4/core/llm_client.js';
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
@@ -400,16 +400,17 @@ const passportPath = (prefix) => paths(prefix).passport;
 const runLogPath = (prefix) => paths(prefix).log;
 
 // Tail of the persistent per-project log written by src_v4 (survives GUI
-// restarts, unlike the in-memory job log). Timestamps/levels are stripped so
-// lines look the same as live SSE output; "=== RUN ... ===" separators stay.
-const LOG_LINE_META_RE = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z (INFO|WARN|ERROR) /;
+// restarts, unlike the in-memory job log). Written the way live SSE output is:
+// the UTC timestamp becomes local "14:05:09" and the level goes; "=== RUN ...
+// ===" separators stay as they are.
+const LOG_LINE_META_RE = /^(\d{4}-\d{2}-\d{2}T[\d:.]+Z) (?:INFO|WARN|ERROR) /;
 function runLogTail(prefix, maxLines = 500) {
     try {
         const raw = fs.readFileSync(runLogPath(prefix), 'utf-8');
         return raw.split('\n')
             .filter(l => l.trim())
             .slice(-maxLines)
-            .map(l => l.replace(LOG_LINE_META_RE, ''));
+            .map(l => l.replace(LOG_LINE_META_RE, (_, ts) => `${clockTime(new Date(ts))} `));
     } catch {
         return [];
     }

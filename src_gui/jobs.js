@@ -2,6 +2,14 @@ import { spawn } from 'child_process';
 
 const LOG_LIMIT = 1000;
 
+// "14:05:09", local time, on every line of the monitor's log. The stages print
+// no time of their own, so an eighteen-minute wait for one answer and a stage
+// that had just started looked the same on screen; the file log has always had
+// times, but not the window people actually watch.
+export function clockTime(date = new Date()) {
+    return [date.getHours(), date.getMinutes(), date.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
+}
+
 class JobManager {
     constructor() {
         this.jobs = new Map();      // prefix -> { proc, log, running, args, startedAt, exitCode }
@@ -54,9 +62,10 @@ class JobManager {
         const pushLines = (buf) => {
             for (const line of buf.split('\n')) {
                 if (!line.trim()) continue;
-                job.log.push(line);
+                const stamped = `${clockTime()} ${line}`;
+                job.log.push(stamped);
                 if (job.log.length > LOG_LIMIT) job.log.shift();
-                this.broadcast(prefix, 'log', line);
+                this.broadcast(prefix, 'log', stamped);
             }
         };
 
@@ -89,7 +98,7 @@ class JobManager {
         });
 
         proc.on('error', (err) => {
-            job.log.push(`[GUI] Failed to spawn process: ${err.message}`);
+            job.log.push(`${clockTime()} [GUI] Failed to spawn process: ${err.message}`);
             job.running = false;
             this.broadcast(prefix, 'job', { running: false, error: err.message });
         });

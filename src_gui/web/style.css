@@ -756,6 +756,7 @@ table.glossary .del { text-align: center; }
 .log-pane .warn { color: var(--yellow); }
 .log-pane .err { color: var(--red); }
 .log-pane .ok { color: var(--green); }
+.log-pane .log-time { color: var(--muted); }
 
 .hint {
     background: rgba(79, 140, 255, 0.08);

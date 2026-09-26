@@ -183,6 +183,9 @@ The program's live output — the same thing the terminal shows, without having 
 find the terminal. A separator is written between runs, so it is clear where the
 last one ended and this one began. The history survives restarting the program.
 
+Each line starts with the local time it appeared: you can see how long a chunk
+took and how long the model spent on a single answer.
+
 ## The links at the top right
 
 - **Glossary** — the editable term list, and the glossary review with it.

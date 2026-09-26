@@ -1608,7 +1608,7 @@ async function renderGlossary(prefix) {
             catch { return; }   // a hiccup in polling is not a failed run
 
             const last = (job.log || []).filter(Boolean).slice(-1)[0] || '';
-            if (note) note.textContent = last.replace(/^\[[^\]]+\]\s*/, '').slice(0, 90);
+            if (note) note.textContent = last.replace(/^\d\d:\d\d:\d\d /, '').replace(/^\[[^\]]+\]\s*/, '').slice(0, 90);
             if (job.running) return;
 
             clearInterval(timer);
@@ -2052,7 +2052,17 @@ async function renderMonitor(prefix) {
         else if (/warn|rejected|missing|failed/i.test(line)) cls = 'warn';
         else if (/approved|complete|saved/i.test(line)) cls = 'ok';
         div.className = cls;
-        div.textContent = line;
+        // The time the server put in front goes into its own muted span, so
+        // the line is still read by its words first.
+        const at = /^(\d\d:\d\d:\d\d) (.*)$/s.exec(line);
+        if (at) {
+            const time = document.createElement('span');
+            time.className = 'log-time';
+            time.textContent = at[1] + ' ';
+            div.append(time, at[2]);
+        } else {
+            div.textContent = line;
+        }
         const atBottom = logPane.scrollTop + logPane.clientHeight >= logPane.scrollHeight - 40;
         logPane.appendChild(div);
         while (logPane.childNodes.length > 1000) logPane.removeChild(logPane.firstChild);
