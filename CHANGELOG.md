@@ -11,6 +11,13 @@ predates the practice and carries none.
 
 **2026-09-28**
 
+- `01a977f` — A long provider outage (500 and 503 errors, a dropped connection) no
+  longer ends the run after a minute. After four quick retries the program tries
+  again once a minute for up to ten more minutes and says in the log that it is
+  waiting out a long outage. Across the run logs of every project, 12 of 114
+  outages ended the run after two to eight minutes, while the fourth retry still
+  rescued five — the outages were ending, just later.
+
 - `cbd9afe` — A Google refusal on the per-minute input-token quota is no longer taken
   at once for "the prompt is bigger than the window". The same refusal comes when
   the window is merely full from earlier requests: a ~5,000-token chunk check on
