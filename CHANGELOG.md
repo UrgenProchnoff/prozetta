@@ -9,6 +9,17 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-28**
+
+- `cbd9afe` — A Google refusal on the per-minute input-token quota is no longer taken
+  at once for "the prompt is bigger than the window". The same refusal comes when
+  the window is merely full from earlier requests: a ~5,000-token chunk check on
+  Crystal Society got it after three retries of a 500 and ended the run, although
+  Google asked for a 33-second wait. The program now waits once as long as the
+  API asks; refused again after that, the prompt really does not fit, and the
+  stage stops with the same explanation as before. A whole-book call pays one
+  pause for this, under a minute.
+
 **2026-09-26**
 
 - `5afe1c6` — Every line of the monitor's log starts with the local time it
