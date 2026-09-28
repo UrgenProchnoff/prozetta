@@ -596,6 +596,7 @@ class LLMClient {
                         // a 429 that followed an outage was given up on early.
                         let rateAttempts = 0;
                         let transientAttempts = 0;
+                        let inputWindowWaited = false;
                         let response;
                         for (;;) {
                             await limiter.waitForToken();
@@ -609,7 +610,26 @@ class LLMClient {
                                 // and the waiting is not free: four attempts on
                                 // Morphotrophic cost eight minutes to learn
                                 // nothing the first attempt had not already said.
-                                if (error.oversizedPrompt) throw error;
+                                //
+                                // But the same refusal also comes when the window
+                                // is merely full: a 5,000-token check on Crystal
+                                // Society was refused after three retries of a 500
+                                // had spent the minute's input, with the API
+                                // asking for a 33-second wait — and treated as
+                                // hopeless, it ended the run. The window's size is
+                                // not in the answer, so the two are told apart by
+                                // waiting once: refused again after the window has
+                                // emptied, the prompt is too big on its own.
+                                if (error.oversizedPrompt) {
+                                    const waitMs = error.retryDelayMs ?? 60000;
+                                    if (inputWindowWaited || waitMs > MAX_WAIT_MS) throw error;
+                                    inputWindowWaited = true;
+                                    console.warn(`[LLM] [${model}] The per-minute input-token quota is full` +
+                                        `${error.quotaId ? ` (quota: ${error.quotaId})` : ''}. Waiting ${Math.round(waitMs / 1000)}s once — ` +
+                                        `if this prompt alone is over the limit, it will be refused again.`);
+                                    await new Promise(r => setTimeout(r, waitMs));
+                                    continue;
+                                }
                                 if (error.rateLimited && rateAttempts < MAX_RATE_RETRIES) {
                                     const waitMs = error.retryDelayMs ?? (rateAttempts + 1) * 10000;
                                     if (waitMs <= MAX_WAIT_MS) {
