@@ -116,8 +116,10 @@ Redman) to any of them.
 
 A link can be typed by hand, but the **"people: forms of names"** filter is
 easier. It shows one card per person: the full name and every form that looks
-like it — names that, without forms of address (Ms, Dr and so on), are one word
-found in that full name. On a card:
+like it — names whose every word, forms of address (Ms, Dr and so on) and
+articles aside, is in that full name: "Ida Willie" and "Mrs. Ida Willie West" to
+"Ida Willie West", "Captain Zephyr" to "Zephyr". Of two names with the same
+words, the one with fewer forms of address becomes the prime. On a card:
 
 - **prime** — which entry speaks for the person (the fullest one by default);
 - **clone** — a tick for whether the form belongs to the group. A word found in

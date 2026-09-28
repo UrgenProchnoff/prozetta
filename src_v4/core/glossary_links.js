@@ -84,16 +84,11 @@ export function resolveLinks(glossary) {
 // Forms of address, which make "Ms Johnson" the same surname as "Johnson".
 // Lower-case, without the full stop. English only, like the article allowance
 // in the matcher: that is the source language every book so far has had.
-const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'mx', 'dr', 'doctor', 'prof', 'professor',
+const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'mx', 'mister', 'missus', 'dr', 'doctor', 'prof', 'professor',
     'sir', 'dame', 'lady', 'lord', 'madam', 'madame', 'captain', 'capt', 'detective',
     'sergeant', 'sgt', 'inspector', 'officer', 'agent', 'uncle', 'aunt']);
 
 const words = s => String(s || '').toLowerCase().split(/[\s\-–—.,:;!?"«»“”()]+/u).filter(Boolean);
-
-/** The words of a name that are not forms of address. */
-function coreWords(original) {
-    return words(original).filter(w => !TITLES.has(w));
-}
 
 /** Do two strings share a whole word, case aside? */
 export function shareWord(a, b) {
@@ -105,11 +100,18 @@ export function shareWord(a, b) {
  * The people of a glossary as the editor groups them: a prime and its forms.
  *
  * A group gathers the clones already linked to an entry and the forms that
- * look like it: names that, without forms of address, are one word found in a
- * fuller name. When exactly one fuller name has that word the form is
- * `suggested`; when several do — "Redman" beside Rex and Candy Redman — it is
- * `ambiguous` and appears in each of their groups, so the choice is on screen
- * and nothing is decided for the person.
+ * look like it: names whose words, forms of address and articles aside, are
+ * all in a fuller name. "Johnson" and "Ms Johnson" go to "Maria Johnson";
+ * "Ida Willie" and "Mrs. Ida Willie West" to "Ida Willie West". The first
+ * version took one-word forms only, and a person whose every form had two
+ * words — the Ida Willie West above — was never gathered at all.
+ *
+ * Two names with the same words ("Captain Zephyr" and "Zephyr") are one form
+ * of each other; the one with fewer extra words becomes the prime. When the
+ * words are in exactly one fuller name the form is `suggested`; when several
+ * do — "Redman" beside Rex and Candy Redman — it is `ambiguous` and appears in
+ * each of their groups, so the choice is on screen and nothing is decided for
+ * the person.
  *
  * @returns {Array<{prime: number, members: Array<{index: number,
  *            state: 'linked'|'suggested'|'ambiguous'}>}>}
@@ -127,22 +129,39 @@ export function personGroups(glossary) {
     };
     prime.forEach((p, i) => { if (p != null) add(p, i, 'linked'); });
 
-    const core = terms.map(t => coreWords(t?.original));
+    const core = terms.map(t => bareWords(t?.original).filter(w => !TITLES.has(w)));
+    const extra = terms.map((t, i) => bareWords(t?.original).length - core[i].length);
+    const within = (a, b) => core[a].every(w => core[b].includes(w));
+    const same = (a, b) => within(a, b) && within(b, a);
+    // Of two names with the same words, the one that speaks for the person:
+    // fewer forms of address, then the earlier entry.
+    const before = (a, b) => extra[a] - extra[b] || a - b;
+    const candidates = terms.map((_, j) => j).filter(j => isName(j) && prime[j] == null && core[j].length);
+
     terms.forEach((term, i) => {
-        if (!isName(i) || prime[i] != null || primes.has(i)) return;
+        if (!isName(i) || prime[i] != null || primes.has(i) || !core[i].length) return;
         if (linkTarget(term.notes) !== null) return;   // a broken link is reported as such
-        if (core[i].length !== 1) return;
-        const fuller = [];
-        terms.forEach((_, j) => {
-            if (j !== i && isName(j) && prime[j] == null && core[j].length >= 2 && core[j].includes(core[i][0])) fuller.push(j);
-        });
-        for (const j of fuller) add(j, i, fuller.length === 1 ? 'suggested' : 'ambiguous');
+
+        // Every name this one could be a form of: more words that include its
+        // own, or the same words and ahead of it.
+        const fuller = candidates.filter(j => j !== i && within(i, j)
+            && (core[j].length > core[i].length || before(j, i) < 0));
+        // Only the fullest of them, one per set of words: "Ida Willie" belongs
+        // to Ida Willie West, not also to every shorter form on the way there.
+        const heads = fuller.filter(j => !fuller.some(k => k !== j
+            && within(j, k) && (core[k].length > core[j].length || (same(j, k) && before(k, j) < 0))));
+        for (const j of heads) add(j, i, heads.length === 1 ? 'suggested' : 'ambiguous');
     });
 
     return [...groups].sort((a, b) => a[0] - b[0]).map(([p, members]) => ({ prime: p, members }));
 }
 
 const ARTICLES = new Set(['the', 'a', 'an']);
+
+/** The words of a name without articles. */
+function bareWords(s) {
+    return words(s).filter(w => !ARTICLES.has(w));
+}
 
 /**
  * Are two names forms of one name — and if so, which is the fuller?
@@ -162,8 +181,7 @@ const ARTICLES = new Set(['the', 'a', 'an']);
  *   differ only by forms of address; null when they are not forms of one name.
  */
 export function fullerForm(a, b) {
-    const bare = s => words(s).filter(w => !ARTICLES.has(w));
-    const wa = bare(a), wb = bare(b);
+    const wa = bareWords(a), wb = bareWords(b);
     if (wa.join(' ') === wb.join(' ')) return null;
     const ca = wa.filter(w => !TITLES.has(w)), cb = wb.filter(w => !TITLES.has(w));
     if (!ca.length || !cb.length) return null;
