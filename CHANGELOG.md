@@ -9,6 +9,18 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-29**
+
+- `34b6616` — The glossary help is rewritten. It now opens with how the glossary
+  reaches the translator — before each chunk the program looks for entries in it
+  and hands over only those it finds — and explains from that why every spelling
+  needs its own entry and why a clone takes its gender and dossier from the
+  prime. Clones are shown by a before-and-after of the translator's cheat sheet,
+  and the "people" card step by step. The examples used to be indented, and the
+  help viewer ran them together into a paragraph; they are shown as blocks now.
+  Three descriptions of things the program does not do are gone: a "junk" filter,
+  a sort by frequency and a warning on deleting a row.
+
 **2026-09-28**
 
 - `1e1198f` — The "people: forms of names" filter gathers forms of a name of any
