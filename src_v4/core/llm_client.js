@@ -583,12 +583,20 @@ class LLMClient {
                         // to the caller instead of blocking the whole run.
                         const MAX_RATE_RETRIES = 3;
                         const MAX_WAIT_MS = 65000;
-                        // A provider outage lasts seconds to a couple of minutes,
-                        // so it gets its own budget with exponential backoff:
-                        // 5s, 10s, 20s, 40s. Losing a stage to a blip is worse
-                        // than waiting — especially on book-level calls, where an
-                        // abort costs one of 20 daily slots.
-                        const MAX_TRANSIENT_RETRIES = 4;
+                        // A provider outage gets its own budget: four quick
+                        // retries (5s, 10s, 20s, 40s) for a blip, then a minute
+                        // at a time for a longer one. Four were all there was,
+                        // and measured over every run log they were not enough:
+                        // of 114 outages 102 passed within them, and the other
+                        // 12 ended the run after two to eight minutes — while
+                        // the fourth retry still rescued five, so the outages
+                        // were ending, not permanent. Ten more minutes costs
+                        // nothing a dead run does not cost more, and losing a
+                        // stage is worse than waiting — especially on book-level
+                        // calls, where an abort costs one of 20 daily slots.
+                        const QUICK_TRANSIENT_RETRIES = 4;
+                        const MAX_TRANSIENT_RETRIES = QUICK_TRANSIENT_RETRIES + 10;
+                        const LONG_OUTAGE_WAIT_MS = 60000;
                         //
                         // Each kind of failure counts against its own budget.
                         // They used to share the loop counter, so two 503s
@@ -640,8 +648,13 @@ class LLMClient {
                                     }
                                 }
                                 if (error.transient && transientAttempts < MAX_TRANSIENT_RETRIES) {
-                                    const waitMs = 5000 * Math.pow(2, transientAttempts);
+                                    const long = transientAttempts >= QUICK_TRANSIENT_RETRIES;
+                                    const waitMs = long ? LONG_OUTAGE_WAIT_MS : 5000 * Math.pow(2, transientAttempts);
                                     transientAttempts++;
+                                    if (transientAttempts === QUICK_TRANSIENT_RETRIES + 1) {
+                                        console.warn(`[LLM] [${model}] A longer outage: retrying once a minute for up to ` +
+                                            `${MAX_TRANSIENT_RETRIES - QUICK_TRANSIENT_RETRIES} minutes before giving up.`);
+                                    }
                                     console.warn(`[LLM] [${model}] Provider is temporarily unavailable: ${failureSummary(error)}. ` +
                                         `Waiting ${Math.round(waitMs / 1000)}s, retry ${transientAttempts}/${MAX_TRANSIENT_RETRIES}...`);
                                     await new Promise(r => setTimeout(r, waitMs));
