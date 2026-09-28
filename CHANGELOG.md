@@ -11,6 +11,15 @@ predates the practice and carries none.
 
 **2026-09-28**
 
+- `1e1198f` — The "people: forms of names" filter gathers forms of a name of any
+  length, not only one-word ones. A person whose every form had two words or
+  more used to be left out entirely: "Ida Willie", "Ida Willie West" and "Mrs.
+  Ida Willie West" stood as three separate entries. A form is now any name whose
+  words, forms of address and articles aside, are all in a fuller one, and of two
+  names with the same words ("Captain Zephyr" and "Zephyr") the one with fewer
+  forms of address becomes the prime. "Mister" and "Missus" join the forms of
+  address.
+
 - `01a977f` — A long provider outage (500 and 503 errors, a dropped connection) no
   longer ends the run after a minute. After four quick retries the program tries
   again once a minute for up to ten more minutes and says in the log that it is
