@@ -1,159 +1,279 @@
 # Glossary: what the book calls its things
 
-The glossary is an agreement about names. Every chunk is translated on its own,
-and without such an agreement a character called *Wei Ying* drifts into *Weiying*
-and *Young Master Wei* a hundred pages later. The glossary is what stops that.
+A book is translated in chunks, and the model sees each chunk on its own. Without
+a shared list of names, a character called *Wei Ying* drifts into *Weiying* and
+*Young Master Wei* a hundred pages later. The glossary is that shared list:
+names, places, organisations, terms, and how each is to be translated.
 
-It is collected during Extraction, but it is a **draft**, not a finished answer.
-Reading it through before translating is worth it: one correction here is cheaper
-than a hundred afterwards.
+The Extraction stage builds it, but it is a **draft**. Read it through before
+translating: one correction here is cheaper than a hundred in the finished text.
+
+## How the glossary reaches the translation
+
+Everything else on this page follows from one fact: the model translating a
+chunk **does not see the whole glossary**. Before each chunk the program looks
+for glossary entries in its text and hands the translator only the ones it
+finds — a short cheat sheet, one line per entry:
+
+```
+Maria Johnson -> Мария Джонсон (жен) — Верховный лидер Las Águilas Rojas (титул Феникс)
+Phoenix -> Феникс — титул
+```
+
+The line holds the original, the translation, the gender (names only) and the
+start of the note. It follows that:
+
+- **An entry is found by its original, as a whole word, exactly.** The entry
+  "Maria Johnson" does not fire in a chunk that says only "Johnson", and
+  "Flourisher" does not fire where the text says "Flourishers". Every spelling the
+  book uses needs an entry of its own.
+- **A name is matched with its case, everything else without.** A character
+  called Face, typed as a name, does not fire on every "face". A name gets two
+  allowances: a leading article in either case ("the Advocate" for the entry "The
+  Advocate"), and the whole name in capitals ("FACE").
+- **The note is a dossier for the translator.** It arrives with the name in every
+  chunk the name appears in, so it should answer "who is this": role, relations,
+  key facts. The translator gets the first **120 characters**; the rest is cut.
+- **Editing the glossary does not change text already translated.** It applies to
+  the chunks translated after it.
 
 ## The table
 
-Each row is a term:
+- **Original** — as written in the book. This is what the entry is found by.
+- **Translation** — how it should read in the target language.
+- **Type** — `name` (a person or a being) or `term` (everything else). The type
+  decides whether case matters in matching and whether gender is passed on.
+- **Gender** — masculine, feminine, neuter. For Russian this matters: agreement
+  around a name depends on it ("Элейн сказала", not "сказал").
+- **Notes** — the entry's dossier, see above. A clone has a `= …` link here —
+  see below.
+- **#** — how many chunks the entry is found in. Zero means the book never uses
+  that spelling: the entry is invented or written in the wrong form.
+- **✕** — delete the row.
 
-- **Original** — how the book writes it.
-- **Translation** — how it should read. This is the field you edit.
-- **Type** — name, place, thing, concept. It changes how the term is put in front
-  of the translator, and where it is found: a name is matched **with its case**,
-  anything else without. A character called Face does not fire on every "face"
-  as long as the entry's type is a name. Two allowances for a name: a leading
-  article may be in either case ("the Advocate" for an entry "The Advocate"), and
-  the name written entirely in capitals is found too ("FACE").
-- **Gender** — masculine, feminine, neuter. In an inflected target language this
-  is not a detail: everything agreeing with the word depends on it.
-- **Notes** — what the model learned about the term from the book. Often more use
-  than the translation itself: "a street in East San Jose", "an estate agency;
-  Susan Poker and Gretchen Bell work there".
-- **#** — how many chunks the term occurs in. A term with zero occurrences was
-  either invented or recorded in a form the text does not use.
-
-Edits are not saved on their own — press Save.
+Edits are not saved on their own — press "Save". Until then, any edit can be
+undone by simply leaving the page.
 
 ## The toolbar
 
-- **Search** — over originals, translations and notes at once.
+- **Search** — across original, translation and notes at once.
 - **+ Term** — add a row by hand.
-- **513 / 513** — how many are shown out of how many.
-- **0 occurrences — junk?** — a quick filter for terms the text does not contain.
-- **Filter** — all entries, or one group:
-  - "model review" — rows with findings of the glossary review;
-  - "errors" — what the text and the glossary prove: absent from the book, a case
-    duplicate, one name translated two ways, a "= …" link that does not work.
-    Gender is not in it: counting pronouns is wrong more often than it helps, and
-    a surname a married couple share is settled by the cheat sheet itself — the
-    full name keeps its gender, only the bare surname goes without;
-  - "forms of one word" and "people: forms of names" — see below;
-  - "untranslated" — entries left in Latin script: a decision, not a mistake.
-- **Order** — as in the file, alphabetical, by frequency.
+- **Counter** — how many rows are shown out of how many.
+- **Filter** — show one group of rows rather than all. Options appear only when
+  they have something in them: "model review", "errors", "forms of one word",
+  "people: forms of names", "untranslated". Each is described below.
+- **Order** — as in the file, by original or by translation. It changes the view
+  only: the file is saved in its own order.
 
-## The glossary review
+## One person under several names: prime and clones
 
-One call for the whole book: the model reads the entire text and the entire list
-and says what is wrong with it. The button is in its own "Ask the model" card.
-
-Above the findings: which review this is and the model's grade — a score for the
-glossary from 1 to 10 and its reason in a sentence or two. It is one call's
-opinion, not a measurement: compare the scores of different reviews with care.
-
-Findings are not applied on their own. You decide each one: accept the correction,
-dismiss the finding, or mark that you dealt with it by hand. The bar at the top
-says how many are left to work through.
-
-Forms of one person (full name, surname, a form with a title) the review proposes
-to **link** rather than merge: a merge would delete a spelling the book uses, and
-often the entry with the full dossier. Such a finding is tagged "link". The Link
-button makes the entry a clone of the one named after "=" (see "One person under
-several names" below). If that entry has no note or gender, it takes the clone's.
-"Duplicates" opens that person's card under the finding — the
-same as in the "people" filter: all their forms, the choice of prime, a shared
-note and gender. Merges of name forms in older
-reviews are shown as links the same way, without a new model call.
-
-Beside the button there is always a **second route** — "Build prompt". It prepares
-text for a web console (Google AI Studio, for instance) where the window is bigger
-and no API key is needed. The answer is pasted back and goes through exactly the
-same checks. If the call does not fit the API quota, "Ask the model" goes dark and
-"Build prompt" lights up — "too big" is a dead end only when the other door cannot
-be seen.
-
-## Forms of one word
-
-The program separately shows groups where the same source term is recorded in
-different forms: `replenisher` and `replenishers`, `exchange` and `the exchange`.
-This is the commonest source of disagreement: stage 1 files them as two
-independent terms and has no way to know they are one word — and the book comes
-out saying it both ways.
-
-The groups **do not decide for you**: they are ordered with the widest
-disagreement first, and a person looks. A difference of case only is ranked high:
-it is the one kind of disagreement that is certainly an error rather than
-morphology.
-
-## One person under several names
+### The problem
 
 A book calls one person several things: "Maria Johnson", "Johnson", "Ms
-Johnson". All three entries are needed, since each is found in the text by its
-own spelling, and "Ms Johnson → г-жа Джонсон" also shows how to render the form
-of address. What is not needed is three different descriptions of one person,
-with the thinnest one on the surname.
+Johnson". Extraction files each spelling as a separate entry, and each gets its
+own dossier — from whichever chunk it was found in:
 
-So one entry can be made the **prime** and the others its **clones**. A clone's
-note holds only the link:
+```
+Maria Johnson   Мария Джонсон   f   Supreme leader of Las Águilas Rojas (title: Phoenix)
+Johnson         Джонсон         m   a participant in events
+Ms Johnson      г-жа Джонсон    f   Maria Johnson — secret leader of Las Águilas Rojas
+```
 
-    Johnson    Джонсон    note: = Maria Johnson
+Deleting the extra ones is not an option: in a chunk that says only "Johnson",
+only the entry "Johnson" fires — delete it and the translator never learns who
+this is. But leaving them as they are is bad too: in that chunk the translator
+gets the thin dossier "a participant in events" and the masculine gender.
 
-After `=` comes the prime's original or its translation ("= Мария Джонсон"
-works too). A clone keeps its own translation and takes its gender and note from
-the prime. In a chunk where several forms appear, the translator gets one line:
+### The solution
 
-    Maria Johnson / Johnson -> Мария Джонсон / Джонсон (жен) — Верховный лидер…
+One entry is made the **prime** — it "speaks for the person". The others become
+its **clones**. A clone stays in the table and is still found in the text by its
+own spelling, but **takes its gender and dossier from the prime**. Only the
+translation is the clone's own: "Ms Johnson → г-жа Джонсон" still shows how to
+render the form of address.
 
-The link takes effect only if both entries are of type "name", exactly one prime
-matches, and the prime is not a clone itself. Otherwise the entry works as an
-ordinary one. Do not link a surname several people share (Rex and Candy
-Redman) to any of them.
+What makes an entry a clone is its note: an `=` sign and the prime's name, and
+nothing else:
 
-A link can be typed by hand, but the **"people: forms of names"** filter is
-easier. It shows one card per person: the full name and every form that looks
-like it — names whose every word, forms of address (Ms, Dr and so on) and
-articles aside, is in that full name: "Ida Willie" and "Mrs. Ida Willie West" to
-"Ida Willie West", "Captain Zephyr" to "Zephyr". Of two names with the same
-words, the one with fewer forms of address becomes the prime. On a card:
+```
+Maria Johnson   Мария Джонсон   f   Supreme leader of Las Águilas Rojas (title: Phoenix)
+Johnson         Джонсон             = Maria Johnson
+Ms Johnson      г-жа Джонсон        = Maria Johnson
+```
 
-- **prime** — which entry speaks for the person (the fullest one by default);
-- **clone** — a tick for whether the form belongs to the group. A word found in
-  several full names (Deborah beside Deborah One and Deborah Two) appears in
-  each such group unticked and marked "?": the call is yours;
-- **notes** — pick the best one and it goes into the shared-note field, which
-  you can edit. The counter shows its length: the translator gets at most 120
-  characters. "Join notes" strings together the notes of the ticked forms;
-  "Combine with LLM" asks the main model to condense them into one (only names
-  and notes are sent, not the book);
-- **gender** — one per group, kept on the prime. A ⚠ marks forms whose gender or
-  translation differs from the chosen one.
+### What changes for the translator
 
-"Apply" writes the choice into the glossary rows, "Save" writes it to disk.
-"Unlink" removes the group's links. Renaming the prime in the table updates its
-clones' links by itself.
+A chunk that says only "Johnson":
 
-The source-text check watches the links: it marks a link that did not take
-effect, and a clone translated differently from its prime. If the two share a
-word in the original, "Johnson" and "Maria Johnson", they must share a word in
-the translation, so «Редмен» beside «Рекс Редман» is marked. The glossary review
-no longer proposes merging linked entries: the link has already done what the
-merge was for.
+```
+before:  Johnson -> Джонсон (муж) — a participant in events
+after:   Johnson -> Джонсон (жен) — Supreme leader of Las Águilas Rojas (title: Phoenix)
+```
 
-## Deleting, and losing nothing by it
+A chunk where several forms appear — one line instead of three:
 
-The cross on the right removes a row. But if the term being deleted occurs where
-the survivor does not — `cytes` standing in 72 chunks that contain no `cyte` — you
-are warned: the merge would lose coverage. A term with an article is safe to
-delete; words are separated by spaces.
+```
+Maria Johnson / Johnson -> Мария Джонсон / Джонсон (жен) — Supreme leader…
+```
+
+### Rules of the link
+
+- After `=` you may write the prime's original or its translation: "= Maria
+  Johnson" and "= Мария Джонсон" work the same.
+- Both entries must be of type `name`.
+- There must be exactly one prime, and it must not be a clone itself: no chains.
+- If any of these fails, the entry works as an ordinary one, and the "errors"
+  filter marks the link as not working, and why.
+- The clone's own gender and note are not used — they can stay empty.
+- Renaming the prime in the table updates its clones' links by itself.
+- To unlink a clone, erase the link from its note (or press "Unlink" on the
+  card, see below).
+
+### A surname several people share
+
+If the book has Rex Redman and Candy Redman, **do not link** the entry "Redman"
+to either: in one chunk it is him, in another her. If the surname's gender
+differs from the gender of someone's full name, the program drops the gender
+from the surname by itself — it goes to the translator without one, and the full
+names keep theirs.
+
+## The "people: forms of names" filter
+
+You do not have to type links by hand: the program works out which names look
+like forms of one person and shows them as **one card per person**.
+
+### How forms are found
+
+Forms of address (Mr, Mrs, Ms, Miss, Mister, Dr, Captain, Detective and the like)
+and articles are set aside. A name is a form of another if **all its remaining
+words are in that other name**:
+
+- "Johnson" and "Ms Johnson" are forms of "Maria Johnson";
+- "Ida Willie" and "Mrs. Ida Willie West" are forms of "Ida Willie West";
+- "Captain Zephyr" is a form of "Zephyr" (the same words; the name without the
+  title becomes the prime).
+
+A form is offered to the fullest name that has all its words. If there are
+several ("Redman" beside Rex Redman and Candy Redman, "Deborah" beside Deborah
+One and Deborah Two), the form appears on each of their cards, but **unticked**
+and marked "?": the program does not know who it is and does not guess.
+
+What this does not see: nicknames and titles that share no word with the name
+("the Phoenix" for Maria Johnson), different spellings of one name ("Anna di
+Malta" and "Anna de Malta"), entries of type `term`. Those are linked by hand, by
+writing the link in the note.
+
+Shared words do not guarantee one person: "Delia" may not be the same as "Real
+Delia". So a card is only a proposal. Nothing changes until you press "Apply".
+
+### Working with a card
+
+1. **"prime" column** — pick the entry that will speak for the person. The
+   fullest name is picked by default.
+2. **"clone" column** — tick the forms that belong to this person. Untick those
+   that do not.
+3. **Notes** — use the round button to pick the best existing dossier; it goes
+   into the "Shared note" field. The field can be edited by hand. The counter to
+   its right shows the length — the translator gets at most 120 characters. "Join
+   notes" strings together the notes of all ticked forms with ";" — quick and
+   free, but usually long. "Combine with LLM" asks the main model to condense
+   them into one dossier; only names and notes are sent, not the book.
+4. **Gender** — one for the whole group. A ⚠ on a form means its gender or
+   translation differs from the prime's: check it.
+5. **"Apply"** — the prime gets the shared note and gender, the clones get `= …`
+   links.
+6. **"Save"** at the top of the page — write the glossary to disk.
+
+"Unlink" removes all the group's links. Forms already linked appear on the card
+too, so a group can be rebuilt at any time.
+
+## The "forms of one word" filter
+
+This filter is about terms, not people. Extraction files "replenisher" and
+"replenishers" as two different terms and translates them separately:
+«восполнитель» and «восстановители». The book comes out calling one thing by two
+words.
+
+Two entries are forms of one word if, with a leading article set aside, one is
+the start of the other and what is left over is short (up to three letters) with
+no space: "replenisher"/"replenishers", "cyte"/"cytes"/"cytes'",
+"exchange"/"the exchange". "Swapper" and "Swapper movement" are not forms: the
+leftover is a whole word.
+
+A group is shown **only if its translations differ** — even by a capital letter.
+The groups with the least similar translations come first; a difference in
+capitals alone («обмен»/«Обмен») is also ranked high — it is almost certainly an
+error. What to do with a group is your call: usually, make the translations
+agree. Do not delete the entries themselves: each spelling is needed to be found
+in the text.
+
+## The "errors" filter
+
+Only what can be checked against the book and the glossary itself:
+
+- **Absent from the book** — zero matches. The entry is invented or written in
+  the wrong form. Correct the original or delete the entry.
+- **Case duplicate** — "ELAINE" and "Elaine". Keep one.
+- **One name translated two ways** — "Ida Willie West → Ида Уилли Уэст" but "Ida
+  Willie → Айда Уилли". Make them agree. For clones the check is stricter: if a
+  clone and its prime share a word in the original, they must share a word in the
+  translation too («Редмен» beside «Рекс Редман» is marked).
+- **A "= …" link that does not work** — with the reason: no such entry, several
+  of them, the target is a clone, the entry has the wrong type.
+
+Gender is not in it. The program can guess gender from the pronouns in the
+text, but it is wrong more often than it helps: a pronoun next to a name often
+belongs to someone else.
+
+The "untranslated" filter is separate: entries left in Latin script. That is not
+a mistake but a transliteration decision — though it is worth checking that the
+decision is the same for similar terms.
+
+## The glossary review by the model
+
+The "Ask the model" button on the card of the same name sends the model **the
+whole book and the whole glossary** in one request. The model looks for what can
+only be seen with everything at once: wrong dossiers, one person in several
+entries, missing names, wrong translations and genders.
+
+- Above the findings: which review this is, and the model's score from 1 to 10
+  with its reason. It is one call's opinion, not a precise measure.
+- Every finding carries a **quotation from the book**, and the program checks
+  that the quotation is really there. Findings it cannot confirm are discarded.
+- **Nothing is applied on its own.** Each finding has its own buttons: accept the
+  correction, delete the entry, "Hide". The line at the top says how many are
+  left. A new review can be asked for once the old findings are dealt with.
+
+A **"link"** finding means the model thinks the entry is a form of another
+entry's name ("Captain Zephyr" is "Zephyr"). Instead of a merge, which would
+delete a spelling the book needs, it proposes making the entry a clone:
+
+- "Link" sets the link at once. If the prime has no note or gender, it takes the
+  clone's; if both have notes, the program first shows that the clone's note will
+  be replaced.
+- "Duplicates" opens that person's card under the finding — the same card as in
+  the "people" filter: there you can choose the prime, the note and the gender
+  for all forms at once.
+
+A **"duplicate"** finding remains for real repeats — one spelling twice, with and
+without an article ("The Scavenger" and "Scavenger"). A merge that would leave
+part of the text without an entry is discarded by the program itself.
+
+If the book and glossary do not fit the API quota, the button goes grey and
+**"Build the prompt"** lights up: it prepares the text for a web console (Google
+AI Studio, for instance), where the limits are larger. The answer is pasted back
+and goes through the same checks.
+
+## Deleting
+
+The ✕ on the right deletes a row at once, without asking — but only on screen:
+until "Save", leaving the page brings it back. Before deleting, consider whether
+the entry is needed to be found in the text: a form of a name is better made a
+clone than deleted.
 
 ## What next
 
-Once the glossary reads right, go back to the monitor, build the passport and run
-the translation. Editing the glossary **does not change already translated text**:
-if the book is translated, changing it means search and replace in the chunk
-editor.
+Glossary read through — go back to the monitor and run the passport, then the
+translation. If the book is already translated, editing the glossary will not
+affect the finished text: that is corrected in the chunk editor or by
+translating again.
