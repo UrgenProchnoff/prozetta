@@ -11,6 +11,14 @@ predates the practice and carries none.
 
 **2026-09-29**
 
+- `cc27793` — Settings saved in the GUI take effect in the server's own checks at
+  once, without restarting it. The server read the settings once, at start: a
+  user raised "Limit of one large request" to 240,000, and the glossary editor
+  still said a 233,000-token review would not fit 170,000, with the button left
+  disabled. "Build the prompt" for the passport and both reviews, and the dossier
+  length limit, held their old values the same way. The stages themselves, which
+  run as separate processes, always saw new settings.
+
 - `34b6616` — The glossary help is rewritten. It now opens with how the glossary
   reaches the translator — before each chunk the program looks for entries in it
   and hands over only those it finds — and explains from that why every spelling
