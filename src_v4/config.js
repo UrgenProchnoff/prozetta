@@ -201,12 +201,33 @@ function deepMerge(base, over) {
     return out;
 }
 
-let overrides = {};
-try {
-    const p = path.join(__dirname, 'config.overrides.json');
-    if (fs.existsSync(p)) overrides = JSON.parse(fs.readFileSync(p, 'utf-8'));
-} catch (e) {
-    console.warn(`[config] Failed to read config.overrides.json: ${e.message}`);
+function readOverrides() {
+    try {
+        const p = path.join(__dirname, 'config.overrides.json');
+        if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf-8'));
+    } catch (e) {
+        console.warn(`[config] Failed to read config.overrides.json: ${e.message}`);
+    }
+    return {};
 }
 
-export default deepMerge(defaults, overrides);
+const config = deepMerge(defaults, readOverrides());
+
+/**
+ * Read the overrides again, into the same object everything already imported.
+ *
+ * A pipeline stage is its own process and reads the settings as it starts, but
+ * the GUI server lives for days and imported this once. Settings saved in the
+ * GUI reached every run and none of the server's own checks: a user who raised
+ * pipeline.bookCallTokenBudget to 240,000 was still told his 233,000-token
+ * review would not fit 170,000, and the button that would have run it stayed
+ * disabled. The server calls this after every write of the overrides.
+ */
+export function reloadConfig() {
+    const fresh = deepMerge(defaults, readOverrides());
+    for (const key of Object.keys(config)) delete config[key];
+    Object.assign(config, fresh);
+    return config;
+}
+
+export default config;

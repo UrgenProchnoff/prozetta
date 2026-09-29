@@ -27,7 +27,9 @@ import { getPrompts } from '../prompts.js';
 // The context window is not the binding constraint — measured on Gemini's free
 // tier, tokens per minute is, and it refuses the call outright rather than
 // truncating.
-const TOKEN_BUDGET = config.pipeline.bookCallTokenBudget;
+// Read when used, not when loaded: the GUI server loads this once and keeps it
+// for days, while the setting can change under it (see reloadConfig).
+const tokenBudget = () => config.pipeline.bookCallTokenBudget;
 
 /**
  * Everything the reviewer is to be given, and what it adds up to.
@@ -72,7 +74,7 @@ export function buildGlossaryReviewPrompt(state) {
 
     return {
         system, user, tokens,
-        budget: TOKEN_BUDGET,
+        budget: tokenBudget(),
         entries: glossary.length,
         // Over the glossary: the findings name its entries, and an answer made
         // from a different version of it would point at rows that have moved.
@@ -168,8 +170,8 @@ export async function runGlossaryReviewStage(state) {
     console.log(`[Review] Prompt: ~${fmt(t.book)} tokens of book + ~${fmt(t.glossary)} of glossary + ` +
         `~${fmt(t.instructions)} of instructions = ~${fmt(t.total)}.`);
 
-    if (t.total > TOKEN_BUDGET) {
-        console.error(`\n[Review] TOO LARGE: ~${fmt(t.total)} tokens against a budget of ${fmt(TOKEN_BUDGET)}.`);
+    if (t.total > tokenBudget()) {
+        console.error(`\n[Review] TOO LARGE: ~${fmt(t.total)} tokens against a budget of ${fmt(tokenBudget())}.`);
         console.error(`[Review] The book (${fmt(t.book)}) and the glossary (${fmt(t.glossary)}) both have to be sent whole:`);
         console.error(`[Review] half a glossary cannot show that one character occupies two entries, and`);
         console.error(`[Review] half a book cannot show how a term is actually used. Splitting would not review, it would guess.`);

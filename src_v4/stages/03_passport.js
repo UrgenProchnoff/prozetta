@@ -32,7 +32,9 @@ import { getPrompts } from '../prompts.js';
 // The same number the other whole-book calls are held to: 200,000 stood here
 // while the measured ceiling turned out to be under 168,000, so the warning
 // would have stayed quiet through a refusal.
-const LARGE_BOOK_TOKENS = config.pipeline.bookCallTokenBudget;
+// Read when used, not when loaded: the GUI server loads this once and keeps it
+// for days, while the setting can change under it (see reloadConfig).
+const largeBookTokens = () => config.pipeline.bookCallTokenBudget;
 
 function normalizeGender(value) {
     const s = String(value || '').trim().toLowerCase();
@@ -129,7 +131,7 @@ export function buildPassportPrompt(state) {
 
     return {
         system, user, tokens, person, candidates, knownAuthor,
-        budget: LARGE_BOOK_TOKENS,
+        budget: largeBookTokens(),
         // Over the source text: the quoted point-of-view boundaries are located in
         // it, and an answer made from a different version would place them wrongly.
         fingerprint: fingerprint(bookText),
@@ -174,10 +176,10 @@ export async function runPassportStage(state) {
     const bookText = chunks.map(c => c.original).join('\n');
     const prompts = getPrompts(config.translation.promptLang);
     console.log(`[Passport] Book: ${chunks.length} chunks, ~${built.tokens.total.toLocaleString('en-US')} tokens.`);
-    if (built.tokens.total > LARGE_BOOK_TOKENS) {
+    if (built.tokens.total > largeBookTokens()) {
         console.warn(`[Passport] WARNING: this is a large prompt. Free tiers cap INPUT tokens per minute ` +
             `below the documented total, and the call may be refused even though the model's context ` +
-            `window fits it (pipeline.bookCallTokenBudget is ${LARGE_BOOK_TOKENS.toLocaleString('en-US')}). ` +
+            `window fits it (pipeline.bookCallTokenBudget is ${largeBookTokens().toLocaleString('en-US')}). ` +
             `The passport page can hand you this prompt to run in a web console instead.`);
     }
 

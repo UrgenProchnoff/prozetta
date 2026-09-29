@@ -31,7 +31,9 @@ import { getPrompts } from '../prompts.js';
 // What a free tier accepts in one minute. The context window is not the binding
 // constraint — measured on Gemini's free tier, tokens per minute is, and it
 // refuses the call outright rather than truncating.
-const TOKEN_BUDGET = config.pipeline.bookCallTokenBudget;
+// Read when used, not when loaded: the GUI server loads this once and keeps it
+// for days, while the setting can change under it (see reloadConfig).
+const tokenBudget = () => config.pipeline.bookCallTokenBudget;
 
 
 /** The glossary as a plain array, or empty when there is none to read. */
@@ -136,7 +138,7 @@ export function buildTranslationReviewPrompt(state, { withOriginal = false } = {
         user,
         tokens,
         withOriginal,
-        budget: TOKEN_BUDGET,
+        budget: tokenBudget(),
         // Over the translation only: that is what the quotes are taken from, and
         // what has to still be there when the answer comes back.
         fingerprint: fingerprint(chunks.map(c => c.translation || '').join('\n')),
@@ -276,8 +278,8 @@ export async function runTranslationReviewStage(state) {
     console.log(`[Review] Prompt: ~${fmt(t.text)} tokens of translation + ~${fmt(t.glossary)} of glossary` +
         `${t.passport ? ` + ~${fmt(t.passport)} of passport` : ''} + ~${fmt(t.instructions)} of instructions = ~${fmt(t.total)}.`);
 
-    if (t.total > TOKEN_BUDGET) {
-        console.error(`\n[Review] TOO LARGE: ~${fmt(t.total)} tokens against a budget of ${fmt(TOKEN_BUDGET)}.`);
+    if (t.total > tokenBudget()) {
+        console.error(`\n[Review] TOO LARGE: ~${fmt(t.total)} tokens against a budget of ${fmt(tokenBudget())}.`);
         console.error(`[Review] The translation has to be sent whole: half a book cannot show that a term is`);
         console.error(`[Review] rendered two ways or that a voice drifts, which is the entire point of this pass.`);
         console.error(`[Review] What refuses a call this size is a per-minute quota on INPUT alone, which is`);

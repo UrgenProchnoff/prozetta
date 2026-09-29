@@ -24,7 +24,7 @@ import { writeFileAtomic } from '../src_v4/utils/atomic_write.js';
 import { outstandingFindings as reviewOutstanding, findingKey, adviceQueue } from '../src_v4/core/translation_review.js';
 import { locateQuote } from '../src_v4/core/quoted_spans.js';
 import { wordDiff, condense, diffSize } from '../src_v4/core/text_diff.js';
-import config from '../src_v4/config.js';
+import config, { reloadConfig } from '../src_v4/config.js';
 
 import { execFileSync } from 'child_process';
 
@@ -2374,6 +2374,7 @@ function readOverrides() {
 
 function writeOverrides(overrides) {
     writeFileAtomic(OVERRIDES_PATH, JSON.stringify(overrides, null, 2));
+    reloadConfig();
 }
 
 // --- Settings presets: a named copy of one card's settings ---
@@ -2627,6 +2628,7 @@ app.put('/api/config', async (req, res) => {
 app.post('/api/config/reset', async (req, res) => {
     try {
         if (fs.existsSync(OVERRIDES_PATH)) fs.unlinkSync(OVERRIDES_PATH);
+        reloadConfig();
         const cfg = await loadEffectiveConfig();
         res.json({ ok: true, groups: describeConfig(cfg, {}), activeProvider: cfg.activeProvider || 'local' });
     } catch (e) {

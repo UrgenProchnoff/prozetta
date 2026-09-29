@@ -26,7 +26,7 @@ export const PASSPORT_VERSION = 1;
 // and each other cast member in the scene 300, which cut all of them: measured,
 // real dossiers run 414–763 characters, so the secondary limit truncated every
 // single one and the primary one truncated the longest.
-const DOSSIER_TOKENS = config.pipeline.dossierMaxTokens || 600;
+const dossierTokens = () => config.pipeline.dossierMaxTokens || 600;
 
 /**
  * @typedef {Object} Passport
@@ -384,7 +384,7 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
             // The dossier belongs to the cast entry; the author field carries no
             // prose, so this only fires on the old shape.
             if (author.dossier) {
-                lines.push(words.authorDossier(fitToTokens(author.dossier, DOSSIER_TOKENS)));
+                lines.push(words.authorDossier(fitToTokens(author.dossier, dossierTokens())));
                 dossiersShown++;
             }
         }
@@ -408,7 +408,7 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
         if (focal && (focal.gender === 'm' || focal.gender === 'f')) {
             lines.push(words.focal(focal.name, words.gender[focal.gender]));
             if (focal.dossier) {
-                lines.push(words.dossier(fitToTokens(focal.dossier, DOSSIER_TOKENS)));
+                lines.push(words.dossier(fitToTokens(focal.dossier, dossierTokens())));
                 dossiersShown++;
             }
         } else if (cast.length) {
@@ -427,7 +427,7 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
             if (!member?.name || !member.dossier) continue;
             if (focal && member.name.toLowerCase() === focal.name.toLowerCase()) continue;
             if (nameRegex(member.name, 'u').test(chunkText)) {
-                lines.push(words.other(member.name, fitToTokens(member.dossier, DOSSIER_TOKENS)));
+                lines.push(words.other(member.name, fitToTokens(member.dossier, dossierTokens())));
                 dossiersShown++;
             }
         }
