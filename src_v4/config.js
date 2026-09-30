@@ -124,10 +124,13 @@ const defaults = {
         // book-sized prompt already eats most of that — a second call inside the
         // same minute gets refused regardless of the requests-per-minute quota.
         maxRPM: 1,
-        // The models themselves allow 65536 out. Book-level answers are meant to
-        // be compact (a glossary diff, not a rewritten glossary), but a truncated
-        // answer costs a whole call, so leave headroom above what we expect.
-        maxOutputTokens: 16384,
+        // The models' own ceiling. Book-level answers are meant to be compact (a
+        // glossary diff, not a rewritten glossary), but a thinking model spends
+        // this same allowance on its thinking before it writes a word, and a
+        // truncated answer costs a whole call — at 16384 a high thinking level
+        // would leave too little for the answer. The limit costs nothing unless
+        // it is used.
+        maxOutputTokens: 65536,
         // How hard the model thinks before it answers: '' leaves it to the
         // model, or 'low' | 'medium' | 'high'. Google only — passed as
         // thinkingConfig.thinkingLevel; the other providers ignore it. These
