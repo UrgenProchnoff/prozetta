@@ -9,6 +9,14 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-09-30**
+
+- `968bfc7` — The book model has a "Thinking level" setting: model decides, low,
+  medium or high. For Google (Gemini) it is sent as the thinking level of the
+  request; other providers ignore it. It is unset by default and the request is
+  unchanged — models that cannot think (Gemma) refuse the field. Thinking shares
+  "Answer length limit" with the answer, so raise that with a high level.
+
 **2026-09-29**
 
 - `cc27793` — Settings saved in the GUI take effect in the server's own checks at
