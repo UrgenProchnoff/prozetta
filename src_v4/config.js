@@ -128,6 +128,12 @@ const defaults = {
         // be compact (a glossary diff, not a rewritten glossary), but a truncated
         // answer costs a whole call, so leave headroom above what we expect.
         maxOutputTokens: 16384,
+        // How hard the model thinks before it answers: '' leaves it to the
+        // model, or 'low' | 'medium' | 'high'. Google only — passed as
+        // thinkingConfig.thinkingLevel; the other providers ignore it. These
+        // calls read a whole book once and are worth thinking over, but thinking
+        // is output the answer has to share maxOutputTokens with.
+        thinkingLevel: '',
     },
 
     // --- Pipeline parameters ---

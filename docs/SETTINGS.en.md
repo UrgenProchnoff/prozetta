@@ -24,6 +24,13 @@ the translation review. There are only a handful, but each one reads the entire
 book, and here depth is exactly what matters. It can be turned off: the passport
 and the reviews then become unavailable, and translation still runs.
 
+The book model has a **thinking level**: how much the model thinks before it
+answers — "model decides", low, medium or high. It applies to Google (Gemini)
+only. High gives a more considered answer to a whole-book call, but takes longer,
+and the thinking spends the same "Answer length limit" as the answer itself —
+raise it with high. Models that cannot think (Gemma, for instance) refuse such a
+request: check with the Test button after changing it.
+
 Each job picks a provider from the cards below. The same card can serve both.
 
 ## Providers

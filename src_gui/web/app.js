@@ -3545,6 +3545,10 @@ async function renderSettings() {
             const opts = BOOK_PROVIDERS.map(v =>
                 `<option value="${esc(v)}" ${f.value === v ? 'selected' : ''}>${esc(providerName(v))}</option>`).join('');
             input = `<select id="${id}" data-type="string" data-orig="${esc(f.value)}">${opts}</select>${hint}`;
+        } else if (groupId === 'book_model' && f.key === 'thinkingLevel') {
+            const opts = ['', 'low', 'medium', 'high'].map(v =>
+                `<option value="${v}" ${(f.value || '') === v ? 'selected' : ''}>${esc(t('cfg.thinking.' + (v || 'default')))}</option>`).join('');
+            input = `<select id="${id}" data-type="string" data-orig="${esc(f.value || '')}">${opts}</select>${hint}`;
         } else if (f.key === 'promptLang') {
             const opts = ['ru', 'en'].map(v =>
                 `<option value="${v}" ${f.value === v ? 'selected' : ''}>${esc(t('cfg.promptLang.' + v))}</option>`).join('');
@@ -3671,7 +3675,7 @@ async function renderSettings() {
         logic_model: ['baseUrl', 'modelName'],
         google_model: ['apiKey', 'modelName'],
         groq_model: ['baseUrl', 'apiKey', 'modelName'],
-        book_model: ['enabled', 'provider', 'baseUrl', 'apiKey', 'modelName'],
+        book_model: ['enabled', 'provider', 'baseUrl', 'apiKey', 'modelName', 'thinkingLevel'],
         translation: ['targetLanguage', 'langSuffix'],
     };
     const simpleOnly = (g) => SIMPLE_FIELDS[g.id]

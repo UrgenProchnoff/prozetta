@@ -421,6 +421,9 @@ export function explainCallFailure(error, provider, conf) {
  * @param {'local'|'google'|'groq'} provider
  * @param {object} conf provider config block (modelName, apiKey, baseUrl, ...)
  */
+// Gemini's thinking levels, as book_model.thinkingLevel spells them.
+const THINKING_LEVELS = new Set(['low', 'medium', 'high']);
+
 export function createRawClient(provider, conf) {
     if (provider === 'google') {
         return new ChatGoogleGenerativeAIWithDiagnostics({
@@ -438,6 +441,10 @@ export function createRawClient(provider, conf) {
             // of twenty daily requests learning what the first one said.
             maxRetries: 0,
             requestTimeout: conf.timeout,
+            // Only the book profile carries it; a model that does not think
+            // refuses the field, so it is sent only when somebody set it.
+            ...(THINKING_LEVELS.has(String(conf.thinkingLevel || '').toLowerCase())
+                ? { thinkingConfig: { thinkingLevel: String(conf.thinkingLevel).toUpperCase() } } : {}),
         });
     }
     if (provider === 'groq' || provider === BOOK_OWN_PROVIDER) {
