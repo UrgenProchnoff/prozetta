@@ -11,6 +11,13 @@ predates the practice and carries none.
 
 **2026-09-30**
 
+- `1590d17` — Token usage now counts the model's thinking as output. Google reports
+  it in the total only, so for gemma-4 on Google "output" showed half its real
+  size and input plus output did not add up to the total: on Crystal Society, 2.7
+  million tokens of thinking were visible only as that gap. A local server always
+  counted thinking as output, and Google bills it as output. Usage already saved is
+  shown settled the same way.
+
 - `ae27494` — The book model's "Answer length limit" now defaults to 65,536 tokens
   instead of 16,384 — the models' own ceiling. Thinking spends the same limit as
   the answer, and with a high thinking level the old one could leave too little
