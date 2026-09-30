@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-09-30**
 
+- `ae27494` — The book model's "Answer length limit" now defaults to 65,536 tokens
+  instead of 16,384 — the models' own ceiling. Thinking spends the same limit as
+  the answer, and with a high thinking level the old one could leave too little
+  for the answer. A value already set in the settings stays as it is.
+
 - `968bfc7` — The book model has a "Thinking level" setting: model decides, low,
   medium or high. For Google (Gemini) it is sent as the thinking level of the
   request; other providers ignore it. It is unset by default and the request is
