@@ -24,25 +24,44 @@ function emptyBucket() {
     return { calls: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 }
 
+/**
+ * Thinking counted as output, wherever it was recorded.
+ *
+ * Google reports the thinking of a model like gemma-4 in its total only:
+ * promptTokenCount + candidatesTokenCount + thoughtsTokenCount = totalTokenCount,
+ * and the output column took candidatesTokenCount alone. On Crystal Society that
+ * left 2.7 million tokens of thinking visible only as the gap between "in + out"
+ * and "total", with output shown at half its size — while a local server folds
+ * the same thinking into its completion tokens and adds up. Google bills thinking
+ * as output, so it is counted as output: whatever the total holds beyond the
+ * input. Applied to what is recorded and to buckets saved before this, so old
+ * projects add up too.
+ */
+function settle(b) {
+    if (b.totalTokens > b.inputTokens + b.outputTokens) b.outputTokens = b.totalTokens - b.inputTokens;
+    return b;
+}
+
 // Coerce a possibly-partial persisted object into a well-formed totals object.
-function normalize(u) {
+export function normalize(u) {
     const out = emptyTotals();
     if (!u || typeof u !== 'object') return out;
     out.totalCalls = num(u.totalCalls);
     out.inputTokens = num(u.inputTokens);
     out.outputTokens = num(u.outputTokens);
     out.totalTokens = num(u.totalTokens) || out.inputTokens + out.outputTokens;
+    settle(out);
     for (const dim of ['byStage', 'byModel']) {
         const src = u[dim];
         if (src && typeof src === 'object') {
             for (const key of Object.keys(src)) {
                 const b = src[key] || {};
-                out[dim][key] = {
+                out[dim][key] = settle({
                     calls: num(b.calls),
                     inputTokens: num(b.inputTokens),
                     outputTokens: num(b.outputTokens),
                     totalTokens: num(b.totalTokens) || num(b.inputTokens) + num(b.outputTokens),
-                };
+                });
             }
         }
     }

@@ -16,6 +16,7 @@ import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
 import { withoutTranslation, ProjectState } from '../src_v4/core/state_manager.js';
 import { wholeWordRegex, entryRegex } from '../src_v4/core/text_stats.js';
 import { countTokens } from '../src_v4/core/tokenizer.js';
+import { normalize as normalizeUsage } from '../src_v4/core/usage_tracker.js';
 import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/stages/05_translation_review.js';
 import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages/04_glossary_review.js';
 import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_passport.js';
@@ -691,7 +692,11 @@ function projectSummary(prefix) {
 
     return {
         prefix,
-        metadata: state.metadata || {},
+        // Usage recorded before thinking was counted as output is shown the
+        // way it is counted now, without waiting for the next run to resave it.
+        metadata: state.metadata?.usage
+            ? { ...state.metadata, usage: { ...state.metadata.usage, ...normalizeUsage(state.metadata.usage) } }
+            : (state.metadata || {}),
         total: chunks.length,
         statuses,
         extracted,

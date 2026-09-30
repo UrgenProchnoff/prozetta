@@ -177,6 +177,11 @@ finds errors of meaning that the translation alone cannot show.
 What this run cost and what the project has cost in total, broken down by kind of
 call. Useful when you are paying per token, or running into a quota.
 
+"Output" includes the model's thinking: with a thinking model there is often more
+of it than of the answer itself. That is how providers count it when they bill.
+Calls you ran by hand in a web console are not here — the program did not make
+them.
+
 ## The log on the right
 
 The program's live output — the same thing the terminal shows, without having to

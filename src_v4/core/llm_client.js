@@ -24,8 +24,11 @@ import { usageTracker } from './usage_tracker.js';
 export function extractUsage(response) {
     const um = response?.usage_metadata;
     if (um && (um.input_tokens != null || um.output_tokens != null)) {
-        const i = um.input_tokens || 0, o = um.output_tokens || 0;
-        return { inputTokens: i, outputTokens: o, totalTokens: um.total_tokens || i + o };
+        const i = um.input_tokens || 0, t = um.total_tokens || 0;
+        // Thinking is output: Google leaves it out of output_tokens and puts it
+        // in the total only (see settle in usage_tracker).
+        const o = Math.max(um.output_tokens || 0, t - i);
+        return { inputTokens: i, outputTokens: o, totalTokens: t || i + o };
     }
     const rm = response?.response_metadata || {};
     const tu = rm.tokenUsage || rm.usage || rm.usageMetadata;
@@ -33,7 +36,7 @@ export function extractUsage(response) {
         const i = tu.promptTokens ?? tu.prompt_tokens ?? tu.input_tokens ?? tu.promptTokenCount ?? 0;
         const o = tu.completionTokens ?? tu.completion_tokens ?? tu.output_tokens ?? tu.candidatesTokenCount ?? 0;
         const t = tu.totalTokens ?? tu.total_tokens ?? tu.totalTokenCount ?? i + o;
-        if (i || o || t) return { inputTokens: i, outputTokens: o, totalTokens: t };
+        if (i || o || t) return { inputTokens: i, outputTokens: Math.max(o, t - i), totalTokens: t };
     }
     return null;
 }
