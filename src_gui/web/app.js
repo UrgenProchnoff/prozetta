@@ -1777,7 +1777,7 @@ async function renderMonitor(prefix) {
                 </div>
                 <div class="grid-hint">${esc(t('mon.gridHint'))}</div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
-                <div id="m-manual"></div>
+                <div id="m-own-advice"></div>
                 <div id="m-review"></div>
                 <details class="usage-details" open>
                     <summary>${esc(t('usage.heading'))}</summary>
@@ -2348,7 +2348,7 @@ async function renderMonitor(prefix) {
     // refresh, which during a run is every few seconds, and a form inside it
     // would lose what was being typed. Drawn once; it reads the summary only
     // when asked to.
-    const manualEl = document.getElementById('m-manual');
+    const manualEl = document.getElementById('m-own-advice');
     manualEl.innerHTML = `<details class="usage-details" id="man-box">
         <summary>${esc(t('man.heading'))}</summary>
         <div class="cfg-hint">${esc(t('man.hint'))}</div>
