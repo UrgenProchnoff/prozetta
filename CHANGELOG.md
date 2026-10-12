@@ -11,6 +11,9 @@ predates the practice and carries none.
 
 **2026-10-12**
 
+- `3407f0c` — The monitor help explains what the number on a translation-review
+  finding means and why the list follows the book.
+
 - `5cf3299` — Every translation-review finding now shows its rank by importance —
   "3/56", say. The model lists findings worst first, while the list on the monitor
   follows the book, and that order stays: it is easier to find your way in. The
