@@ -11,6 +11,12 @@ predates the practice and carries none.
 
 **2026-10-12**
 
+- `5cf3299` — Every translation-review finding now shows its rank by importance —
+  "3/56", say. The model lists findings worst first, while the list on the monitor
+  follows the book, and that order stays: it is easier to find your way in. The
+  number is the finding's place in the saved review, so it does not shift as
+  others are dealt with; reviews already saved get numbers too.
+
 - `ef5ea7e` — Every badge on a project card has a tooltip now, saying what ✓, ~, ⏳,
   "extracted" and the spend line count. Only ⛔ had one before.
 
