@@ -3182,7 +3182,19 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
             <div class="man-form">
                 <textarea id="ca-advice" rows="3" placeholder="${esc(t('man.advice'))}"></textarea>
                 <input id="ca-quote" type="text" placeholder="${esc(t('man.quote'))}">
-                <div class="man-row"><button id="ca-add" class="primary">${esc(t('man.add'))}</button></div>
+                <div class="man-row">
+                    <input id="ca-chunks" type="text" placeholder="${esc(t('man.alsoChunks'))}">
+                    <input id="ca-search" type="text" placeholder="${esc(t('man.search'))}">
+                    <select id="ca-where">
+                        <option value="translation">${esc(t('man.where.translation'))}</option>
+                        <option value="original">${esc(t('man.where.original'))}</option>
+                    </select>
+                </div>
+                <div class="man-row">
+                    <button id="ca-preview">${esc(t('man.preview'))}</button>
+                    <button id="ca-add" class="primary">${esc(t('man.add'))}</button>
+                    <span id="ca-result" class="cfg-hint"></span>
+                </div>
             </div>
             <div id="ca-queue"></div>
         </div>
@@ -3576,19 +3588,45 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
         drawQueue();
         document.getElementById('ca-advice').focus();
     });
+    // This chunk always, plus whatever else the fields name: a fault noticed
+    // here is often a fault wherever the same word stands.
+    const adviceBody = (preview) => {
+        const extra = document.getElementById('ca-chunks').value.trim();
+        return {
+            advice: document.getElementById('ca-advice').value.trim(),
+            quote: document.getElementById('ca-quote').value.trim(),
+            chunks: extra ? `${i + 1}, ${extra}` : String(i + 1),
+            search: document.getElementById('ca-search').value,
+            where: document.getElementById('ca-where').value,
+            preview,
+        };
+    };
+    const showAdviceReach = (res) => {
+        const list = l => l.map(n => n + 1).join(', ');
+        const parts = [res.chunks.length
+            ? t('man.found', { n: res.chunks.length, list: list(res.chunks.slice(0, 40)) + (res.chunks.length > 40 ? '…' : '') })
+            : t('man.none')];
+        if (res.untranslated?.length) parts.push(t('man.untranslated', { list: list(res.untranslated.slice(0, 20)) }));
+        document.getElementById('ca-result').textContent = parts.join(' · ');
+    };
+    document.getElementById('ca-preview').addEventListener('click', async () => {
+        try { showAdviceReach(await api(`/api/projects/${encodeURIComponent(prefix)}/advice/add`, { method: 'POST', body: adviceBody(true) })); }
+        catch (err) { document.getElementById('ca-result').textContent = err.message; }
+    });
     document.getElementById('ca-add').addEventListener('click', async (e) => {
-        const advice = document.getElementById('ca-advice').value.trim();
-        const quote = document.getElementById('ca-quote').value.trim();
+        const body = adviceBody(false);
         e.target.disabled = true;
         try {
-            const res = await api(`/api/projects/${encodeURIComponent(prefix)}/advice/add`,
-                { method: 'POST', body: { chunks: String(i + 1), advice, quote } });
+            const res = await api(`/api/projects/${encodeURIComponent(prefix)}/advice/add`, { method: 'POST', body });
             if (res.preview) throw new Error(t('man.notTranslated'));
-            chunk.advice = [...(chunk.advice || []), { key: res.key, issue: 'manual', advice, ...(quote ? { quote } : {}) }];
-            document.getElementById('ca-advice').value = '';
-            document.getElementById('ca-quote').value = '';
+            if (res.chunks.includes(i)) {
+                chunk.advice = [...(chunk.advice || []),
+                    { key: res.key, issue: 'manual', advice: body.advice, ...(body.quote ? { quote: body.quote } : {}) }];
+            }
+            for (const id of ['ca-advice', 'ca-quote', 'ca-chunks', 'ca-search']) document.getElementById(id).value = '';
+            showAdviceReach(res);
             drawQueue();
-            toast(t('man.added', { n: 1 }), 'ok');
+            toast(t('man.added', { n: res.chunks.length }), 'ok');
         } catch (err) {
             toast(t('common.error', { msg: err.message }), 'error');
         }

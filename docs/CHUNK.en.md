@@ -84,9 +84,12 @@ The **Queue a correction** button on the toolbar opens a field for an instructio
 to the translator about this chunk. The next Translation run carries it out — it
 fixes the saved translation and sends it for review, as with an accepted review
 finding. Select a phrase in the translation before pressing it, and the phrase
-becomes the quote. Below is everything already queued on this chunk, each with a
-Remove button. The same tool for several chunks at once is on the monitor, under
-"Your own correction".
+becomes the quote. The same correction can go on other chunks at once: the "also on
+chunks" field takes numbers and ranges (`5, 7-12`), and the search finds chunks by
+a word in the translation or the original — handy when a fault noticed here recurs
+wherever the same word stands. "Show chunks" first shows where it will land. Below
+is everything already queued on this chunk, each with a Remove button. The same
+tool without a starting chunk is on the monitor, under "Your own correction".
 
 ## The edit history
 
