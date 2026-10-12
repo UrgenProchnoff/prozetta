@@ -528,11 +528,11 @@ async function renderDashboard() {
                 <div class="p-in_progress" style="width:${pct('in_progress')}%"></div>
             </div>
             <div class="badges">
-                <span class="badge b-success">✓ ${p.statuses.success}</span>
-                <span class="badge b-best_effort">~ ${p.statuses.best_effort}</span>
+                <span class="badge b-success" title="${esc(t('dash.successTitle'))}">✓ ${p.statuses.success}</span>
+                <span class="badge b-best_effort" title="${esc(t('dash.bestEffortTitle'))}">~ ${p.statuses.best_effort}</span>
                 ${p.statuses.blocked ? `<span class="badge b-blocked" title="${esc(t('dash.blockedTitle'))}">⛔ ${p.statuses.blocked}</span>` : ''}
-                <span class="badge">⏳ ${p.statuses.pending + p.statuses.in_progress}</span>
-                <span class="badge">${esc(t('dash.extracted', { done: p.extracted, total: p.total }))}</span>
+                <span class="badge" title="${esc(t('dash.pendingTitle'))}">⏳ ${p.statuses.pending + p.statuses.in_progress}</span>
+                <span class="badge" title="${esc(t('dash.extractedTitle'))}">${esc(t('dash.extracted', { done: p.extracted, total: p.total }))}</span>
             </div>
             ${p.metadata?.usage?.totalCalls ? `<div class="meta usage-line" title="${esc(t('usage.cardTitle'))}">⚡ ${esc(t('usage.cardLine', { calls: fmtNum(p.metadata.usage.totalCalls), tokens: fmtNum(p.metadata.usage.totalTokens) }))}</div>` : ''}
             <div class="row">
