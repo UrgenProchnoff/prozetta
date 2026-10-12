@@ -9,6 +9,11 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-10-12**
+
+- `ef5ea7e` — Every badge on a project card has a tooltip now, saying what ✓, ~, ⏳,
+  "extracted" and the spend line count. Only ⛔ had one before.
+
 **2026-09-30**
 
 - `1590d17` — Token usage now counts the model's thinking as output. Google reports
