@@ -5,6 +5,9 @@ terminology consistent across an entire book and self-checks its own quality.
 
 🇷🇺 [Русская версия](README.ru.md)
 
+![The monitor: the pipeline, the chunk map and the live log](docs/img/monitor.en.png)
+*The monitor for Stevenson's* Strange Case of Dr Jekyll and Mr Hyde *(public domain), translated into Russian: every step done, five review findings queued for fixing.*
+
 > 🚀 **Start here:** run `start.bat` (Windows) or `./start.sh` (macOS/Linux). It
 > installs what it needs on the first run and opens the web interface in your
 > browser. There is also a [step-by-step beginner guide](docs/GUIDE.en.md):
@@ -62,6 +65,8 @@ articles are in `docs/`.
 Translating a book into a second language reuses the chunking and the extracted
 terms, which is the expensive part.
 
+![The projects screen: a translated book and its German copy](docs/img/projects.en.png)
+
 **[Monitor](docs/MONITOR.en.md)** — one book's main screen: the seven-step
 pipeline with a line under each step saying where it stands, one sentence naming
 what to do next, and a Start button that does exactly that. Below it, a map of the
@@ -83,6 +88,8 @@ corrected by hand.
 the review's findings for this chunk above them; a finding's button selects its
 quote in the editable text. **Ctrl+Shift+F** searches every chunk at once, in the
 translation or the original, and replaces across the book with a single undo.
+
+![The chunk editor: a review finding above the original and the editable translation](docs/img/chunk.en.png)
 
 **[History](docs/HISTORY.en.md)** — everything that has changed the translation,
 newest first, filtered by kind of change. Opening a row shows the change itself,
