@@ -11,6 +11,16 @@ predates the practice and carries none.
 
 **2026-10-12**
 
+- `207bd50` — Corrections of your own: an instruction to the translator written by
+  hand, on one chunk or several. On the monitor, a "Your own correction" block:
+  the instruction, an optional quote, and the chunks — by number and range (`3,
+  7-12`), by a search of the translation or the original, or both; "Show chunks"
+  first shows where it will land. On the chunk page, a "Queue a correction"
+  button: a phrase selected in the translation becomes the quote, and the chunk's
+  queue is listed below with Remove. The correction joins the same queue as
+  accepted review findings, and the next Translation run fixes it the same way.
+  Untranslated chunks are named and skipped.
+
 - `3407f0c` — The monitor help explains what the number on a translation-review
   finding means and why the list follows the book.
 
