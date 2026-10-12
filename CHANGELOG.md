@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-10-12**
 
+- `6729dd3` — A correction queued from the chunk page can go on other chunks at
+  once: an "also on chunks" field (numbers and ranges) and a search of the
+  translation or the original, with a preview — as on the monitor. Handy when a
+  fault noticed in one chunk recurs wherever the same word stands.
+
 - `f3cb16b` — The "Your own correction" block on the monitor did not appear: it had
   the same internal id as the hidden "Build the prompt" button, so the form was
   written into that button, wiping its label. The block has an id of its own now,
