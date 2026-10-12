@@ -1251,6 +1251,10 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 }
 .rev-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .rev-issue { color: var(--muted); font-size: 12px; }
+.man-form { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.man-form textarea { resize: vertical; }
+.man-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.man-row input { flex: 1 1 160px; min-width: 0; }
 .rev-rank { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); border: 1px solid var(--border); border-radius: 9px; padding: 0 7px; cursor: help; }
 .rev-quote {
     margin: 6px 0 4px;

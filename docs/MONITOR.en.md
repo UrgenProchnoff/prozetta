@@ -154,6 +154,25 @@ accepted from the first stays on its chunks.
 A finding leaves the list on its own once the text it complained about is gone.
 Nothing is applied without you.
 
+## Your own correction
+
+A folded block above the review, for instructions you write yourself: you read
+the translation and noticed the narrator's gender slipping in one scene, or a
+name rendered two ways across several chapters. The correction joins the same
+queue as accepted review findings, and the next Translation run fixes only the
+chosen chunks by it — just as it does with the model's advice.
+
+- **What to fix** — the instruction itself, required.
+- **Quote** — the phrase in the translation it is about; optional, but it helps
+  the translator find the place.
+- **Chunks** — by number and range (`3, 7-12, 40`), by searching the text — in the
+  translation or the original — or both together.
+
+"Show chunks" first shows which chunks the correction will land on. Only chunks
+already translated can be corrected: the others are named and skipped. A queued
+correction appears under "Queued for fixing", marked "your own", and can be
+removed like any advice.
+
 ## Run by hand
 
 The second route for whole-book calls — the glossary review, the passport, the

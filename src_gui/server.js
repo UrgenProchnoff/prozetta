@@ -23,6 +23,7 @@ import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_pa
 import { extractJson, describeJsonError, extractFromTags } from '../src_v4/utils/parsers.js';
 import { writeFileAtomic } from '../src_v4/utils/atomic_write.js';
 import { outstandingFindings as reviewOutstanding, findingKey, adviceQueue } from '../src_v4/core/translation_review.js';
+import { manualKey, parseChunkList, chunksContaining } from '../src_v4/core/manual_advice.js';
 import { locateQuote } from '../src_v4/core/quoted_spans.js';
 import { wordDiff, condense, diffSize } from '../src_v4/core/text_diff.js';
 import config, { reloadConfig } from '../src_v4/config.js';
@@ -1802,6 +1803,58 @@ app.post('/api/projects/:prefix/advice/remove', (req, res) => {
     state.metadata.updatedAt = new Date().toISOString();
     writeJsonAtomic(statePath(prefix), state);
     res.json({ ok: true, chunk: index, queued: chunk.advice?.length || 0 });
+});
+
+/**
+ * Queue advice a person wrote on one or more chunks — see core/manual_advice.js.
+ *
+ * The chunks are named by number ("3, 7-12"), found by a phrase in the
+ * translation or the original, or both together. With `preview` nothing is
+ * written: the answer says which chunks the request would reach, so the form
+ * can show them before anything is queued.
+ */
+app.post('/api/projects/:prefix/advice/add', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    const { advice, quote, chunks: spec, search, where, preview } = req.body || {};
+    const text = String(advice || '').trim();
+    if (!preview && !text) return res.status(400).json({ error: 'Напишите, что исправить' });
+    if (!String(spec || '').trim() && !String(search || '').trim()) {
+        return res.status(400).json({ error: 'Укажите номера кусков или текст для поиска' });
+    }
+    if (!preview && jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — очередь заблокирована' });
+    }
+
+    let state;
+    try { state = readJson(statePath(prefix)); }
+    catch { return res.status(404).json({ error: 'Project not found' }); }
+    const chunks = state.chunks || [];
+
+    const listed = parseChunkList(spec, chunks.length);
+    if (listed.bad.length) {
+        return res.status(400).json({ error: `Нет таких кусков: ${listed.bad.join(', ')} (в книге ${chunks.length})` });
+    }
+    const found = String(search || '').trim() ? chunksContaining(chunks, search, where) : [];
+    const reached = [...new Set([...listed.indices, ...found])].sort((a, b) => a - b);
+    // With nothing translated there is nothing to fix; those are reported, not queued.
+    const ready = reached.filter(i => String(chunks[i]?.translation || '').trim());
+    const untranslated = reached.filter(i => !ready.includes(i));
+
+    if (preview || !ready.length) {
+        return res.json({ ok: true, preview: true, chunks: ready, untranslated });
+    }
+
+    const key = manualKey();
+    const item = { key, issue: 'manual', advice: text.slice(0, 2000) };
+    const q = String(quote || '').trim();
+    if (q) item.quote = q.slice(0, 600);
+    for (const i of ready) chunks[i].advice = [...(chunks[i].advice || []), item];
+
+    state.metadata = state.metadata || {};
+    state.metadata.updatedAt = new Date().toISOString();
+    writeJsonAtomic(statePath(prefix), state);
+    res.json({ ok: true, key, chunks: ready, untranslated });
 });
 
 /**

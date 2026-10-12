@@ -78,6 +78,16 @@ An empty replacement deletes what was found. That is a legitimate operation, but
 has to be allowed by ticking "allow an empty replacement". The tick clears when the
 panel closes: it is permission for the thing being done now.
 
+## Queue a correction
+
+The **Queue a correction** button on the toolbar opens a field for an instruction
+to the translator about this chunk. The next Translation run carries it out — it
+fixes the saved translation and sends it for review, as with an accepted review
+finding. Select a phrase in the translation before pressing it, and the phrase
+becomes the quote. Below is everything already queued on this chunk, each with a
+Remove button. The same tool for several chunks at once is on the monitor, under
+"Your own correction".
+
 ## The edit history
 
 At the bottom, every step this chunk went through, newest first. Opening one shows

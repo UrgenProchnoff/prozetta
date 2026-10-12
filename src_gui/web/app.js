@@ -1777,6 +1777,7 @@ async function renderMonitor(prefix) {
                 </div>
                 <div class="grid-hint">${esc(t('mon.gridHint'))}</div>
                 <div id="m-grid" class="chunk-grid"><span class="loading">${esc(t('common.loading'))}</span></div>
+                <div id="m-manual"></div>
                 <div id="m-review"></div>
                 <details class="usage-details" open>
                     <summary>${esc(t('usage.heading'))}</summary>
@@ -2225,7 +2226,7 @@ async function renderMonitor(prefix) {
             <div class="rev-item">
                 <div class="rev-head">
                     <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${q.chunk}">${q.chunk + 1}</a>
-                    <span class="rev-issue">${esc(a.issue || '')}</span>
+                    <span class="rev-issue">${esc(a.issue === 'manual' ? t('rev.manualIssue') : (a.issue || ''))}</span>
                     ${a.term ? `<span class="rev-term">${esc(t('rev.term', { term: a.term }))}</span>` : ''}
                     <span class="spacer"></span>
                     <button data-queue="remove" data-chunk="${q.chunk}" data-key="${esc(a.key || '')}">${esc(t('rev.queueRemove'))}</button>
@@ -2340,6 +2341,73 @@ async function renderMonitor(prefix) {
         </details>` + manualRunBox();
         wireBookCalls(prefix, refreshGrid);
     }
+
+    // --- Advice of one's own, queued like an accepted finding ---
+    //
+    // Outside the review block on purpose: that block is redrawn on every
+    // refresh, which during a run is every few seconds, and a form inside it
+    // would lose what was being typed. Drawn once; it reads the summary only
+    // when asked to.
+    const manualEl = document.getElementById('m-manual');
+    manualEl.innerHTML = `<details class="usage-details" id="man-box">
+        <summary>${esc(t('man.heading'))}</summary>
+        <div class="cfg-hint">${esc(t('man.hint'))}</div>
+        <div class="man-form">
+            <textarea id="man-advice" rows="3" placeholder="${esc(t('man.advice'))}"></textarea>
+            <input id="man-quote" type="text" placeholder="${esc(t('man.quote'))}">
+            <div class="man-row">
+                <input id="man-chunks" type="text" placeholder="${esc(t('man.chunks'))}">
+                <input id="man-search" type="text" placeholder="${esc(t('man.search'))}">
+                <select id="man-where">
+                    <option value="translation">${esc(t('man.where.translation'))}</option>
+                    <option value="original">${esc(t('man.where.original'))}</option>
+                </select>
+            </div>
+            <div class="man-row">
+                <button id="man-preview">${esc(t('man.preview'))}</button>
+                <button id="man-add" class="primary">${esc(t('man.add'))}</button>
+                <span id="man-result" class="cfg-hint"></span>
+            </div>
+        </div>
+    </details>`;
+
+    const manualBody = (preview) => ({
+        advice: document.getElementById('man-advice').value,
+        quote: document.getElementById('man-quote').value,
+        chunks: document.getElementById('man-chunks').value,
+        search: document.getElementById('man-search').value,
+        where: document.getElementById('man-where').value,
+        preview,
+    });
+    const chunkList = list => list.map(i => i + 1).join(', ');
+    const showReach = (res) => {
+        const parts = [res.chunks.length
+            ? t('man.found', { n: res.chunks.length, list: chunkList(res.chunks.slice(0, 40)) + (res.chunks.length > 40 ? '…' : '') })
+            : t('man.none')];
+        if (res.untranslated?.length) parts.push(t('man.untranslated', { list: chunkList(res.untranslated.slice(0, 20)) }));
+        document.getElementById('man-result').textContent = parts.join(' · ');
+    };
+
+    document.getElementById('man-preview').addEventListener('click', async () => {
+        try { showReach(await api(`/api/projects/${encodeURIComponent(prefix)}/advice/add`, { method: 'POST', body: manualBody(true) })); }
+        catch (err) { document.getElementById('man-result').textContent = err.message; }
+    });
+    document.getElementById('man-add').addEventListener('click', async (e) => {
+        e.target.disabled = true;
+        try {
+            const res = await api(`/api/projects/${encodeURIComponent(prefix)}/advice/add`, { method: 'POST', body: manualBody(false) });
+            showReach(res);
+            if (!res.preview) {
+                toast(t('man.added', { n: res.chunks.length }), 'ok');
+                document.getElementById('man-advice').value = '';
+                document.getElementById('man-quote').value = '';
+                refreshGrid();
+            }
+        } catch (err) {
+            toast(t('common.error', { msg: err.message }), 'error');
+        }
+        e.target.disabled = false;
+    });
 
     reviewEl.addEventListener('click', async (e) => {
         // Taking something out of the queue goes by chunk, not by finding: the
@@ -3075,6 +3143,7 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
             <span class="badge" title="${esc(t('chunk.termsTitle'))}">${extracted ? esc(t('chunk.termsExtracted', { n: nTerms ?? '✓' })) : esc(t('chunk.termsNot'))}</span>
             ${helpLink('chunk')}
             <button id="c-find" title="${esc(t('chunk.findTitle'))}">${esc(t('chunk.find'))}</button>
+            ${chunk.translation ? `<button id="c-advice" title="${esc(t('man.chunkTitle'))}">${esc(t('man.chunkButton'))}</button>` : ''}
             <button id="c-toggle-orig" title="${esc(t('chunk.toggleTitle'))}"></button>
             <label class="cs-opt" id="c-sync-wrap" title="${esc(t('chunk.syncScrollTitle'))}"><input type="checkbox" id="c-sync"> ${esc(t('chunk.syncScroll'))}</label>
             <span class="font-ctl">
@@ -3107,6 +3176,15 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
                 <span class="cfg-hint">${esc(t('chunk.replaceScope'))}</span>
             </div>
             <div id="cs-hits"></div>
+        </div>
+        <div class="chunk-search" id="c-advice-box" hidden>
+            <div class="cfg-hint">${esc(t('man.chunkHint'))}</div>
+            <div class="man-form">
+                <textarea id="ca-advice" rows="3" placeholder="${esc(t('man.advice'))}"></textarea>
+                <input id="ca-quote" type="text" placeholder="${esc(t('man.quote'))}">
+                <div class="man-row"><button id="ca-add" class="primary">${esc(t('man.add'))}</button></div>
+            </div>
+            <div id="ca-queue"></div>
         </div>
         ${findingsHtml}
         ${chunk.dispute ? `<div class="dispute-note">${esc(t('chunk.disputeExplain', { reason: chunk.dispute.reason || '?' }))}</div>` : ''}
@@ -3469,6 +3547,65 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
             toast(e.message, 'error');
         }
     }
+
+    // --- Advice of one's own for this chunk ---
+    //
+    // Queued, not applied: the next translation run fixes the saved translation
+    // with it, the same way it acts on an accepted review finding. The queue is
+    // listed here because nothing else on this page shows it, and advice nobody
+    // can see is advice nobody can take back.
+    const adviceBox = document.getElementById('c-advice-box');
+    function drawQueue() {
+        const items = chunk.advice || [];
+        document.getElementById('ca-queue').innerHTML = items.length ? `
+            <div class="cfg-hint" style="margin-top:8px">${esc(t('man.chunkQueue', { n: items.length }))}</div>
+            ${items.map(a => `<div class="rev-item"><div class="rev-head">
+                <span class="rev-issue">${esc(a.issue === 'manual' ? t('rev.manualIssue') : (a.issue || ''))}</span>
+                <span class="spacer"></span>
+                <button data-ca-remove="${esc(a.key || '')}">${esc(t('rev.queueRemove'))}</button>
+            </div>
+            ${a.quote ? `<div class="rev-quote">«${esc(a.quote)}»</div>` : ''}
+            <div class="rev-advice">→ ${esc(a.advice || '')}</div></div>`).join('')}` : '';
+    }
+    document.getElementById('c-advice')?.addEventListener('click', () => {
+        adviceBox.hidden = !adviceBox.hidden;
+        if (adviceBox.hidden) return;
+        // A phrase selected in the translation is what the advice is about.
+        const picked = ta.value.slice(ta.selectionStart, ta.selectionEnd).trim();
+        if (picked) document.getElementById('ca-quote').value = picked;
+        drawQueue();
+        document.getElementById('ca-advice').focus();
+    });
+    document.getElementById('ca-add').addEventListener('click', async (e) => {
+        const advice = document.getElementById('ca-advice').value.trim();
+        const quote = document.getElementById('ca-quote').value.trim();
+        e.target.disabled = true;
+        try {
+            const res = await api(`/api/projects/${encodeURIComponent(prefix)}/advice/add`,
+                { method: 'POST', body: { chunks: String(i + 1), advice, quote } });
+            if (res.preview) throw new Error(t('man.notTranslated'));
+            chunk.advice = [...(chunk.advice || []), { key: res.key, issue: 'manual', advice, ...(quote ? { quote } : {}) }];
+            document.getElementById('ca-advice').value = '';
+            document.getElementById('ca-quote').value = '';
+            drawQueue();
+            toast(t('man.added', { n: 1 }), 'ok');
+        } catch (err) {
+            toast(t('common.error', { msg: err.message }), 'error');
+        }
+        e.target.disabled = false;
+    });
+    document.getElementById('ca-queue').addEventListener('click', async (e) => {
+        const key = e.target.dataset.caRemove;
+        if (key === undefined) return;
+        try {
+            await api(`/api/projects/${encodeURIComponent(prefix)}/advice/remove`,
+                { method: 'POST', body: { chunk: i, key: key || undefined } });
+            chunk.advice = (chunk.advice || []).filter(a => (a.key || '') !== key);
+            drawQueue();
+        } catch (err) {
+            toast(t('common.error', { msg: err.message }), 'error');
+        }
+    });
 
     document.getElementById('c-save').addEventListener('click', () => saveChunk(false));
     document.getElementById('c-approve').addEventListener('click', () => saveChunk(true));
