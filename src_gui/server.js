@@ -645,7 +645,7 @@ function projectSummary(prefix) {
     if (fs.existsSync(transReviewPath(prefix))) {
         try {
             const r = readJson(transReviewPath(prefix));
-            const { open, done, hidden, dismissed } = reviewOutstanding(r, chunks);
+            const { open, done, hidden, dismissed, total } = reviewOutstanding(r, chunks);
             // For a glossary finding that names its entry: how many chunks use
             // that term. Fixing the glossary changes nothing already translated,
             // so this is the size of the work the finding actually implies, and
@@ -666,13 +666,13 @@ function projectSummary(prefix) {
                 summary: r.summary || null,
                 returned: r.returned ?? null,
                 rejected: r.rejected || null,
-                open, done, hidden,
+                open, done, hidden, total,
                 // The dismissed ones, so they can be read and taken back. Trimmed
                 // to what identifies a finding and what it objected to: the rest
                 // comes with it when it returns to the open list, and this list
                 // rides along on every summary the monitor asks for.
                 dismissed: dismissed.map(f => ({
-                    key: f.key, chunk: f.chunk, scope: f.scope,
+                    key: f.key, chunk: f.chunk, scope: f.scope, rank: f.rank,
                     issue: f.issue, quote: f.quote, problem: f.problem,
                 })),
             };

@@ -1251,6 +1251,7 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 }
 .rev-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .rev-issue { color: var(--muted); font-size: 12px; }
+.rev-rank { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); border: 1px solid var(--border); border-radius: 9px; padding: 0 7px; cursor: help; }
 .rev-quote {
     margin: 6px 0 4px;
     font-style: italic;

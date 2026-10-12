@@ -2254,6 +2254,11 @@ async function renderMonitor(prefix) {
         ].filter(Boolean).join(' · ');
 
         const where = { glossary: `#/glossary/${encodeURIComponent(prefix)}`, passport: `#/passport/${encodeURIComponent(prefix)}` };
+        // Where the model ranked the finding — it lists them worst first — while
+        // the list itself stays in book order. A review saved before ranks were
+        // kept still has its findings in that order, so every one has a place.
+        const rankBadge = f => (f.rank && r.total)
+            ? `<span class="rev-rank" title="${esc(t('rev.rankTitle', { n: f.rank, total: r.total }))}">${f.rank}/${r.total}</span>` : '';
         // A rule under the last finding of each chunk, so a block of findings on
         // one chunk reads as a block. The list is already ordered by chunk.
         const lastOfChunk = new Set();
@@ -2287,6 +2292,7 @@ async function renderMonitor(prefix) {
                     <span class="badge b-${f.scope === 'chunk' ? 'best_effort' : 'disputed'}">${esc(t('rev.scope.' + f.scope))}</span>
                     <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${f.chunk}?finding=${encodeURIComponent(f.key)}"
                        title="${esc(t('rev.goToQuote'))}">${f.chunk + 1}</a>
+                    ${rankBadge(f)}
                     <span class="rev-issue">${esc(f.issue)}</span>
                     ${f.queued ? `<span class="badge b-success">${esc(t('rev.queuedBadge'))}</span>` : ''}
                     <span class="spacer"></span>
@@ -2311,6 +2317,7 @@ async function renderMonitor(prefix) {
                     <span class="badge b-${f.scope === 'chunk' ? 'best_effort' : 'disputed'}">${esc(t('rev.scope.' + f.scope))}</span>
                     <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${f.chunk}"
                        title="${esc(t('rev.goToQuote'))}">${f.chunk + 1}</a>
+                    ${rankBadge(f)}
                     <span class="rev-issue">${esc(f.issue)}</span>
                     <span class="spacer"></span>
                     <button data-rev="restore" data-key="${esc(f.key)}">${esc(t('rev.restore'))}</button>

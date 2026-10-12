@@ -235,7 +235,16 @@ export function outstandingFindings(review, chunks) {
     const handled = new Set((review?.handled || []).map(k => String(k).toLowerCase()));
     const open = [];
     const dismissedList = [];
+    const rank = new Map();
     let done = 0, hidden = 0;
+
+    // The model lists findings worst first, and that order is information the
+    // list below throws away by sorting on chunks — which it must, since a list
+    // in rank order jumps all over the book. So each finding carries its place:
+    // "3/56" says how much it matters without moving it. Counted over the whole
+    // review, so a number stays the same as findings around it are dealt with.
+    const total = (review?.findings || []).length;
+    (review?.findings || []).forEach((f, index) => { rank.set(f, index + 1); });
 
     for (const f of review?.findings || []) {
         const key = findingKey(f);
@@ -251,7 +260,7 @@ export function outstandingFindings(review, chunks) {
         // the finding done the moment it queues the work.
         const queued = (chunk?.advice || []).some(a => a.key === key);
         if (!queued) {
-            if (dismissed.has(key)) { hidden++; dismissedList.push({ ...f, key }); continue; }
+            if (dismissed.has(key)) { hidden++; dismissedList.push({ ...f, key, rank: rank.get(f) }); continue; }
             if (handled.has(key)) { done++; continue; }
             if (!text) { done++; continue; }
         }
@@ -267,7 +276,7 @@ export function outstandingFindings(review, chunks) {
         if (!queued && appliedInHistory(chunk, key, f.advice, review?.generatedAt)) { done++; continue; }
         if (!queued && locateQuote(text, f.quote).occurrences === 0) { done++; continue; }
 
-        open.push({ ...f, key, queued });
+        open.push({ ...f, key, queued, rank: rank.get(f) });
     }
 
     // By chunk, so findings that will be fixed together are read together and the
@@ -278,7 +287,7 @@ export function outstandingFindings(review, chunks) {
         || String(a.issue).localeCompare(String(b.issue)));
     dismissedList.sort((a, b) => (a.chunk - b.chunk) || String(a.issue).localeCompare(String(b.issue)));
 
-    return { open, done, hidden, dismissed: dismissedList };
+    return { open, done, hidden, dismissed: dismissedList, total };
 }
 
 /**
