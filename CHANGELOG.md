@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-10-12**
 
+- `f3cb16b` — The "Your own correction" block on the monitor did not appear: it had
+  the same internal id as the hidden "Build the prompt" button, so the form was
+  written into that button, wiping its label. The block has an id of its own now,
+  and the button is whole again.
+
 - `207bd50` — Corrections of your own: an instruction to the translator written by
   hand, on one chunk or several. On the monitor, a "Your own correction" block:
   the instruction, an optional quote, and the chunks — by number and range (`3,
