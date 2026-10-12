@@ -134,6 +134,12 @@ Inside is the list of findings. Each one is **a decision, not a notification**:
 The button with the chunk number opens that chunk **on the quote itself**, which
 arrives selected in the editable text.
 
+The list runs **in book order**, not by importance: findings on one chunk stand
+together, and the order matches the map. Importance is the number beside the
+chunk — `3/56`, say: the model lists findings worst first, and this is the
+finding's place in that list. The number does not change as others are dealt
+with.
+
 A dismissal is not a deletion: at the end of the list is a folded **Dismissed
 findings** block, each with a **Take back** button that returns it to the open
 ones. Dismissing is a judgement, and a judgement can be hasty — the more so when
