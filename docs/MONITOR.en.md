@@ -237,7 +237,7 @@ only the refused chunks are picked up, nothing else is touched. A local model ha
 no such filter.
 
 **A call does not fit the quota.** The program says so with a number: "does not
-fit the model's limit: 195,000 tokens against a limit of 170,000." Open Run by
+fit the model's limit: 215,000 tokens against a limit of 200,000." Open Run by
 hand and carry the prompt to a web console.
 
 **One word needs changing across the whole book.** Open any chunk and press

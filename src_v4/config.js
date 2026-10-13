@@ -163,22 +163,23 @@ const defaults = {
         // provider's tokens per minute, not the model's context window, and the
         // call is refused outright rather than truncated.
         //
-        // 250,000 was the documented figure and it is the wrong one: that is the
-        // total per-minute allowance, while what actually refuses these calls is
-        // a separate, lower quota over INPUT alone —
-        // GenerateContentInputTokensPerModelPerMinute-FreeTier. Measured on
-        // gemini-3.7-flash free tier: 157,411 / 159,533 / 167,843 / 167,852
-        // tokens of input all went through, and ~195,000 was refused four times
-        // over eight minutes. So the ceiling sits between 168k and 195k, and this
-        // sits just above the largest input actually seen accepted — blocking a
-        // call the provider has already taken is as wrong as passing one it will
-        // refuse.
+        // What refuses these calls is the quota over INPUT alone —
+        // GenerateContentInputTokensPerModelPerMinute-FreeTier — and the 429
+        // names it as 250,000. The real ceiling is lower than the number it names.
+        // Measured on gemini-3.8-flash free tier, October 2026, sizes as counted
+        // by countTokens: 200,441 went through; 225,573 was refused three times,
+        // once after six idle minutes; 238,864 of Russian text was refused too,
+        // so the gap is not a matter of characters per token. The ceiling sits
+        // between 200k and 225k, and this is the largest input seen accepted.
         //
-        // No safety margin on top, because none is needed any more: the callers
-        // now count the instructions as well as the data, and the glossary review
-        // of Morphotrophic estimates 167,850 against the 167,852 the API charged.
-        // Raise this on a paid tier.
-        bookCallTokenBudget: 170000,
+        // An earlier measurement on gemini-3.7-flash had ~195,000 refused four
+        // times, which is why this stood at 170,000. Quotas move; the error
+        // message says which one refused, and the manual route is always open.
+        //
+        // No safety margin on top: the callers count the instructions as well as
+        // the data, and the glossary review of Morphotrophic estimates 167,850
+        // against the 167,852 the API charged. Raise this on a paid tier.
+        bookCallTokenBudget: 200000,
 
         // Translation loop
         translationMaxRetries: 10,
@@ -228,7 +229,7 @@ const config = deepMerge(defaults, readOverrides());
  * A pipeline stage is its own process and reads the settings as it starts, but
  * the GUI server lives for days and imported this once. Settings saved in the
  * GUI reached every run and none of the server's own checks: a user who raised
- * pipeline.bookCallTokenBudget to 240,000 was still told his 233,000-token
+ * pipeline.bookCallTokenBudget to 240,000 was still told a 233,000-token
  * review would not fit 170,000, and the button that would have run it stayed
  * disabled. The server calls this after every write of the overrides.
  */
