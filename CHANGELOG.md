@@ -9,6 +9,18 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-10-13**
+
+- `751ea4d` — A whole-book call may now carry 200,000 tokens by default instead
+  of 170,000. Measured on the free Gemini tier: 200,000 tokens go through, from
+  225,000 up are refused, although the error names the quota as 250,000. A
+  setting you changed yourself stays as it is.
+
+- `38d3c42` — The README is rewritten: it now starts from the problem and the
+  design, in a plain register, and covers what has appeared since the last
+  revision — linked forms of a name, hand-written corrections, a separate
+  service for the book model, languages of the original.
+
 **2026-10-12**
 
 - `6729dd3` — A correction queued from the chunk page can go on other chunks at
