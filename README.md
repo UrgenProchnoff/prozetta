@@ -1,250 +1,301 @@
 # prozetta
 
-*Prose + Rosetta* — an LLM pipeline for **literary translation** that keeps names and
-terminology consistent across an entire book and self-checks its own quality.
+prozetta translates fiction with language models. The text is translated in
+parts. Decisions that must hold for the whole book are made once and passed to
+every part: how names and terms are spelled, the narrative person, forms of
+address, the gender of each character. The program runs locally, through a web
+interface in the browser, with a cloud or a local model.
 
-🇷🇺 [Русская версия](README.ru.md)
+[Русская версия](README.ru.md)
 
-![The monitor: the pipeline, the chunk map and the live log](docs/img/monitor.en.png)
-*The monitor for Stevenson's* Strange Case of Dr Jekyll and Mr Hyde *(public domain), translated into Russian: every step done, five review findings queued for fixing.*
+![The monitor: the pipeline, the chunk map and the log](docs/img/monitor.en.png)
 
-> 🚀 **Start here:** run `start.bat` (Windows) or `./start.sh` (macOS/Linux). It
-> installs what it needs on the first run and opens the web interface in your
-> browser. There is also a [step-by-step beginner guide](docs/GUIDE.en.md):
-> installation, a free Google API key, a first translation, and everything from
-> there to a finished FB2. It is in the program too, first in **? Help**.
+*The monitor for R. L. Stevenson's* Strange Case of Dr Jekyll and Mr Hyde
+*(public domain), translated into Russian. Every step is done, and five review
+findings are queued for fixing.*
 
-Most machine translation handles a chapter in isolation, so a character called
-*Wei Ying* drifts into *Weiying* and *Young Master Wei* a hundred pages later.
-prozetta reads the whole book first and translates second.
+## The problem
 
-Its answer to that is not one trick but a shape: **things that can only be decided
-once for a whole book are decided once, in one place, and then handed to every
-chunk.** Who narrates. Whether characters address each other formally. What gender
-a minor character is. How a term is spelled. None of these can be worked out from
-inside a single chunk, and all of them go wrong when each chunk decides for
-itself.
+A book does not fit into a single model response, so it is translated in parts
+of a few thousand characters. When the parts are translated independently, the
+translation loses its unity. A character's name acquires several spellings,
+informal address turns formal, a minor character changes gender. None of this
+can be resolved from inside a single part: the information needed lies in other
+parts of the book.
 
-Nothing a model proposes is applied on its own. The glossary is a draft you
-correct; every finding of every review is a decision you make. The program's job
-is to find the questions and to make each one cheap to answer.
+## The approach
 
-## Getting started
+The work is split into two levels.
+
+**The book level.** Before translation, the program builds two documents from
+the whole text:
+
+- **the glossary**: names, places and terms with their agreed translation,
+  gender and a note;
+- **the passport**: narrative person and tense, forms of address, the cast with
+  genders and short dossiers, how direct speech is set.
+
+**The part level.** Each part is translated separately. Along with it, the model
+receives an extract of the glossary, only the terms that occur in that part, and
+the relevant parts of the passport. A separate model call checks the draft.
+Depending on its score, the part is accepted, corrected or translated again.
+
+Two calls read the book as a whole. The glossary review runs before translation,
+the translation review after it. They find what cannot be seen from a single
+part: inconsistent terms, a broken register, errors of meaning.
+
+Review findings are not applied automatically: a person accepts or dismisses
+each one. Accepted findings are queued on their parts, and the next translation
+run corrects only those parts.
+
+Some of the work is done without a model:
+
+- counting where terms occur;
+- working out who narrates each part, from names mentioned and the rotation of
+  chapters;
+- checking how direct speech is set.
+
+## Installation and start
+
+You need [Node.js](https://nodejs.org). The program starts with one script:
 
 ```bash
 start.bat          # Windows
 ./start.sh         # macOS, Linux
 ```
 
-Either one installs dependencies on the first run, starts the server and opens
-`http://127.0.0.1:3457`. The port is set by `GUI_PORT`; the server binds to
-`127.0.0.1` and listens to nothing else.
+On first run the script installs the dependencies. It then starts the server
+and opens `http://127.0.0.1:3457` in the browser. The port is set by the
+`GUI_PORT` variable. The server accepts connections from the local address
+only.
 
-You need **Node.js**, and a model to translate with — one of:
+For newcomers there is a [step-by-step guide](docs/GUIDE.en.md), from
+installation and a free Google key to a finished FB2 book. The same guide opens
+in the program under Help.
 
-- a **local** OpenAI-compatible server (LM Studio, Ollama, llama.cpp, vLLM). No
-  key, no cost, and no content filter, which is the only way to finish a book
-  whose chunks a cloud model refuses;
-- **Google**, whose free tier is enough for a whole book — a key from AI Studio;
-- **any service with an OpenAI-compatible interface** — OpenRouter, Together,
-  NVIDIA NIM: the address, key and model name can be kept as a preset and
-  switched between;
-- anything else reachable over the OpenAI protocol.
+## Models
 
-Keys are entered on the Settings page and stored in
-`src_v4/config.overrides.json`, which is gitignored.
+The program uses models in two roles:
 
-## What the interface does
+- **The main model** extracts terms, translates and checks parts. There are many
+  calls, so cost and speed matter here.
+- **The book model** makes the calls that read the whole book: the passport, the
+  glossary review, the translation review. There are few such calls, and each
+  takes tens or hundreds of thousands of tokens.
 
-Eight screens, each with a **? Help** button that opens an article about it: what
-is on the screen, what it is for, and what to do in the usual cases. The same
-articles are in `docs/`.
+You can connect:
 
-**[Projects](docs/PROJECTS.en.md)** — every book you have loaded. Upload a `.txt`
-(the encoding is detected and converted to UTF-8) or drop files into `txt/`.
-Translating a book into a second language reuses the chunking and the extracted
-terms, which is the expensive part.
+- **Google AI Studio.** The free tier is enough for a book.
+- **A local server with an OpenAI-compatible interface:** llama.cpp, LM Studio,
+  Ollama, vLLM. No key is needed and there is no content filter, so a local
+  model can translate parts a cloud model refuses.
+- **Any service with an OpenAI-compatible interface,** such as OpenRouter or
+  Mistral. The address, key and model name are saved as a preset.
 
-![The projects screen: a translated book and its German copy](docs/img/projects.en.png)
+The book model can use a service of its own. For Google models, a thinking level
+can be set.
 
-**[Monitor](docs/MONITOR.en.md)** — one book's main screen: the seven-step
-pipeline with a line under each step saying where it stands, one sentence naming
-what to do next, and a Start button that does exactly that. Below it, a map of the
-book: one cell per chunk, coloured by state, marked in the corners for chunks a
-filter refused or the review wants changed, each cell a click away from its text.
+Keys are entered on the settings page. They are stored in
+`src_v4/config.overrides.json`, which git does not track.
 
-**[Glossary](docs/GLOSSARY.en.md)** — the term list as a table rather than JSON:
-search, type, gender, notes, and how many chunks each term actually occurs in
-(zero means it was invented or misrecorded). It also groups entries that are forms
-of one word — `replenisher` against `replenishers` — which is where a book quietly
-starts calling one thing three names.
+## How a book is translated
 
-**[Passport](docs/PASSPORT.en.md)** — the decisions that hold for a whole book:
-narrative person and tense, the form of address, the cast with their genders and
-dossiers, how direct speech is set. Built by one call over the entire text, then
-corrected by hand.
+1. **Extraction.** The program reads the book part by part and records names,
+   places and terms.
+2. **Glossary.** What was recorded is merged into one list, which a person
+   checks and corrects.
+3. **Glossary review.** The book model checks the list against the text and
+   proposes changes: a translation, a gender, a note, a link between forms of one
+   name.
+4. **Passport.** The book model determines the book-level decisions, and a
+   person checks them.
+5. **Translation.** Parts are translated in order, each through the review loop.
+6. **Translation review.** The book model reads the finished translation and
+   lists findings with verbatim quotes.
+7. **Export.** The book is assembled into a text file or into FB2 with a cover
+   and a table of contents.
 
-**[Chunk editor](docs/CHUNK.en.md)** — original and translation side by side, with
-the review's findings for this chunk above them; a finding's button selects its
-quote in the editable text. **Ctrl+Shift+F** searches every chunk at once, in the
-translation or the original, and replaces across the book with a single undo.
+Steps 3, 4 and 6 are optional: the book can be translated without them, but
+with them the translation is more consistent.
 
-![The chunk editor: a review finding above the original and the editable translation](docs/img/chunk.en.png)
+### The review loop for a part
 
-**[History](docs/HISTORY.en.md)** — everything that has changed the translation,
-newest first, filtered by kind of change. Opening a row shows the change itself,
-word by word. Every change can be undone, and the undo is recorded rather than
-erased, so it can be undone in its turn.
+The check gives a score from 0 to 10 and says separately whether the translation
+is acceptable as a whole (`like`):
 
-**[Book](docs/BOOK.en.md)** — assembles FB2 with a cover, title, author and a
-table of contents found from the headings in the text.
+| Check result                 | Action                       |
+|------------------------------|------------------------------|
+| score ≥ 9.1 and `like = 1`   | the translation is accepted  |
+| score ≥ 7.5 and `like = 1`   | the translation is corrected |
+| score < 7.5 or `like = 0`    | the part is translated again |
 
-**[Settings](docs/SETTINGS.en.md)** — which model does which job, and how to reach
-it. Two jobs: a **main model** that translates and checks chunk by chunk, where
-price and speed matter, and a **book model** for the handful of calls that read
-the entire book, where depth does.
+A part gets at most ten attempts, of which at most three are fresh translations.
+If no attempt is accepted, the best one is kept. If the translator and the check
+never agree, the part is marked as disputed and left to a person. An interrupted
+translation resumes from the part where it stopped.
 
-## How a book gets translated
+### Whole-book calls
 
-1. **Extraction** reads the book in chunks and pulls out names, places and terms.
-2. **Glossary** consolidates them into one list for you to correct.
-3. **Glossary review** — one call over the whole book, saying what the list gets
-   wrong. Findings are proposals; you accept or reject each.
-4. **Passport** — the whole-book decisions, above.
-5. **Translation** — chunk by chunk through **translate → review → decide →
-   fix/redraft**, with the glossary and the passport as ground truth.
-6. **Translation review** — one call over the finished text, finding what no chunk
-   could see: a broken register, terms that disagree, a joke that went missing.
-   Accepted findings are queued onto their chunks and applied by the next
-   translation run.
-7. **Export** — the book, as text or FB2.
+A whole-book call is usually limited not by the model's context window but by
+the provider's quota on input tokens per minute. On the free Gemini tier this
+quota is stated as 250,000 tokens, but the actual limit is lower. Measured on
+gemini-3.8-flash in October 2026: a request of 200,000 tokens (as counted by
+`countTokens`) went through, while requests from 225,000 up were refused,
+including after several idle minutes. The limit did not depend on the language
+of the text.
 
-Steps 3, 4 and 6 read the entire book in a single call. What limits them is not
-the model's context window but the **quota on input tokens per minute** — measured
-on Gemini's free tier, calls of ~167,000 tokens go through and ~195,000 are
-refused. So each of them can also be run by hand: the program builds the prompt,
-you paste it into a web console where the window is a million tokens and no API
-key is needed, and paste the answer back. It passes exactly the same checks — and
-by that route the **original** can be sent alongside the translation, which finds
-errors of meaning the translation alone cannot show.
+So by default a call is limited to 200,000 tokens (`bookCallTokenBudget`). For
+paid tiers and other providers it can be raised to their own limits.
 
-### The review loop, chunk by chunk
+If a call does not fit the quota, it can be run by hand:
 
-| Review result            | Action                          |
-|--------------------------|---------------------------------|
-| score ≥ 9.1 and `like=1` | ✅ **Accepted** — saved          |
-| score ≥ 7.5 and `like=1` | 🔧 **Fix** — correct the errors  |
-| score < 7.5 or `like=0`  | 🔄 **Redraft** — translate anew  |
+1. the program builds the prompt;
+2. the prompt is pasted into a web console, such as Google AI Studio;
+3. the answer is pasted back into the program.
 
-Ten iterations per chunk at most; the best attempt is kept if they run out. A run
-that is interrupted resumes where it stopped. A chunk the two sides cannot agree
-on is marked disputed and left for a human rather than burning the budget.
+An answer obtained by hand goes through the same checks as one from the API.
+Only by hand can the original be sent along with the translation. The prompt
+doubles in size, but it finds errors of meaning.
+
+### Forms of one name
+
+A book refers to one person in several ways: "Maria Johnson", "Johnson", "Ms
+Johnson". Each form stays a separate glossary entry, because it is found in the
+text by its own spelling. One entry is made the main one (the prime), and the
+others become its clones: a clone's note reads `= Maria Johnson`. A clone takes
+its gender and dossier from the prime and keeps only its own translation.
+
+The glossary finds likely forms of one name and shows them as a card, where the
+prime and the clones are chosen together. The glossary review can also propose a
+link. Details: [docs/GLOSSARY.en.md](docs/GLOSSARY.en.md).
+
+### Corrections
+
+The correction queue holds:
+
+- accepted translation review findings;
+- corrections written by hand for one or several parts. Parts are chosen by
+  number, by range, or by searching the translation or the original.
+
+The next translation run corrects only the parts that have corrections, with the
+same review loop. Everything that changed the translation is recorded in the
+history, and any change can be undone.
+
+## The interface
+
+Each screen has a Help button that opens an article about it. The same articles
+are in `docs/`.
+
+- [Projects](docs/PROJECTS.en.md): the loaded books. The encoding of a `.txt`
+  file is detected automatically. Translating the same book into another
+  language reuses the chunking and extraction already done.
+- [Monitor](docs/MONITOR.en.md): the state of the book, a recommended next step,
+  the chunk map, translation review findings, the correction queue, the run log,
+  token spend.
+- [Glossary](docs/GLOSSARY.en.md): the term table with search, filters and the
+  review.
+- [Passport](docs/PASSPORT.en.md): the book-level decisions, open to editing.
+- [Chunk editor](docs/CHUNK.en.md): original and translation side by side, the
+  review findings for that part, search and replace across the book.
+- [History](docs/HISTORY.en.md): every change to the translation, with the
+  difference shown and an undo.
+- [Book](docs/BOOK.en.md): FB2 assembly.
+- [Settings](docs/SETTINGS.en.md): models, connections, thresholds.
+
+![The projects screen: a translated book and its copy for German](docs/img/projects.en.png)
+
+![The chunk editor: a review finding above the original and the translation](docs/img/chunk.en.png)
+
+## Languages
+
+The target language is set when a project is created and is passed to the model
+as a string, so any language the model knows will do.
+
+The calculations made without a model depend on the source language. They count
+pronouns to determine the narrative person and gender, and they find direct
+speech. Built-in tables cover English, Russian, Ukrainian, Polish, German,
+French, Spanish, Italian and Portuguese. For other languages the program asks
+the model for a table and accepts it only if the text bears it out: for example,
+words named as frequent must actually be frequent. Accepted tables are stored in
+`src_v4/language_profiles.json`. If the language cannot be determined, the
+program reports that the value was not measured rather than passing off an
+empty count as a result.
 
 ## Command line
 
-Everything the interface does, the CLI does too — it is the same pipeline, and the
-GUI runs these very commands.
+The interface runs the same commands that are available from the command line:
 
 ```bash
-node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=txt/My_Book.txt [--model=google|local|custom]
+node src_v4/main.js --stage=<stage> --file=txt/My_Book.txt [--model=google|local|custom]
 ```
 
-`--file` is required at every stage. It identifies the project: the source, the
-prefix of its state and glossary files, and the output name — which is what lets
-several books run in parallel, each with its own state.
+Stages: `extract`, `glossary`, `passport`, `translate`, `review`, `export`.
+`--file` is required: it identifies the project. Several books can be processed
+at the same time.
 
 ```bash
-# Extract terms and build the glossary
-node src_v4/main.js --stage=extract --file=txt/My_Book.txt --model=google
-
-# Review the glossary against the whole book (writes findings, applies nothing)
-node src_v4/main.js --stage=glossary --file=txt/My_Book.txt
-
-# Build the book passport
-node src_v4/main.js --stage=passport --file=txt/My_Book.txt
-
-# Translate
-node src_v4/main.js --stage=translate --file=txt/My_Book.txt --model=google
-
-# Review the finished translation (writes findings, changes nothing)
-node src_v4/main.js --stage=review --file=txt/My_Book.txt
-
-# Assemble whatever is translated, complete or not
-node src_v4/main.js --stage=export --file=txt/My_Book.txt
+node src_v4/main.js --stage=extract   --file=txt/My_Book.txt --lang=German --suffix=de
+node src_v4/main.js --stage=glossary  --file=txt/My_Book.txt   # glossary review
+node src_v4/main.js --stage=passport  --file=txt/My_Book.txt
+node src_v4/main.js --stage=translate --file=txt/My_Book.txt
+node src_v4/main.js --stage=review    --file=txt/My_Book.txt   # translation review
+node src_v4/main.js --stage=export    --file=txt/My_Book.txt   # → txt/My_Book_de.txt
 ```
 
-Target language is set at extraction and then fixed for the project:
+The target language is set at extraction and stays with the project. When
+running from the command line, cloud keys can be passed in the environment
+variables `GOOGLE_API_KEY` and `CUSTOM_API_KEY`.
+
+Utility commands:
 
 ```bash
-node src_v4/main.js --stage=extract --file=txt/My_Book.txt --lang=English --suffix=en
-# later stages assemble txt/My_Book_en.txt
-```
-
-Cloud keys come from the environment when running this way:
-
-```bash
-export GOOGLE_API_KEY="your_key"
-export CUSTOM_API_KEY="your_key"
-```
-
-### Tools
-
-```bash
-node src_v4/tools/reset_to_stage1.js --file=txt/My_Book.txt   # drop translations, keep what extraction found
-npm run i18n        # interface strings: both languages present, none dead
-npm run routes      # every call the interface makes has a route to answer it
-npm run changelog   # every commit is recorded, in both languages
+node src_v4/tools/reset_to_stage1.js --file=txt/My_Book.txt   # drop the translation, keep the extraction
+node src_v4/tools/glossary_hygiene.js --file=txt/My_Book.txt  # a report on the glossary's state
+npm run i18n        # interface strings: both languages present, none unused
+npm run routes      # every interface request has a handler on the server
+npm run changelog   # every commit is recorded in the changelog, in both languages
 ```
 
 ## Configuration
 
-Models and pipeline parameters live in [src_v4/config.js](src_v4/config.js);
-anything changed in the GUI is written to `src_v4/config.overrides.json` and
-applied at the next stage run.
+Defaults are in [src_v4/config.js](src_v4/config.js). Changes made in the
+interface are written to `src_v4/config.overrides.json`. The main parameters:
 
-Worth knowing:
+- `approvalScoreThreshold`, `redraftScoreThreshold`: the review loop
+  thresholds, 9.1 and 7.5 by default.
+- `bookCallTokenBudget`: the largest whole-book call, 200,000 tokens by default.
+- `targetLanguage`, `langSuffix`: the default target language and file suffix.
+  The language is written in the form the model's instructions expect:
+  "German" with `promptLang: 'en'`, «немецкий» with `'ru'`.
+- `promptLang`: the language of the instructions given to the model (`ru` or
+  `en`), not to be confused with the target language.
 
-- **approve at ≥ 9.1, fix at ≥ 7.5, redraft below** — the review loop's thresholds.
-- **bookCallTokenBudget** — the ceiling for a whole-book call, 170,000 by default.
-  This is a quota, not a context window; change it if your provider's differs.
-- **targetLanguage / langSuffix** — the default language to translate into and the
-  exported file's suffix. Written into the prompt as a string, so spell it the way
-  `promptLang` expects (`немецкий` for `ru`, `German` for `en`).
-- **promptLang** — the language of the instructions given to the model, `ru` or
-  `en`. Not the target language.
+Models of the Gemma 4 26B class and larger work well as the main model. With
+parts of about 1,000 tokens, a reasoning model needs a context of about 32,000
+tokens.
 
-Precedence for the language: **CLI flag → project metadata → config.js**.
-
-**Models.** `gemma4-26b-a4b` and larger do well as the main model. With the
-default ~1k-token chunks, give a reasoning model ~32k of context: the chunk, the
-glossary extract and the reasoning trace all need room.
-
-## Project layout
+## Repository layout
 
 ```
-src_v4/                # The pipeline
-  main.js              # CLI entry point
-  config.js            # Models and pipeline parameters
-  prompts.js           # What the models are told
-  stages/              # 01_extraction, 02_consolidation, 03_passport,
-                       # 04_glossary_review, 05_translation_review, translation_loop
-  core/                # llm_client, state_manager, tokenizer, passport, pov_map,
-                       # glossary_review, translation_review, quoted_spans, text_diff,
-                       # dialogue, book_call, book_assembler, usage_tracker
-  tools/               # reset_to_stage1, and the checks: i18n, routes, changelog
-  utils/               # parsers, rate_limiter
-src_gui/               # The web interface, over the same pipeline
-  server.js            # API and static files
-  web/                 # app.js, i18n.js, style.css
-docs/                  # The help articles, one per screen
-projects/<book>/       # One folder per book: state, glossary, passport, reviews (gitignored)
-txt/                   # Source texts and output (gitignored)
+src_v4/                 the pipeline
+  main.js               command-line entry point
+  config.js             parameters and defaults
+  prompts.js            instructions for the models
+  stages/               stages: extraction, glossary consolidation, passport,
+                        glossary review, translation review, translation loop
+  core/                 models, project state, chunking, the glossary and links
+                        between forms, the passport and narrators, direct speech,
+                        reviews, the correction queue, history, book assembly,
+                        token accounting
+  tools/                utility commands and checks
+src_gui/                the web interface over the same pipeline
+docs/                   help articles, one per screen
+projects/<book>/        a book's state, glossary, passport and reviews
+txt/                    source texts and results
 ```
 
-A book's own files never enter git. `projects/`, `txt/`, `config.overrides.json`
-and `.env` are all ignored — one ignored directory per book rather than a pattern
-per file type, because a new kind of artifact used to default to *not* ignored,
-which is how a copyrighted translation nearly got committed.
+Book texts and their translations never enter the repository: the `projects/`
+and `txt/` directories and the key file are excluded in `.gitignore`.
 
 ## License
 
