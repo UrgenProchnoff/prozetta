@@ -21,7 +21,7 @@ import { spansFromQuotes } from '../core/quoted_spans.js';
 import { splitTextIntoChunks, chunkTokens, countTokens } from '../core/tokenizer.js';
 import { fingerprint, fingerprintMismatch } from '../core/book_call.js';
 import { carryExtraction } from '../core/rechunk.js';
-import { loadPassport, savePassport, handEdited } from '../core/passport.js';
+import { loadPassport, savePassport, handEdited, acceptedNotes, mergeNotes } from '../core/passport.js';
 import { profileForText, reloadLearnedProfiles } from '../core/language.js';
 import { learnLanguageProfile, validateLanguageProfile, saveLearnedProfile } from '../core/language_learn.js';
 import config from '../config.js';
@@ -107,8 +107,14 @@ export function buildPassportPrompt(state) {
     // person.
     const knownAuthor = String(state.data.metadata?.book?.author || '').trim() || undefined;
 
+    // Notes accepted on an earlier run survive the rebuild, so the model is shown
+    // them — otherwise it proposes them again and they have to be rejected again.
+    const accepted = acceptedNotes(loadPassport(state.getPassportPath()))
+        .map(n => ({ topic: n.topic || undefined, advice: n.advice }));
+
     const evidence = {
         knownAuthor,
+        acceptedNotes: accepted.length ? accepted : undefined,
         narrativePerson: { detected: person.person, share: Number(person.share.toFixed(2)), counts: person.counts },
         characterCandidates: candidates.map(c => ({
             name: c.name,
@@ -355,6 +361,14 @@ export function applyPassportAnswer(state, answer, meta) {
             ? `[Passport] Direct speech in ${targetLang} is set with "${passport.dialogue.marker}".`
             : `[Passport] Direct speech: the model named no marker — left unset, and nothing will be said about it in the prompts.`);
     }
+
+    // --- notes for the translator ---
+    // Proposals only: none reaches a prompt until a person accepts it.
+    passport.notes = mergeNotes(passport.notes, answer?.notes);
+    const proposed = passport.notes.filter(n => n.status === 'proposed').length;
+    console.log(proposed
+        ? `[Passport] ${proposed} note(s) for the translator proposed — accept or reject them on the passport page.`
+        : `[Passport] No new notes for the translator.`);
 
     const address = normalizeAddressForm(answer?.narration?.addressForm);
     passport.narration = {

@@ -10,7 +10,7 @@ import { personGroups, MAX_NOTE_CHARS } from '../src_v4/core/glossary_links.js';
 import { getPrompts } from '../src_v4/prompts.js';
 import { outstandingFindings as glossaryOutstanding } from '../src_v4/core/glossary_review.js';
 import { projectPaths, projectDir, ensureProjectDir, listProjects, PROJECTS_DIR, exportFileName } from '../src_v4/core/paths.js';
-import { handEdited } from '../src_v4/core/passport.js';
+import { handEdited, acceptedNotes } from '../src_v4/core/passport.js';
 import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
 import { withoutTranslation, ProjectState } from '../src_v4/core/state_manager.js';
@@ -1343,7 +1343,11 @@ app.get('/api/projects/:prefix/passport', (req, res) => {
         // The dialogue field is a norm; whether the text obeys it is a separate
         // fact, and the page that invites you to change the norm is where you
         // want to see what changing it would be arguing with.
-        res.json({ exists: true, passport, totalChunks: total, speech: speechAdherence(chunks, passport?.dialogue?.marker || null) });
+        // Accepted notes ride along on every chunk, so their cost is per chunk.
+        const notes = acceptedNotes(passport);
+        const notesTokens = notes.length
+            ? countTokens(notes.map(n => `- ${n.topic ? `${n.topic}: ` : ''}${n.advice}`).join('\n')) : 0;
+        res.json({ exists: true, passport, totalChunks: total, notesTokens, speech: speechAdherence(chunks, passport?.dialogue?.marker || null) });
     } catch (e) {
         res.status(500).json({ error: `Не удалось прочитать паспорт: ${e.message}` });
     }

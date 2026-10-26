@@ -157,6 +157,12 @@ const ru = {
            ${targetLang} начинается реплика, и приведи одну короткую выдуманную
            реплику как образец.
 
+        7. ЗАМЕТКИ переводчику: что ещё в этой книге стоит знать тому, кто её
+           переводит, — всё, о чём не спрашивают пункты выше. Каждая заметка —
+           отдельный пункт: их принимают или отклоняют по одной. Не повторяй то,
+           что уже сказано в полях выше, и заметки из <evidence> под
+           "acceptedNotes" — они уже приняты. Нечего добавить — пустой список.
+
         Рассуждай шаг за шагом.
         JSON должен быть обёрнут в тройные кавычки (markdown block).
 
@@ -185,7 +191,10 @@ const ru = {
           "dialogue": {
             "marker": "ОДИН знак препинания, с которого по нормам ${targetLang} начинается реплика прямой речи (например «—» или «„»)",
             "sample": "одна короткая выдуманная реплика, оформленная по этим нормам на ${targetLang}"
-          }
+          },
+          "notes": [
+            { "topic": "о чём, в двух-трёх словах", "advice": "что знать и что делать переводчику" }
+          ]
         }
         \`\`\``,
         user: userBuilders.passport,
@@ -614,6 +623,12 @@ const en = {
            that a line of dialogue opens with by the conventions of ${targetLang}, and
            give one short invented line as an example.
 
+        7. NOTES for the translator: what else whoever translates this book should
+           know — anything the items above do not ask about. Each note is a separate
+           item: they are accepted or rejected one at a time. Do not repeat what the
+           fields above already say, nor the notes under "acceptedNotes" in
+           <evidence> — those are already accepted. Nothing to add — an empty list.
+
         Reason step by step.
         The JSON must be wrapped in triple backticks (markdown block).
 
@@ -642,7 +657,10 @@ const en = {
           "dialogue": {
             "marker": "ONE punctuation mark that a line of direct speech opens with by the conventions of ${targetLang} (e.g. «—» or «„»)",
             "sample": "one short invented line of dialogue, set by those conventions, in ${targetLang}"
-          }
+          },
+          "notes": [
+            { "topic": "what it is about, in two or three words", "advice": "what the translator should know and do" }
+          ]
         }
         \`\`\``,
         user: userBuilders.passport,

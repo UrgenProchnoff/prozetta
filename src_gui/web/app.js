@@ -2807,6 +2807,21 @@ async function renderPassport(prefix) {
             ${p.narration?.addressNote ? `<div class="cfg-hint" style="margin-top:8px">${esc(t('pass.note'))}: ${esc(p.narration.addressNote)}</div>` : ''}
         </div>
 
+        <h3>${esc(t('pass.notes'))}</h3>
+        <div class="cfg-hint">${esc(t('pass.notesHint'))}</div>
+        <table class="glossary">
+            <thead><tr>
+                <th style="width:20%">${esc(t('pass.noteTopic'))}</th>
+                <th>${esc(t('pass.noteAdvice'))}</th>
+                <th style="width:18%"></th>
+            </tr></thead>
+            <tbody id="p-notes"></tbody>
+        </table>
+        <div class="toolbar" style="margin-top:6px">
+            <button id="p-note-add" class="btn">${esc(t('pass.noteAdd'))}</button>
+            <span class="cfg-hint" id="p-notes-cost"></span>
+        </div>
+
         <h3>${esc(t('pass.cast'))}</h3>
         <table class="glossary">
             <thead><tr>
@@ -2837,6 +2852,54 @@ async function renderPassport(prefix) {
     const dirtyEl = document.getElementById('p-dirty');
     const markDirty = () => { dirty = true; dirtyEl.hidden = false; };
 
+    // Notes for the translator: the model proposes, a person decides, and only
+    // accepted ones reach a prompt — so the decision is the whole interface.
+    p.notes = Array.isArray(p.notes) ? p.notes : [];
+    const notesBody = document.getElementById('p-notes');
+    const notesCost = document.getElementById('p-notes-cost');
+    let notesChanged = false;
+    const renderNotes = () => {
+        notesBody.innerHTML = p.notes.length ? p.notes.map((n, i) => {
+            const status = n.status || 'proposed';
+            const actions = [
+                status !== 'accepted' ? `<button class="primary" data-note="accepted" data-ni="${i}">${esc(t('pass.noteAccept'))}</button>` : '',
+                status !== 'rejected' ? `<button class="btn" data-note="rejected" data-ni="${i}">${esc(t('pass.noteReject'))}</button>` : '',
+                n.source === 'hand' ? `<button class="danger" data-note="delete" data-ni="${i}" title="${esc(t('pass.noteDelete'))}">✕</button>` : '',
+            ].join(' ');
+            return `<tr data-ni="${i}" class="note-${status}"${status === 'rejected' ? ' style="opacity:.5"' : ''}>
+                <td><input data-nf="topic" value="${esc(n.topic || '')}"></td>
+                <td><div class="grow" data-val="${esc(n.advice || '')}"><textarea data-nf="advice" rows="1">${esc(n.advice || '')}</textarea></div></td>
+                <td><div class="cfg-hint">${esc(t('pass.noteStatus.' + status))}${n.source === 'hand' ? ' · ' + esc(t('pass.noteHand')) : ''}</div>${actions}</td>
+            </tr>`;
+        }).join('') : `<tr><td colspan="3" class="cfg-hint">${esc(t('pass.notesNone'))}</td></tr>`;
+        const accepted = p.notes.filter(n => n.status === 'accepted').length;
+        // The count comes from the server's tokenizer and describes the saved
+        // passport; after a change it is stale until the next save.
+        notesCost.textContent = accepted
+            ? (notesChanged ? t('pass.notesCostStale', { n: accepted }) : t('pass.notesCost', { n: accepted, tokens: data.notesTokens || 0 }))
+            : '';
+    };
+    renderNotes();
+
+    notesBody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-note]');
+        if (!btn) return;
+        const i = +btn.dataset.ni;
+        if (btn.dataset.note === 'delete') p.notes.splice(i, 1);
+        else p.notes[i].status = btn.dataset.note;
+        notesChanged = true;
+        renderNotes();
+        markDirty();
+    });
+    document.getElementById('p-note-add').addEventListener('click', () => {
+        // Written by the person, so accepted from the start.
+        p.notes.push({ topic: '', advice: '', status: 'accepted', source: 'hand' });
+        notesChanged = true;
+        renderNotes();
+        notesBody.querySelector(`tr[data-ni="${p.notes.length - 1}"] input`)?.focus();
+        markDirty();
+    });
+
     // Narration fields are addressed by dotted path so the form stays flat.
     // Named and taken off again on the way out: hung anonymously on the page
     // container, it was added on every visit and removed on none, so a second
@@ -2860,6 +2923,15 @@ async function renderPassport(prefix) {
             markDirty();
             return;
         }
+        const noteRow = e.target.closest('tr[data-ni]');
+        if (noteRow && e.target.dataset.nf) {
+            const n = p.notes[+noteRow.dataset.ni];
+            if (e.target.dataset.nf === 'advice') e.target.parentElement.dataset.val = e.target.value;
+            n[e.target.dataset.nf] = e.target.value;
+            notesChanged = true;
+            markDirty();
+            return;
+        }
         const tr = e.target.closest('tr[data-ci]');
         if (tr && e.target.dataset.cf) {
             const c = p.characters[+tr.dataset.ci];
@@ -2873,10 +2945,17 @@ async function renderPassport(prefix) {
 
     document.getElementById('p-save').addEventListener('click', async () => {
         try {
+            // A note with no text says nothing; it would only be dropped on read.
+            p.notes = p.notes.filter(n => String(n.advice || '').trim());
             await api(`/api/projects/${encodeURIComponent(prefix)}/passport`, { method: 'PUT', body: p });
             dirty = false;
             dirtyEl.hidden = true;
             toast(t('pass.saved'), 'ok');
+            if (notesChanged) {
+                try { data.notesTokens = (await api(`/api/projects/${encodeURIComponent(prefix)}/passport`)).notesTokens; } catch { /* the count only */ }
+                notesChanged = false;
+                renderNotes();
+            }
         } catch (e) {
             toast(t('gloss.saveError', { msg: e.message }), 'error');
         }

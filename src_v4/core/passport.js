@@ -99,6 +99,14 @@ const dossierTokens = () => config.pipeline.dossierMaxTokens || 600;
  *   well be right; only one can be verified, and a confident wrong name would be
  *   indistinguishable from either without this flag. `null` means nobody has
  *   looked, which is what a name typed by hand gets.
+ * @property {Array<{topic: string, advice: string,
+ *                   status: 'proposed'|'accepted'|'rejected', source: 'model'|'hand'}>} notes
+ *   Whatever else a translator of this book should know that no field above
+ *   asks for. The model proposes, a person accepts or rejects each one, and only
+ *   accepted notes reach a prompt. Free text on purpose: the useful findings are
+ *   too varied to name in advance — Crystal Society sets its subpersonalities'
+ *   inner speech in {braces}, a convention the translation kept losing, and no
+ *   field would have been there to say so.
  * @property {{marker: string, sample: string|null, source: 'model'|'hand'}|null} dialogue
  *   How direct speech is set in the TARGET LANGUAGE — the punctuation a line of
  *   dialogue opens with, plus an example. A norm, settled before translation
@@ -126,7 +134,47 @@ export function emptyPassport() {
         addressRegistry: [],
         voices: [],
         dialogue: null,
+        notes: [],
     };
+}
+
+const NOTE_STATUSES = new Set(['proposed', 'accepted', 'rejected']);
+
+/** Keep only notes that say something, with a known status. */
+function cleanNotes(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .filter(n => n && typeof n === 'object' && String(n.advice || '').trim())
+        .map(n => ({
+            topic: String(n.topic || '').trim(),
+            advice: String(n.advice).trim(),
+            status: NOTE_STATUSES.has(n.status) ? n.status : 'proposed',
+            source: n.source === 'hand' ? 'hand' : 'model',
+        }));
+}
+
+/** The notes a person has accepted — the only ones that reach a prompt. */
+export function acceptedNotes(passport) {
+    return (passport?.notes || []).filter(n => n.status === 'accepted' && String(n.advice || '').trim());
+}
+
+/**
+ * The notes after a rebuild: what a person has decided stays, the model's
+ * fresh proposals replace its old undecided ones.
+ *
+ * Accepted notes and hand-written ones are a person's work and survive. Rejected
+ * ones are dropped rather than kept as a memory of refusals: the model is told
+ * which notes are already accepted, not which were turned down, so it may well
+ * propose a rejected one again — one more click, against a list that would
+ * otherwise only grow.
+ */
+export function mergeNotes(previous, proposals) {
+    const kept = cleanNotes(previous).filter(n => n.status === 'accepted' || n.source === 'hand');
+    const seen = new Set(kept.map(n => n.advice.toLowerCase()));
+    const fresh = cleanNotes(proposals)
+        .map(n => ({ ...n, status: 'proposed', source: 'model' }))
+        .filter(n => !seen.has(n.advice.toLowerCase()));
+    return [...kept, ...fresh];
 }
 
 /**
@@ -167,6 +215,7 @@ export function loadPassport(passportPath) {
             // instruction into every prompt, which is worse than no instruction.
             dialogue: raw.dialogue && typeof raw.dialogue === 'object' && raw.dialogue.marker
                 ? raw.dialogue : base.dialogue,
+            notes: cleanNotes(raw.notes),
         };
     } catch (e) {
         console.warn(`[Passport] Failed to read ${passportPath}: ${e.message}. Continuing without it.`);
@@ -293,6 +342,7 @@ const STYLE_WORDS = {
             + `Держи её одинаково во всей книге и НЕ переноси пунктуацию диалогов из оригинала.`
             + (sample ? `\nОбразец оформления: ${sample}` : ''),
         undetermined: 'Кто повествователь этого фрагмента — НЕ определено. НЕ приписывай повествователю род: держи время повествования и перестраивай фразы так, чтобы родовые формы не требовались.',
+        notes: 'Заметки к этой книге:',
     },
     en: {
         person: { first: 'first person', second: 'second person', third: 'third person' },
@@ -326,6 +376,7 @@ const STYLE_WORDS = {
             + `Keep it uniform through the whole book and do NOT carry the original's dialogue punctuation across.`
             + (sample ? `\nExample of the setting: ${sample}` : ''),
         undetermined: 'The narrator of this fragment is NOT determined. Do not assign the narrator a gender: keep the narrative tense and rephrase so gendered forms are not needed.',
+        notes: 'Notes on this book:',
     },
 };
 
@@ -363,6 +414,13 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
     // Second person hides two opposite referents behind one pronoun, so it is
     // spelled out rather than left to the model to infer.
     if (person === 'second') lines.push(words.secondPerson[nonfiction ? 'nonfiction' : 'fiction']);
+
+    // Accepted by a person, so said on every chunk as written: a note cannot be
+    // matched to the chunks it concerns the way a dossier is by name.
+    const notes = acceptedNotes(passport);
+    if (notes.length) {
+        lines.push([words.notes, ...notes.map(n => `- ${n.topic ? `${n.topic}: ` : ''}${n.advice}`)].join('\n'));
+    }
 
     const cast = passport.characters || [];
     let focal = null;
@@ -450,5 +508,6 @@ export function isEmptyPassport(passport) {
         && !(addressRegistry || []).length
         && !(voices || []).length
         && !dialogue?.marker
-        && !author?.gender;
+        && !author?.gender
+        && !acceptedNotes(passport).length;
 }

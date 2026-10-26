@@ -23,7 +23,7 @@ import { extractJson } from '../utils/parsers.js';
 import { writeFileAtomic } from '../utils/atomic_write.js';
 import { countTokens, chunkTokens } from '../core/tokenizer.js';
 import { verifyFindings } from '../core/translation_review.js';
-import { loadPassport, isEmptyPassport } from '../core/passport.js';
+import { loadPassport, isEmptyPassport, acceptedNotes } from '../core/passport.js';
 import { fingerprint, fingerprintMismatch, nextReviewRound, reviewScore } from '../core/book_call.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
@@ -104,6 +104,9 @@ export function buildTranslationReviewPrompt(state, { withOriginal = false } = {
         characters: passport.characters?.length ? passport.characters : undefined,
         voices: passport.voices?.length ? passport.voices : undefined,
         addressRegistry: passport.addressRegistry?.length ? passport.addressRegistry : undefined,
+        // Accepted only: a proposal nobody agreed to is not the intent.
+        notes: acceptedNotes(passport).length
+            ? acceptedNotes(passport).map(n => ({ topic: n.topic || undefined, advice: n.advice })) : undefined,
     };
 
     // Bilingually the two texts are interleaved rather than stacked: aligning
