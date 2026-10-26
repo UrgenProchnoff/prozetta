@@ -9,6 +9,14 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-10-26**
+
+- `6a30007` — The passport now holds notes for the translator: whatever else
+  the model thinks a translator of this book should know — a book's own
+  markup, recurring devices, traps. Each note is accepted or rejected on the
+  passport page, and only accepted ones go into the prompts. Rebuilding the
+  passport keeps your decisions.
+
 **2026-10-13**
 
 - `751ea4d` — A whole-book call may now carry 200,000 tokens by default instead
