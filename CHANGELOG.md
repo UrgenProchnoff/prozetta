@@ -11,6 +11,11 @@ predates the practice and carries none.
 
 **2026-10-26**
 
+- `62e88a2` — The point-of-view boundaries are a separate request now. The
+  passport no longer looks for them; when a book has several narrators and no
+  chapter anchors to draw the map from, the passport page offers a call that
+  finds them. Books with one narrator do not pay for the question.
+
 - `6a30007` — The passport now holds notes for the translator: whatever else
   the model thinks a translator of this book should know — a book's own
   markup, recurring devices, traps. Each note is accepted or rejected on the
