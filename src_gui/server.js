@@ -10,7 +10,7 @@ import { personGroups, MAX_NOTE_CHARS } from '../src_v4/core/glossary_links.js';
 import { getPrompts } from '../src_v4/prompts.js';
 import { outstandingFindings as glossaryOutstanding } from '../src_v4/core/glossary_review.js';
 import { projectPaths, projectDir, ensureProjectDir, listProjects, PROJECTS_DIR, exportFileName } from '../src_v4/core/paths.js';
-import { handEdited, acceptedNotes } from '../src_v4/core/passport.js';
+import { handEdited, acceptedNotes, povMapNeeded } from '../src_v4/core/passport.js';
 import { dominantMarker, deviatingChunks, adherence } from '../src_v4/core/dialogue.js';
 import { inflectionGroups } from '../src_v4/core/glossary_forms.js';
 import { withoutTranslation, ProjectState } from '../src_v4/core/state_manager.js';
@@ -19,7 +19,7 @@ import { countTokens } from '../src_v4/core/tokenizer.js';
 import { normalize as normalizeUsage } from '../src_v4/core/usage_tracker.js';
 import { buildTranslationReviewPrompt, applyTranslationReview } from '../src_v4/stages/05_translation_review.js';
 import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages/04_glossary_review.js';
-import { buildPassportPrompt, applyPassportAnswer } from '../src_v4/stages/03_passport.js';
+import { buildPassportPrompt, applyPassportAnswer, buildPovMapPrompt, applyPovMapAnswer } from '../src_v4/stages/03_passport.js';
 import { extractJson, describeJsonError, extractFromTags } from '../src_v4/utils/parsers.js';
 import { writeFileAtomic } from '../src_v4/utils/atomic_write.js';
 import { outstandingFindings as reviewOutstanding, findingKey, adviceQueue } from '../src_v4/core/translation_review.js';
@@ -1347,7 +1347,8 @@ app.get('/api/projects/:prefix/passport', (req, res) => {
         const notes = acceptedNotes(passport);
         const notesTokens = notes.length
             ? countTokens(notes.map(n => `- ${n.topic ? `${n.topic}: ` : ''}${n.advice}`).join('\n')) : 0;
-        res.json({ exists: true, passport, totalChunks: total, notesTokens, speech: speechAdherence(chunks, passport?.dialogue?.marker || null) });
+        const translated = chunks.filter(c => c.translation).length;
+        res.json({ exists: true, passport, totalChunks: total, translated, povMapNeeded: povMapNeeded(passport), notesTokens, speech: speechAdherence(chunks, passport?.dialogue?.marker || null) });
     } catch (e) {
         res.status(500).json({ error: `Не удалось прочитать паспорт: ${e.message}` });
     }
@@ -1589,8 +1590,8 @@ app.post('/api/projects/:prefix/glossary/merge-note', async (req, res) => {
 app.post('/api/run', (req, res) => {
     const { file, prefix: bodyPrefix, stage, model, lang, suffix } = req.body || {};
 
-    if (!['1', 'passport', 'glossary', '2', 'review', 'export'].includes(String(stage))) {
-        return res.status(400).json({ error: 'stage must be 1, passport, glossary, 2, review or export' });
+    if (!['1', 'passport', 'povmap', 'glossary', '2', 'review', 'export'].includes(String(stage))) {
+        return res.status(400).json({ error: 'stage must be 1, passport, povmap, glossary, 2, review or export' });
     }
 
     let prefix, sourceFile;
@@ -1887,7 +1888,7 @@ function fillTranslationTokens(state) {
 }
 
 /** Which runnable stage is which whole-book call. */
-const BOOK_STAGE = { passport: 'passport', glossary: 'glossary', review: 'translation' };
+const BOOK_STAGE = { passport: 'passport', povmap: 'povmap', glossary: 'glossary', review: 'translation' };
 
 const BOOK_CALLS = {
     translation: {
@@ -1904,6 +1905,10 @@ const BOOK_CALLS = {
     passport: {
         build: (state) => buildPassportPrompt(state),
         apply: (state, raw, meta) => { applyPassportAnswer(state, raw, meta); return { notes: [] }; },
+    },
+    povmap: {
+        build: (state) => buildPovMapPrompt(state),
+        apply: (state, raw, meta) => { applyPovMapAnswer(state, raw, meta); return { notes: [] }; },
     },
 };
 

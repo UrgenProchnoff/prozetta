@@ -31,9 +31,16 @@ appears in, so the briefing differs from scene to scene.
 dash, quotation marks, guillemets. This is **set for the target language before
 translating**, not read out of the text — the text does not exist yet.
 
+**Notes for the translator.** Whatever else the model thinks a translator of this
+book should know: its own markup, recurring devices, traps. You accept or reject
+each note; only accepted ones go into every chunk's prompt. You can add your own.
+
 **The point-of-view map.** Who narrates each chunk. Worked out from anchors plus a
 prior on how narrators alternate, rather than by asking the model chunk by chunk,
-which is measurably less reliable.
+which is measurably less reliable. When there are several narrators and the book
+has no anchors, a separate call appears under the map: the model finds the
+boundaries by quoting across the whole book. While nothing is translated, the text
+is re-split on them so that no chunk is shared by two narrators.
 
 ## Editing by hand
 

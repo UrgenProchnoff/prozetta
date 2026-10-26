@@ -295,7 +295,7 @@ export function applyPassportAnswer(state, answer, meta) {
         try {
             fs.copyFileSync(passportPath, backup);
             console.warn(`[Passport] This passport was edited by hand after it was generated. ` +
-                `The model's answer replaces narration, the cast and the map; your copy is kept as ` +
+                `The model's answer replaces narration and the cast; your copy is kept as ` +
                 `${backup.split(/[\\/]/).pop()}.`);
         } catch (e) {
             throw new Error(`Could not back up the hand-edited passport (${e.message}) — nothing was overwritten.`);
@@ -397,78 +397,31 @@ export function applyPassportAnswer(state, answer, meta) {
 
     const castNames = passport.characters.map(c => c.name);
 
-    // The map is computed first: anchors plus a rotation prior score 99.4% on
-    // chapter-aligned chunks and cost nothing. The model's quoted boundaries are
-    // the fallback for what that cannot see — a book whose point of view changes
-    // without any chapter heading to key off. Measured on this book with its
-    // headings stripped: the deterministic layer produces an empty map, while
-    // the quoted boundaries land 36 of 38 chapters with a median error of 3
-    // characters (95.5% of chunks labelled correctly).
+    // The map is computed: anchors plus a rotation prior score 99.4% on
+    // chapter-aligned chunks and cost nothing. What that cannot see — a book
+    // whose point of view changes without any chapter heading to key off — is a
+    // separate whole-book call (runPovMapStage), offered only when it is needed:
+    // both multi-narrator books so far needed it, the other four had one
+    // narrator and no map to draw.
+    const previous = { map: passport.povMap || [], from: passport.source?.povMapFrom, model: passport.source?.povMapModel, at: passport.source?.povMapAt };
     passport.povMap = buildPovMap(chunks, castNames);
     let mapSource = 'anchors';
+    let mapMeta = {};
 
-    if (castNames.length > 1 && !passport.povMap.length) {
-        const { map, offsets, stats } = spansFromQuotes(chunks, answer?.povSpans, castNames);
-        console.log(`[Passport] No anchors found — falling back to the model's quoted boundaries: ` +
-            `${stats.located}/${stats.total} located` +
-            `${stats.missing ? `, ${stats.missing} not in the text` : ''}` +
-            `${stats.ambiguous ? `, ${stats.ambiguous} ambiguous` : ''}` +
-            `${stats.outOfOrder ? `, ${stats.outOfOrder} out of order` : ''}` +
-            `${stats.unknownCharacter ? `, ${stats.unknownCharacter} naming someone outside the cast` : ''}.`);
-
-        if (map.length) {
-            passport.povMap = map;
+    // A map from quoted boundaries was paid for with a whole-book call of its
+    // own. Rebuilding the passport is no reason to throw it away, as long as it
+    // still speaks of this cast.
+    if (castNames.length > 1 && !passport.povMap.length && previous.from === 'quotes' && previous.map.length) {
+        const known = new Set(castNames.map(n => n.toLowerCase()));
+        if (previous.map.every(s => !s.character || known.has(String(s.character).toLowerCase()))) {
+            passport.povMap = previous.map;
             mapSource = 'quotes';
-
-            // These boundaries arrive after the text was already split, and they
-            // land mid-chunk far more often than not (measured: 28 of 36, median
-            // 847 characters from the nearest edge). A chunk straddling a change
-            // of narrator gets one label for two people, which is precisely the
-            // defect the map exists to prevent. Re-split with the boundaries as
-            // hard break points — but only while nothing has been translated,
-            // since re-splitting renumbers the chunks and would orphan the work.
-            const translated = chunks.filter(c => c.translation).length;
-            if (translated) {
-                console.warn(`[Passport] ${translated} chunk(s) already translated, so the text is not re-split. ` +
-                    `Boundaries stay buried inside chunks and those chunks carry two narrators; ` +
-                    `a fresh project on the same source would be cut cleanly.`);
-            } else {
-                const source = chunks.map(c => c.original).join('');
-                const resplit = splitTextIntoChunks(source, offsets);
-
-                // The splitter returns bare chunks, so the extraction's work has to be
-                // moved across by hand — otherwise a re-split silently throws
-                // away every extracted term and they have to be paid for again.
-                const { chunks: carried, stats, refused } = carryExtraction(chunks, resplit);
-                const hadTerms = chunks.some(c => c.extracted_terms?.length);
-
-                if (refused && hadTerms) {
-                    console.warn(`[Passport] NOT re-splitting: ${refused}. ` +
-                        `The map stands, but chunks straddling a change of narrator stay as they are — ` +
-                        `losing ${chunks.reduce((n, c) => n + (c.extracted_terms?.length || 0), 0)} extracted term(s) ` +
-                        `would cost more than the cleaner cut is worth.`);
-                } else {
-                    state.setChunks(carried);
-                    state.save();
-                    console.log(`[Passport] Re-split on ${offsets.length} point-of-view boundaries: ` +
-                        `${chunks.length} → ${carried.length} chunks, none spanning a change of narrator.`);
-                    if (stats.terms) {
-                        console.log(`[Passport] Carried ${stats.terms} extracted term(s) across: ` +
-                            `${stats.located} placed by locating their text` +
-                            `${stats.fallback ? `, ${stats.fallback} by overlap because the recorded form does not occur verbatim` : ''}` +
-                            `; ${stats.extracted}/${carried.length} chunk(s) stay marked as extracted.`);
-                    }
-                    chunks = carried;
-                }
-                // Indices changed with the split, so the map is rebuilt against
-                // the new chunks; the old one stands if that somehow yields less.
-                const rebuilt = spansFromQuotes(chunks, answer?.povSpans, castNames);
-                if (rebuilt.map.length) passport.povMap = rebuilt.map;
-            }
+            mapMeta = { povMapModel: previous.model, povMapAt: previous.at };
+            console.log(`[Passport] No anchors found — keeping the map from quoted boundaries built earlier (${previous.map.length} span(s)).`);
         }
     }
 
-    passport.source = { model: conf.modelName, generatedAt: new Date().toISOString(), povMapFrom: mapSource };
+    passport.source = { model: conf.modelName, generatedAt: new Date().toISOString(), povMapFrom: mapSource, ...mapMeta };
 
     savePassport(passportPath, passport);
 
@@ -488,11 +441,12 @@ export function applyPassportAnswer(state, answer, meta) {
         const stats = describePovMap(chunks, castNames);
         const covered = passport.povMap.reduce((n, s) => n + (s.toChunk - s.fromChunk + 1), 0);
         console.log(`[Passport] Point-of-view map: ${passport.povMap.length} span(s) over ${covered}/${chunks.length} chunks, ` +
-            `from ${mapSource === 'quotes' ? "the model's quoted boundaries" : 'anchors + rotation'} ` +
+            `from ${mapSource === 'quotes' ? 'quoted boundaries asked for earlier' : 'anchors + rotation'} ` +
             `(${stats.anchors} of ${stats.segments} segments carried an anchor).`);
         if (!passport.povMap.length) {
-            console.warn('[Passport] Neither anchors nor usable quoted boundaries — the map has nothing to build on. ' +
-                'Chunks stay undetermined, and the translation prompt will be told to avoid gendered forms rather than guess.');
+            console.warn('[Passport] No anchors to build the map on. Ask for the point-of-view boundaries — the button is on ' +
+                'the passport page, or --stage=povmap. Until then chunks stay undetermined, and the translation prompt ' +
+                'is told to avoid gendered forms rather than guess.');
         }
     } else if (castNames.length === 1) {
         console.log(`[Passport] Single narrator (${castNames[0]}) — no map needed, the decision holds for the whole book.`);
@@ -503,3 +457,198 @@ export function applyPassportAnswer(state, answer, meta) {
     return { passport, chunks };
 }
 
+// ============================================================
+// Point-of-view boundaries: a whole-book call of their own
+// ============================================================
+
+/**
+ * What the model is to be asked for the boundaries. Split from applying the
+ * answer for the same reason as the passport: the call can be carried by hand.
+ *
+ * @throws {Error} when there is no cast to draw a map between
+ */
+export function buildPovMapPrompt(state) {
+    const chunks = state.getChunks();
+    if (!chunks.length) throw new Error('Project has no chunks yet — run the extraction first.');
+    const passport = loadPassport(state.getPassportPath());
+    const cast = (passport.characters || []).filter(c => c?.name);
+    if (cast.length < 2) {
+        throw new Error('The passport names fewer than two point-of-view characters — there is no map to draw. Build the passport first.');
+    }
+
+    const bookText = chunks.map(c => c.original).join('\n');
+    const prompts = getPrompts(config.translation.promptLang);
+    // Names and genders only. The dossiers would help tell the narrators apart,
+    // but they run to 600 tokens each and the names alone are what the answer
+    // has to match.
+    const castBrief = cast.map(c => ({ name: c.name, gender: c.gender || undefined }));
+    const system = prompts.povMap.system();
+    const user = prompts.povMap.user(bookText, castBrief);
+    const tokens = {
+        book: chunkTokens(chunks),
+        evidence: countTokens(JSON.stringify(castBrief, null, 1)),
+        instructions: countTokens(system),
+    };
+    tokens.total = tokens.book + tokens.evidence + tokens.instructions;
+
+    const translated = chunks.filter(c => c.translation).length;
+    return {
+        system, user, tokens,
+        budget: largeBookTokens(),
+        fingerprint: fingerprint(bookText),
+        warnings: translated
+            ? [`${translated} chunk(s) are already translated, so the text will not be re-split on the boundaries.`]
+            : [],
+    };
+}
+
+/**
+ * Take the boundaries, locate them, and put the map into the passport —
+ * re-splitting the text on them while nothing has been translated.
+ *
+ * @throws {Error} when the answer does not belong to this text, or locates nothing
+ */
+export function applyPovMapAnswer(state, answer, meta) {
+    let chunks = state.getChunks();
+    const bookText = chunks.map(c => c.original).join('\n');
+    const stale = fingerprintMismatch(fingerprint(bookText), meta.fingerprint);
+    if (stale) throw new Error(stale);
+
+    const passportPath = state.getPassportPath();
+    const passport = loadPassport(passportPath);
+    const castNames = (passport.characters || []).map(c => c.name).filter(Boolean);
+    if (castNames.length < 2) throw new Error('The passport names fewer than two point-of-view characters — there is no map to draw.');
+
+    const spans = answer?.povSpans;
+    const { map, offsets, stats } = spansFromQuotes(chunks, spans, castNames);
+    console.log(`[POV map] Quoted boundaries: ${stats.located}/${stats.total} located` +
+        `${stats.missing ? `, ${stats.missing} not in the text` : ''}` +
+        `${stats.ambiguous ? `, ${stats.ambiguous} ambiguous` : ''}` +
+        `${stats.outOfOrder ? `, ${stats.outOfOrder} out of order` : ''}` +
+        `${stats.unknownCharacter ? `, ${stats.unknownCharacter} naming someone outside the cast` : ''}.`);
+    if (!map.length) {
+        throw new Error(`None of the ${stats.total} quoted boundaries could be located in the text — the map is left as it was.`);
+    }
+    passport.povMap = map;
+
+    // These boundaries arrive after the text was already split, and they land
+    // mid-chunk far more often than not (measured: 28 of 36, median 847
+    // characters from the nearest edge). A chunk straddling a change of narrator
+    // gets one label for two people, which is precisely the defect the map exists
+    // to prevent. Re-split with the boundaries as hard break points — but only
+    // while nothing has been translated, since re-splitting renumbers the chunks
+    // and would orphan the work.
+    const translated = chunks.filter(c => c.translation).length;
+    if (translated) {
+        console.warn(`[POV map] ${translated} chunk(s) already translated, so the text is not re-split. ` +
+            `Boundaries stay buried inside chunks and those chunks carry two narrators; ` +
+            `a fresh project on the same source would be cut cleanly.`);
+    } else {
+        const source = chunks.map(c => c.original).join('');
+        const resplit = splitTextIntoChunks(source, offsets);
+
+        // The splitter returns bare chunks, so the extraction's work has to be
+        // moved across by hand — otherwise a re-split silently throws away every
+        // extracted term and they have to be paid for again.
+        const { chunks: carried, stats: carry, refused } = carryExtraction(chunks, resplit);
+        const hadTerms = chunks.some(c => c.extracted_terms?.length);
+
+        if (refused && hadTerms) {
+            console.warn(`[POV map] NOT re-splitting: ${refused}. ` +
+                `The map stands, but chunks straddling a change of narrator stay as they are — ` +
+                `losing ${chunks.reduce((n, c) => n + (c.extracted_terms?.length || 0), 0)} extracted term(s) ` +
+                `would cost more than the cleaner cut is worth.`);
+        } else {
+            state.setChunks(carried);
+            state.save();
+            console.log(`[POV map] Re-split on ${offsets.length} point-of-view boundaries: ` +
+                `${chunks.length} → ${carried.length} chunks, none spanning a change of narrator.`);
+            if (carry.terms) {
+                console.log(`[POV map] Carried ${carry.terms} extracted term(s) across: ` +
+                    `${carry.located} placed by locating their text` +
+                    `${carry.fallback ? `, ${carry.fallback} by overlap because the recorded form does not occur verbatim` : ''}` +
+                    `; ${carry.extracted}/${carried.length} chunk(s) stay marked as extracted.`);
+            }
+            chunks = carried;
+        }
+        // Indices changed with the split, so the map is rebuilt against the new
+        // chunks; the old one stands if that somehow yields less.
+        const rebuilt = spansFromQuotes(chunks, spans, castNames);
+        if (rebuilt.map.length) passport.povMap = rebuilt.map;
+    }
+
+    // povMapAt tells handEdited that this save was the model's. Stamped only
+    // when the passport had no hand edits already: otherwise the stamp would
+    // hide them, and a rebuild would replace them without the backup.
+    const edited = handEdited(passport);
+    passport.source = {
+        ...passport.source,
+        povMapFrom: 'quotes',
+        povMapModel: meta.model || null,
+        povMapAt: edited ? passport.source?.povMapAt || null : new Date().toISOString(),
+    };
+    savePassport(passportPath, passport);
+
+    const covered = passport.povMap.reduce((n, s) => n + (s.toChunk - s.fromChunk + 1), 0);
+    console.log(`[POV map] ${passport.povMap.length} span(s) over ${covered}/${chunks.length} chunks. ` +
+        `Saved to ${passportPath.split(/[\\/]/).pop()}`);
+    console.log('--- SYSTEM: Point-of-view map completed ---');
+    return { passport, chunks };
+}
+
+export async function runPovMapStage(state) {
+    console.log('--- SYSTEM: Asking for the point-of-view boundaries ---');
+    usageTracker.setStage('povmap');
+
+    if (!bookModelEnabled()) {
+        console.error('[POV map] The large model is switched off (book_model.enabled), and the boundaries are found by ' +
+            'one call to it. Turn it on in Settings → Large model.');
+        process.exitCode = 1;
+        return;
+    }
+
+    let built;
+    try {
+        built = buildPovMapPrompt(state);
+    } catch (e) {
+        console.error(`[POV map] ${e.message}`);
+        process.exitCode = 1;
+        return;
+    }
+    for (const w of built.warnings) console.warn(`[POV map] ${w}`);
+    console.log(`[POV map] Book: ${state.getChunks().length} chunks, ~${built.tokens.total.toLocaleString('en-US')} tokens.`);
+
+    let client, conf, provider;
+    try {
+        ({ conf, provider } = llmManager.getBookSettings());
+        client = llmManager.getClient('book');
+    } catch (e) {
+        console.error(`[POV map] The large model is not configured: ${e.message}`);
+        process.exitCode = 1;
+        return;
+    }
+
+    console.log(`[POV map] Asking ${conf.modelName} where the point of view changes...`);
+    let answer;
+    try {
+        const response = await client.invoke([
+            new HumanMessage(built.system),
+            new HumanMessage(built.user),
+        ]);
+        answer = extractJson(response.content || '');
+    } catch (e) {
+        console.error(`[POV map] The whole-book call failed — ${explainCallFailure(e, provider, conf)}`);
+        if (e.contentBlocked) {
+            console.error('[POV map] The provider refused the text. Retrying will not help — switch the book_model provider.');
+        }
+        process.exitCode = 1;
+        return;
+    }
+
+    try {
+        applyPovMapAnswer(state, answer, { model: conf.modelName, fingerprint: built.fingerprint });
+    } catch (e) {
+        console.error(`[POV map] ${e.message}`);
+        process.exitCode = 1;
+    }
+}

@@ -241,7 +241,11 @@ export function savePassport(passportPath, passport) {
  * for judgement.
  */
 export function handEdited(passport) {
-    const generated = Date.parse(passport?.source?.generatedAt || '');
+    // The boundaries call saves the passport too, later than the passport was
+    // generated; that is a model's answer, not a person's edit.
+    const stamps = [passport?.source?.generatedAt, passport?.source?.povMapAt]
+        .map(s => Date.parse(s || '')).filter(Number.isFinite);
+    const generated = stamps.length ? Math.max(...stamps) : NaN;
     const updated = Date.parse(passport?.updatedAt || '');
     if (!Number.isFinite(generated) || !Number.isFinite(updated)) return false;
     return updated - generated > 5000;
@@ -495,6 +499,20 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
     if (dossiersShown > 0) lines.push(words.dialogueAddress);
 
     return lines.join('\n');
+}
+
+/**
+ * Should the point-of-view boundaries be asked for — a whole-book call of
+ * their own?
+ *
+ * Only when there is more than one narrator and the anchors drew no map. Not
+ * asked of the model: the passport names the cast, the anchors are counted, so
+ * the answer is a fact rather than a judgement. A map already drawn from quoted
+ * boundaries still answers yes — it can be asked for again.
+ */
+export function povMapNeeded(passport) {
+    if ((passport?.characters || []).length < 2) return false;
+    return !(passport?.source?.povMapFrom === 'anchors' && (passport?.povMap || []).length);
 }
 
 /** True when the passport carries nothing worth injecting into a prompt. */

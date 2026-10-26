@@ -4,7 +4,7 @@ import { ProjectState } from './core/state_manager.js';
 import { splitTextIntoChunks } from './core/tokenizer.js';
 import { runExtractionStage } from './stages/01_extraction.js';
 import { runConsolidationStage } from './stages/02_consolidation.js';
-import { runPassportStage } from './stages/03_passport.js';
+import { runPassportStage, runPovMapStage } from './stages/03_passport.js';
 import { runGlossaryReviewStage } from './stages/04_glossary_review.js';
 import { runTranslationReviewStage } from './stages/05_translation_review.js';
 import { runTranslationLoopStage } from './stages/translation_loop.js';
@@ -45,9 +45,10 @@ async function main() {
     const suffixArg = args.find(a => a.startsWith('--suffix='));
 
     if (!stageArg || !fileArg) {
-        console.error('Usage: node src_v4/main.js --stage=<extract|glossary|passport|translate|review|export> --file=<path/to/book.txt> [--model=google|local|custom] [--lang=<язык>] [--suffix=<код>]');
+        console.error('Usage: node src_v4/main.js --stage=<extract|glossary|passport|povmap|translate|review|export> --file=<path/to/book.txt> [--model=google|local|custom] [--lang=<язык>] [--suffix=<код>]');
         console.error('  --stage=extract reads the book chunk by chunk and pulls out names, places and terms (also accepted as 1).');
         console.error('  --stage=passport reads the whole book at once (book_model profile) and writes <prefix>_passport.json.');
+        console.error('  --stage=povmap asks where the point of view changes, for a passport with several narrators and no chapter anchors; re-splits the text while nothing is translated.');
         console.error('  --stage=glossary reviews the glossary against the whole book and writes glossary_review.json (applies nothing).');
         console.error('  --stage=translate is the translation itself, chunk by chunk (also accepted as 2).');
         console.error('  --stage=review reads the finished translation in one call and writes translation_review.json (changes nothing).');
@@ -146,6 +147,11 @@ async function main() {
                 // survived when the stage happened to re-split the text, which
                 // saves for its own reasons.
                 state.save();
+                reportUsage();
+                break;
+            case 'povmap':
+                await runPovMapStage(state);
+                state.save();   // flush token-usage stats
                 reportUsage();
                 break;
             case 'glossary':

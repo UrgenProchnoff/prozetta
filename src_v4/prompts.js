@@ -23,6 +23,13 @@ const userBuilders = {
 <book>
 ${bookText}
 </book>`,
+    // Границы точек зрения: весь текст плюс состав из паспорта (03_passport.js).
+    povMap: (bookText, cast) =>
+`<cast>${JSON.stringify(cast, null, 1)}</cast>
+
+<book>
+${bookText}
+</book>`,
     consolidation: (items) => JSON.stringify(items),
     // Заметки форм одного имени для редактора глоссария (src_gui/server.js).
     glossaryNote: (entries) => JSON.stringify(entries, null, 1),
@@ -136,28 +143,21 @@ const ru = {
            Пиши телеграфно, без прозы. Проверка качества досье такая: по нему можно
            опознать главу этого персонажа по одному абзацу, не встретив его имени.
 
-        4. ГРАНИЦЫ смены точки зрения (только если фокальных персонажей несколько).
-           Для каждого участка укажи "startsWith" - ТОЧНУЮ дословную цитату из текста,
-           первые 6-12 слов участка, скопированные СИМВОЛ В СИМВОЛ. Не пересказывай и
-           не исправляй цитату: по ней участок будет найден в тексте автоматически.
-           Цитата должна встречаться в книге ровно один раз. Участки перечисляй строго
-           в порядке следования в тексте, от начала до конца, не пропуская смен.
-
-        5. АВТОР книги: имя и пол. Нужен там, где автор говорит от себя, —
+        4. АВТОР книги: имя и пол. Нужен там, где автор говорит от себя, —
            предисловие, послесловие, благодарности, авторские примечания: в этих
            местах родовые формы при «я» берутся от автора, а не от повествователя.
            Если имя автора есть в уликах — бери оттуда. Если ни в книге, ни в уликах
            автора нет и ты его не знаешь — верни null: выдуманный пол хуже
            отсутствующего.
 
-        6. ОФОРМЛЕНИЕ ПРЯМОЙ РЕЧИ на ${targetLang}. Единственный пункт, который НЕ
+        5. ОФОРМЛЕНИЕ ПРЯМОЙ РЕЧИ на ${targetLang}. Единственный пункт, который НЕ
            выводится из книги, а вспоминается как норма языка: оригинал написан на
            другом языке, и его пунктуация диалогов здесь — заведомо неверный ответ.
            НЕ переноси знак из оригинала. Назови ОДИН знак, с которого по нормам
            ${targetLang} начинается реплика, и приведи одну короткую выдуманную
            реплику как образец.
 
-        7. ЗАМЕТКИ переводчику: что ещё в этой книге стоит знать тому, кто её
+        6. ЗАМЕТКИ переводчику: что ещё в этой книге стоит знать тому, кто её
            переводит, — всё, о чём не спрашивают пункты выше. Каждая заметка —
            отдельный пункт: их принимают или отклоняют по одной. Не повторяй то,
            что уже сказано в полях выше, и заметки из <evidence> под
@@ -180,9 +180,6 @@ const ru = {
           "povCharacters": [
             { "name": "Имя как в оригинале", "gender": "m|f|n", "dossier": "телеграфное досье" }
           ],
-          "povSpans": [
-            { "startsWith": "точная цитата первых слов участка", "character": "Имя как в оригинале" }
-          ],
           "author": {
             "name": "имя автора книги, или null если он нигде не назван и неизвестен",
             "gender": "m|f|n, или null если пол автора неизвестен",
@@ -198,6 +195,36 @@ const ru = {
         }
         \`\`\``,
         user: userBuilders.passport,
+    },
+
+    // --- Границы точек зрения: отдельный вызов на весь текст (03_passport.js) ---
+    // Только для книги с несколькими рассказчиками, где карту не удалось
+    // построить по опорам. Отдельно от паспорта, потому что это единственный
+    // вопрос, который требует пройти всю книгу, ничего не пропустив.
+    povMap: {
+        system: () => `
+        Ты - литературный аналитик. Тебе дан ПОЛНЫЙ текст книги и в <cast> - её
+        фокальные персонажи: те, чьими глазами читатель видит происходящее.
+
+        Найди все ГРАНИЦЫ, где точка зрения переходит от одного из них к другому.
+        Для каждого участка укажи "startsWith" - ТОЧНУЮ дословную цитату из текста,
+        первые 6-12 слов участка, скопированные СИМВОЛ В СИМВОЛ. Не пересказывай и
+        не исправляй цитату: по ней участок будет найден в тексте автоматически.
+        Цитата должна встречаться в книге ровно один раз. "character" - имя ровно
+        как в <cast>. Участки перечисляй строго в порядке следования в тексте, от
+        начала до конца, не пропуская смен.
+
+        JSON должен быть обёрнут в тройные кавычки (markdown block).
+
+        Пример ответа:
+        \`\`\`json
+        {
+          "povSpans": [
+            { "startsWith": "точная цитата первых слов участка", "character": "Имя как в <cast>" }
+          ]
+        }
+        \`\`\``,
+        user: userBuilders.povMap,
     },
 
     // --- Ревизия глоссария: один вызов на книгу (04_glossary_review.js) ---
@@ -601,29 +628,21 @@ const en = {
            recognise that character's chapter from a single paragraph without their
            name appearing in it.
 
-        4. The BOUNDARIES where the point of view changes (only when there is more than
-           one focal character). For each stretch give "startsWith" — an EXACT verbatim
-           quote from the text, the first 6-12 words of that stretch, copied CHARACTER
-           BY CHARACTER. Do not paraphrase or correct the quote: it is what locates the
-           stretch in the text automatically. The quote must occur exactly once in the
-           book. List the stretches strictly in the order they appear, start to finish,
-           without skipping a change.
-
-        5. THE AUTHOR: name and gender. Needed wherever the author speaks in their own
+        4. THE AUTHOR: name and gender. Needed wherever the author speaks in their own
            first person — preface, afterword, acknowledgements, author's notes: there
            the gendered forms around "I" are the author's, not the narrator's. If the
            author's name is in the evidence, take it from there. If neither the book
            nor the evidence names them and you do not know who they are, return null:
            an invented gender is worse than a missing one.
 
-        6. HOW DIRECT SPEECH IS SET in ${targetLang}. The one item that is NOT derived
+        5. HOW DIRECT SPEECH IS SET in ${targetLang}. The one item that is NOT derived
            from the book but recalled as a norm of the language: the original is
            written in another language, and its dialogue punctuation is the wrong
            answer here. Do NOT carry the mark over from the original. Name ONE mark
            that a line of dialogue opens with by the conventions of ${targetLang}, and
            give one short invented line as an example.
 
-        7. NOTES for the translator: what else whoever translates this book should
+        6. NOTES for the translator: what else whoever translates this book should
            know — anything the items above do not ask about. Each note is a separate
            item: they are accepted or rejected one at a time. Do not repeat what the
            fields above already say, nor the notes under "acceptedNotes" in
@@ -646,9 +665,6 @@ const en = {
           "povCharacters": [
             { "name": "Name as in the original", "gender": "m|f|n", "dossier": "telegraphic dossier" }
           ],
-          "povSpans": [
-            { "startsWith": "exact quote of the stretch's first words", "character": "Name as in the original" }
-          ],
           "author": {
             "name": "the author's name, or null if they are named nowhere and unknown to you",
             "gender": "m|f|n, or null if the author's gender is unknown",
@@ -664,6 +680,33 @@ const en = {
         }
         \`\`\``,
         user: userBuilders.passport,
+    },
+
+    // --- Point-of-view boundaries: a separate whole-book call (03_passport.js) ---
+    povMap: {
+        system: () => `
+        You are a literary analyst. You are given the COMPLETE text of a book, and in
+        <cast> its focal characters: the ones through whose eyes the reader sees events.
+
+        Find every BOUNDARY where the point of view passes from one of them to another.
+        For each stretch give "startsWith" — an EXACT verbatim quote from the text, the
+        first 6-12 words of that stretch, copied CHARACTER BY CHARACTER. Do not
+        paraphrase or correct the quote: it is what locates the stretch in the text
+        automatically. The quote must occur exactly once in the book. "character" is
+        the name exactly as in <cast>. List the stretches strictly in the order they
+        appear, start to finish, without skipping a change.
+
+        The JSON must be wrapped in triple backticks (markdown block).
+
+        Example response:
+        \`\`\`json
+        {
+          "povSpans": [
+            { "startsWith": "exact quote of the stretch's first words", "character": "Name as in <cast>" }
+          ]
+        }
+        \`\`\``,
+        user: userBuilders.povMap,
     },
 
     // --- Glossary review: one call over the whole book (04_glossary_review.js) ---

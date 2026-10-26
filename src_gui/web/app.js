@@ -111,13 +111,14 @@ function statusLabel(s) { return t(`status.${s}`); }
 // the roadmap call the same thing the same thing.
 // The runnable stage each whole-book call belongs to, so the box can name itself
 // after the step a person pressed rather than after an internal kind.
-const BOOK_STAGE_OF = { passport: 'passport', glossary: 'glossary', translation: 'review' };
+const BOOK_STAGE_OF = { passport: 'passport', povmap: 'povmap', glossary: 'glossary', translation: 'review' };
 const STAGE_BOOK_CALL = { passport: 'passport', glossary: 'glossary', review: 'translation' };
 
 const STAGE_LABEL = {
     '1': 'mon.stepExtract',
     glossary: 'mon.stepReview',
     passport: 'mon.stepPassport',
+    povmap: 'mon.stepPovMap',
     '2': 'mon.stepTranslate',
     review: 'mon.stepAssess',
     export: 'mon.stepExport',
@@ -2764,7 +2765,7 @@ async function renderPassport(prefix) {
             const title = t('pass.spanTitle', { from: s.fromChunk + 1, to: s.toChunk + 1, who: s.character || t('pass.unknown'), src: s.source || '—' });
             return `<span class="pov-span" style="width:${w}%;background:${s.character ? povColor(s.character) : 'var(--panel2)'}" title="${esc(title)}">${esc(s.character || '?')}</span>`;
         }).join('') + `</div>`
-        : `<div class="cfg-hint">${esc(t('pass.noMap'))}</div>`;
+        : `<div class="cfg-hint">${esc(t(data.povMapNeeded ? 'pass.noMapYet' : 'pass.noMap'))}</div>`;
 
     app.innerHTML = `
         <div class="toolbar">
@@ -2842,7 +2843,9 @@ async function renderPassport(prefix) {
 
         <h3>${esc(t('pass.map'))}</h3>
         ${strip}
-        <div class="cfg-hint">${esc(t('pass.mapHint', { n: (p.povMap || []).length, total }))}</div>
+        ${(p.povMap || []).length ? `<div class="cfg-hint">${esc(t('pass.mapHint', { n: (p.povMap || []).length, total }))}</div>` : ''}
+        ${data.povMapNeeded ? `${data.translated ? `<div class="cfg-hint">${esc(t('pass.povMapTranslated', { n: data.translated }))}</div>` : ''}
+            ${bookCallCard('povmap')}` : ''}
         ${p.source?.model ? `<div class="cfg-hint" style="margin-top:12px">${esc(t('pass.source', { model: p.source.model, date: fmtDate(p.source.generatedAt) }))}${p.source.povMapFrom ? ` · ${esc(t('pass.mapFrom.' + p.source.povMapFrom))}` : ''}</div>` : ''}
         ${bookCallCard('passport')}
     `;
