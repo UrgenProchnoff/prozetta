@@ -11,6 +11,10 @@ predates the practice and carries none.
 
 **2026-10-29**
 
+- `bb409f2` — Leaving the glossary with unsaved edits: "Cancel" now keeps you on
+  the page with the edits intact; before, it left just like "OK". The passport
+  asks the same question now, and so does closing the tab.
+
 - `7ade197` — Building the passport now also fills the Book page: title, author
   and blurb, in the target language. Only empty fields are filled — what you
   typed stays. Next to the title the page says whether it is the title of a
