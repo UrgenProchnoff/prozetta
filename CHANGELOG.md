@@ -9,6 +9,20 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-10-29**
+
+- `7ade197` — Building the passport now also fills the Book page: title, author
+  and blurb, in the target language. Only empty fields are filled — what you
+  typed stays. Next to the title the page says whether it is the title of a
+  published translation (worth checking) or one the model translated.
+
+- `465bb91` — Headings in the FB2 can be marked by the large model: the "Mark the
+  structure" button on the Book page. It sees only the short lines that could be
+  headings, not the whole book, and recognises "Part One" or "Часть первая" in
+  any language. Chapters now nest inside parts, and the resulting contents are
+  shown under the button. If the model is busy, the request can be carried to a
+  web console by hand.
+
 **2026-10-26**
 
 - `62e88a2` — The point-of-view boundaries are a separate request now. The
