@@ -2265,7 +2265,11 @@ app.get('/api/projects/:prefix/book-meta', (req, res) => {
     let state;
     try { state = readJson(statePath(prefix)); } catch { return res.status(404).json({ error: 'Project not found' }); }
     const book = state.metadata?.book || {};
+    // What the passport proposed, so the page can say where a title came from.
+    let proposed = null;
+    try { proposed = fs.existsSync(passportPath(prefix)) ? readJson(passportPath(prefix)).book || null : null; } catch { /* no hint */ }
     res.json({
+        proposed,
         title: book.title || '',
         author: book.author || '',
         annotation: book.annotation || '',

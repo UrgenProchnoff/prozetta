@@ -135,6 +135,9 @@ export function emptyPassport() {
         voices: [],
         dialogue: null,
         notes: [],
+        // The title, author and blurb the model proposed for the e-reader; the
+        // export fields themselves live in the project state.
+        book: null,
     };
 }
 

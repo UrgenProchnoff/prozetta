@@ -31,6 +31,11 @@ appears in, so the briefing differs from scene to scene.
 dash, quotation marks, guillemets. This is **set for the target language before
 translating**, not read out of the text — the text does not exist yet.
 
+**The book's description.** Title, the author as spelt in the target language, and
+a blurb for the e-reader. They go into the empty fields of the Book page; whatever
+you have typed there a rebuild leaves alone. If the model gave the title of a
+published translation, the Book page says so — worth checking.
+
 **Notes for the translator.** Whatever else the model thinks a translator of this
 book should know: its own markup, recurring devices, traps. You accept or reject
 each note; only accepted ones go into every chunk's prompt. You can add your own.

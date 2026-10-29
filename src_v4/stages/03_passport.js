@@ -362,6 +362,30 @@ export function applyPassportAnswer(state, answer, meta) {
             : `[Passport] Direct speech: the model named no marker — left unset, and nothing will be said about it in the prompts.`);
     }
 
+    // --- the book's description, for the e-reader ---
+    // Kept in the passport as the model gave it, and copied into the export
+    // fields only where those are empty: a title or blurb typed by a person is
+    // never replaced by a rebuild.
+    const bookRaw = answer?.book && typeof answer.book === 'object' ? answer.book : {};
+    const described = {
+        title: String(bookRaw.title || '').trim().slice(0, 300) || null,
+        titleSource: bookRaw.titleSource === 'published' ? 'published' : (bookRaw.title ? 'translated' : null),
+        author: String(bookRaw.author || '').trim().slice(0, 300) || null,
+        annotation: String(bookRaw.annotation || '').replace(/\r\n?/g, '\n').trim().slice(0, 3000) || null,
+    };
+    passport.book = described.title || described.author || described.annotation ? described : null;
+    if (passport.book) {
+        const meta = state.data.metadata = state.data.metadata || {};
+        const fields = meta.book = meta.book || {};
+        const filled = ['title', 'author', 'annotation'].filter(k => !String(fields[k] || '').trim() && described[k]);
+        for (const k of filled) fields[k] = described[k];
+        if (filled.length) {
+            state.save();
+            console.log(`[Passport] Book page: filled ${filled.join(', ')} from the model` +
+                `${filled.includes('title') ? ` (title ${described.titleSource === 'published' ? 'of a published edition, by the model\'s account' : 'translated'})` : ''}.`);
+        }
+    }
+
     // --- notes for the translator ---
     // Proposals only: none reaches a prompt until a person accepts it.
     passport.notes = mergeNotes(passport.notes, answer?.notes);

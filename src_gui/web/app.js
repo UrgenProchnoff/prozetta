@@ -2605,6 +2605,8 @@ async function renderBook(prefix) {
                     <label>${esc(t('book.titleLabel'))}
                         <input id="b-title" type="text" maxlength="300" placeholder="${esc(prefix)}" value="${esc(meta.title)}">
                     </label>
+                    ${meta.proposed?.title && meta.title === meta.proposed.title
+                        ? `<div class="cfg-hint">${esc(t('book.titleFrom.' + (meta.proposed.titleSource === 'published' ? 'published' : 'translated')))}</div>` : ''}
                     <label>${esc(t('book.authorLabel'))}
                         <input id="b-author" type="text" maxlength="300" placeholder="${esc(t('book.authorPlaceholder'))}" value="${esc(meta.author)}">
                     </label>

@@ -165,6 +165,11 @@ const ru = {
            что уже сказано в полях выше, и заметки из <evidence> под
            "acceptedNotes" — они уже приняты. Нечего добавить — пустой список.
 
+        7. ОПИСАНИЕ КНИГИ для читалки, на ${targetLang}: название, имя автора в
+           принятом на ${targetLang} написании и аннотация - 3-5 предложений о том,
+           о чём книга, без спойлеров. Если книга издавалась на ${targetLang} и ты
+           уверен в названии издания - бери его и отметь "published"; иначе переведи
+           заглавие и отметь "translated".
 
         Рассуждай шаг за шагом.
         JSON должен быть обёрнут в тройные кавычки (markdown block).
@@ -184,7 +189,7 @@ const ru = {
             { "name": "Имя как в оригинале", "gender": "m|f|n", "dossier": "телеграфное досье" }
           ],
           "author": {
-            "name": "имя автора книги, или null если он нигде не назван и неизвестен",
+            "name": "имя автора книги в написании оригинала, или null если он нигде не назван и неизвестен",
             "gender": "m|f|n, или null если пол автора неизвестен",
             "reason": "коротко, откуда это известно: из улик, из текста книги или из общих знаний"
           },
@@ -194,7 +199,13 @@ const ru = {
           },
           "notes": [
             { "topic": "о чём, в двух-трёх словах", "advice": "что знать и что делать переводчику" }
-          ]
+          ],
+          "book": {
+            "title": "название книги на ${targetLang}",
+            "titleSource": "published|translated",
+            "author": "имя автора на ${targetLang}",
+            "annotation": "аннотация на ${targetLang}"
+          }
         }
         \`\`\``,
         user: userBuilders.passport,
@@ -688,6 +699,12 @@ const en = {
            fields above already say, nor the notes under "acceptedNotes" in
            <evidence> — those are already accepted. Nothing to add — an empty list.
 
+        7. THE BOOK'S DESCRIPTION for an e-reader, in ${targetLang}: the title, the
+           author's name as it is usually spelt in ${targetLang}, and a blurb — 3-5
+           sentences on what the book is about, without spoilers. If the book has been
+           published in ${targetLang} and you are sure of that edition's title, take it
+           and mark it "published"; otherwise translate the title and mark it
+           "translated".
 
         Reason step by step.
         The JSON must be wrapped in triple backticks (markdown block).
@@ -707,7 +724,7 @@ const en = {
             { "name": "Name as in the original", "gender": "m|f|n", "dossier": "telegraphic dossier" }
           ],
           "author": {
-            "name": "the author's name, or null if they are named nowhere and unknown to you",
+            "name": "the author's name as the original spells it, or null if they are named nowhere and unknown to you",
             "gender": "m|f|n, or null if the author's gender is unknown",
             "reason": "briefly, where this comes from: the evidence, the book's text, or general knowledge"
           },
@@ -717,7 +734,13 @@ const en = {
           },
           "notes": [
             { "topic": "what it is about, in two or three words", "advice": "what the translator should know and do" }
-          ]
+          ],
+          "book": {
+            "title": "the book's title in ${targetLang}",
+            "titleSource": "published|translated",
+            "author": "the author's name in ${targetLang}",
+            "annotation": "the blurb in ${targetLang}"
+          }
         }
         \`\`\``,
         user: userBuilders.passport,
