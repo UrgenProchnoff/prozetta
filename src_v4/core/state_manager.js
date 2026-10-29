@@ -61,6 +61,8 @@ export class ProjectState {
         // state for the same reason as the glossary review: it is a report about
         // the translation, not a version of it.
         this.translationReviewFile = paths.translationReview;
+        // Headings marked for the FB2 (core/book_structure.js).
+        this.structureFile = paths.structure;
 
         this.data = {
             metadata: {
@@ -124,6 +126,10 @@ export class ProjectState {
 
     getTranslationReviewPath() {
         return this.translationReviewFile;
+    }
+
+    getStructurePath() {
+        return this.structureFile;
     }
 
     getChunks() {

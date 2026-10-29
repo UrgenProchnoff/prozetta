@@ -115,49 +115,89 @@ function bookUuid(seed) {
  * @param {Array<{translation?: string}>} chunks
  * @param {{
  *   title: string, author?: string, annotation?: string, langSuffix?: string,
- *   modelName?: string, cover?: { base64: string, mime: string } | null
+ *   modelName?: string, cover?: { base64: string, mime: string } | null,
+ *   headingAt?: (chunk: number, text: string, nth: number) => ({level: number, joinPrev?: boolean}|null)
  * }} meta
+ *   `headingAt` — the model's marks (core/book_structure.js headingLookup);
+ *   without it headings are guessed by keyword.
  * @returns {{ xml: string, missing: number, sections: number }}
  */
 export function assembleBookFb2(chunks, meta) {
     let missing = 0;
+    // Each line keeps the chunk it came from and its occurrence there, which is
+    // how the model's marks (core/book_structure.js) find it again.
     const lines = [];
     for (let i = 0; i < chunks.length; i++) {
         const c = chunks[i];
         if (c && c.translation) {
-            for (const line of c.translation.split('\n')) lines.push(line.trim());
+            const seen = new Map();
+            for (const raw of c.translation.split('\n')) {
+                const text = raw.trim();
+                const nth = seen.get(text) || 0;
+                seen.set(text, nth + 1);
+                lines.push({ text, chunk: i, nth });
+            }
         } else {
-            lines.push(`[MISSING CHUNK ${i}]`);
+            lines.push({ text: `[MISSING CHUNK ${i}]`, chunk: i, nth: 0 });
             missing++;
         }
     }
 
-    // Cut the line stream into sections at detected headings.
-    const sections = [];
-    let cur = { title: null, items: [] }; // items: {kind: 'p'|'subtitle', text}
+    // Marked by a model when there are marks; the keyword heuristic otherwise,
+    // as a flat run of sections — what every book got before marks existed.
+    const lookup = typeof meta.headingAt === 'function' ? meta.headingAt : null;
+    const headingOf = lookup
+        ? (l) => lookup(l.chunk, l.text, l.nth)
+        : (l) => (isHeading(l.text) ? { level: 1 } : null);
+
+    // Sections as a tree: a heading closes every open section of its level or
+    // deeper and opens one under the nearest shallower one.
+    const root = { level: 0, title: [], items: [], children: [] };
+    const stack = [root];
+    let count = 0;
     for (const line of lines) {
-        if (!line) continue;
-        if (isHeading(line)) {
-            if (cur.title !== null || cur.items.length) sections.push(cur);
-            cur = { title: line, items: [] };
-        } else if (isSeparator(line)) {
-            cur.items.push({ kind: 'subtitle', text: '* * *' });
+        if (!line.text) continue;
+        const mark = headingOf(line);
+        if (mark) {
+            const top = stack[stack.length - 1];
+            // The second line of a two-line title ("Часть первая:" / "Создатели"),
+            // as long as nothing has been written under the first.
+            if (mark.joinPrev && top !== root && !top.items.length && !top.children.length) {
+                top.title.push(line.text);
+                continue;
+            }
+            while (stack.length > 1 && stack[stack.length - 1].level >= mark.level) stack.pop();
+            const section = { level: mark.level, title: [line.text], items: [], children: [] };
+            stack[stack.length - 1].children.push(section);
+            stack.push(section);
+            count++;
         } else {
-            cur.items.push({ kind: 'p', text: line });
+            // Always the deepest open section: a section is closed only by the
+            // next heading, so the one on top has no subsections yet.
+            stack[stack.length - 1].items.push(isSeparator(line.text)
+                ? { kind: 'subtitle', text: '* * *' }
+                : { kind: 'p', text: line.text });
         }
     }
-    if (cur.title !== null || cur.items.length) sections.push(cur);
-    if (!sections.length) sections.push({ title: null, items: [] });
 
-    const sectionXml = sections.map(s => {
-        const title = s.title ? `\n<title><p>${escXml(s.title)}</p></title>` : '';
-        const body = s.items.map(it =>
-            it.kind === 'subtitle'
-                ? `<subtitle>${escXml(it.text)}</subtitle>`
-                : `<p>${escXml(it.text)}</p>`
-        ).join('\n');
-        return `<section>${title}\n${body}\n</section>`;
-    }).join('\n');
+    const itemXml = (it) => it.kind === 'subtitle'
+        ? `<subtitle>${escXml(it.text)}</subtitle>`
+        : `<p>${escXml(it.text)}</p>`;
+    const sectionToXml = (sec) => {
+        const title = sec.title.length
+            ? `\n<title>${sec.title.map(t => `<p>${escXml(t)}</p>`).join('')}</title>` : '';
+        if (!sec.children.length) return `<section>${title}\n${sec.items.map(itemXml).join('\n')}\n</section>`;
+        // Paragraphs between a part's title and its first chapter — an epigraph,
+        // a date line — go first, in an untitled section: FB2 lets a section
+        // hold paragraphs or subsections, not both.
+        const lead = sec.items.length ? `\n<section>\n${sec.items.map(itemXml).join('\n')}\n</section>` : '';
+        return `<section>${title}${lead}\n${sec.children.map(sectionToXml).join('\n')}\n</section>`;
+    };
+    const top = [];
+    if (root.items.length) top.push(`<section>\n${root.items.map(itemXml).join('\n')}\n</section>`);
+    for (const sec of root.children) top.push(sectionToXml(sec));
+    if (!top.length) top.push('<section>\n\n</section>');
+    const sectionXml = top.join('\n');
 
     const title = meta.title || 'Без названия';
     const lang = langCode(meta.langSuffix);
@@ -213,5 +253,5 @@ ${sectionXml}
 </FictionBook>
 `;
 
-    return { xml, missing, sections: sections.length };
+    return { xml, missing, sections: count || top.length };
 }

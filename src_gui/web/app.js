@@ -111,7 +111,7 @@ function statusLabel(s) { return t(`status.${s}`); }
 // the roadmap call the same thing the same thing.
 // The runnable stage each whole-book call belongs to, so the box can name itself
 // after the step a person pressed rather than after an internal kind.
-const BOOK_STAGE_OF = { passport: 'passport', povmap: 'povmap', glossary: 'glossary', translation: 'review' };
+const BOOK_STAGE_OF = { passport: 'passport', povmap: 'povmap', glossary: 'glossary', translation: 'review', structure: 'structure' };
 const STAGE_BOOK_CALL = { passport: 'passport', glossary: 'glossary', review: 'translation' };
 
 const STAGE_LABEL = {
@@ -119,6 +119,7 @@ const STAGE_LABEL = {
     glossary: 'mon.stepReview',
     passport: 'mon.stepPassport',
     povmap: 'mon.stepPovMap',
+    structure: 'book.structure',
     '2': 'mon.stepTranslate',
     review: 'mon.stepAssess',
     export: 'mon.stepExport',
@@ -2625,7 +2626,54 @@ async function renderBook(prefix) {
                title="${done ? '' : esc(t('mon.downloadDisabled'))}">${esc(t('book.downloadTxt'))}</a>
         </div>
         <div class="hint" style="margin-top:10px">${esc(t('book.chaptersHint'))}</div>
+        <div class="card" id="b-structure" style="margin-top:14px">
+            <div class="title">${esc(t('book.structure'))}</div>
+            <div class="cfg-hint">${esc(t('book.structureHint'))}</div>
+            <div id="b-structure-body"><div class="cfg-hint">${esc(t('common.loading'))}</div></div>
+            ${manualCallBox('structure')}
+        </div>
     `;
+
+    // The headings the FB2 is cut by: marked by the large model on request, and
+    // shown as the outline they give, so a wrong mark is seen before the book
+    // reaches a reader rather than in it.
+    const structureBody = document.getElementById('b-structure-body');
+    const drawStructure = (rep) => {
+        const status = !rep.candidates ? t('book.structureEmpty')
+            : !rep.marked ? t('book.structureNone')
+            : t('book.structureStatus', { n: rep.outline.length, model: rep.model || '—', date: fmtDate(rep.generatedAt) });
+        const stale = rep.marked && (rep.unmarked || rep.lost)
+            ? `<div class="cfg-hint">⚠ ${esc(t('book.structureStale', { unmarked: rep.unmarked, lost: rep.lost }))}</div>` : '';
+        const rows = rep.outline.map(r => `<div class="outline-row" style="padding-left:${(r.level - 1) * 20}px">`
+            + `${esc(r.title.join(' '))} <span class="cfg-hint">#${r.chunk + 1}</span></div>`).join('');
+        structureBody.innerHTML = `
+            <div class="cfg-hint" style="margin:8px 0">${esc(status)}</div>${stale}
+            ${rep.candidates ? `<div class="row" style="margin:8px 0">
+                <button id="b-structure-run" class="primary">${esc(t(rep.marked ? 'book.structureRerun' : 'book.structureRun'))}</button>
+                <span class="cfg-hint">${esc(t('book.structureCost', { n: rep.candidates, tokens: fmtNum(rep.tokens) }))}</span>
+            </div>` : ''}
+            ${rows ? `<div class="outline" style="max-height:360px;overflow:auto">${rows}</div>` : ''}`;
+        document.getElementById('b-structure-run')?.addEventListener('click', async (e) => {
+            const btn = e.currentTarget;
+            btn.disabled = true;
+            btn.textContent = t('book.structureRunning');
+            try {
+                drawStructure(await api(`/api/projects/${encodeURIComponent(prefix)}/structure`, { method: 'POST' }));
+                toast(t('book.structureDone'), 'ok');
+            } catch (err) {
+                toast(err.message, 'error');
+                btn.disabled = false;
+                btn.textContent = t(rep.marked ? 'book.structureRerun' : 'book.structureRun');
+            }
+        });
+    };
+    const loadStructure = () => api(`/api/projects/${encodeURIComponent(prefix)}/structure`)
+        .then(drawStructure)
+        .catch(e => { structureBody.innerHTML = `<div class="cfg-hint">${esc(t('common.error', { msg: e.message }))}</div>`; });
+    loadStructure();
+    // By hand, for when the model is busy or the API is out of reach: the same
+    // prompt to a web console, the answer back through the same checks.
+    wireBookCalls(prefix, loadStructure);
 
     document.getElementById('b-save').addEventListener('click', async () => {
         try {

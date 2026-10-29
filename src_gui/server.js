@@ -3,8 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { jobManager, clockTime } from './jobs.js';
-import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER } from '../src_v4/core/llm_client.js';
+import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER, isTransientServerError, failureSummary } from '../src_v4/core/llm_client.js';
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
+import { structureCandidates, matchStructure, outline, loadStructure, headingLookup, buildStructurePrompt, applyStructureAnswer } from '../src_v4/core/book_structure.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { personGroups, MAX_NOTE_CHARS } from '../src_v4/core/glossary_links.js';
 import { getPrompts } from '../src_v4/prompts.js';
@@ -399,6 +400,7 @@ app.get('/api/help', (req, res) => {
 });
 
 const passportPath = (prefix) => paths(prefix).passport;
+const structurePath = (prefix) => paths(prefix).structure;
 const runLogPath = (prefix) => paths(prefix).log;
 
 // Tail of the persistent per-project log written by src_v4 (survives GUI
@@ -1906,6 +1908,12 @@ const BOOK_CALLS = {
         build: (state) => buildPassportPrompt(state),
         apply: (state, raw, meta) => { applyPassportAnswer(state, raw, meta); return { notes: [] }; },
     },
+    // Not a whole-book call — the candidate lines only — but carried by hand the
+    // same way when the model is busy or the API is out of reach.
+    structure: {
+        build: (state) => ({ ...buildStructurePrompt(state.getChunks(), getPrompts(config.translation.promptLang)), budget: Infinity }),
+        apply: (state, raw, meta) => { applyStructureAnswer(state.getChunks(), raw, state.getStructurePath(), meta); return { notes: [] }; },
+    },
     povmap: {
         build: (state) => buildPovMapPrompt(state),
         apply: (state, raw, meta) => { applyPovMapAnswer(state, raw, meta); return { notes: [] }; },
@@ -2334,6 +2342,97 @@ app.delete('/api/projects/:prefix/cover', (req, res) => {
     res.json({ ok: true });
 });
 
+// --- API: book structure (headings for FB2) ---
+//
+// Which short lines of the translation are headings, and of what level, marked
+// by the large model from the lines alone — not the book. Kept in structure.json
+// and read by the FB2 export; without it the export guesses by keyword.
+
+const STRUCTURE_ATTEMPTS = 4;
+
+function structureReport(prefix, chunks) {
+    const candidates = structureCandidates(chunks);
+    const structure = loadStructure(structurePath(prefix));
+    const { byKey, matched, lost, unmarked } = matchStructure(structure, candidates);
+    return {
+        candidates: candidates.length,
+        tokens: candidates.length
+            ? buildStructurePrompt(chunks, getPrompts(config.translation.promptLang)).tokens.total : 0,
+        marked: !!structure,
+        model: structure?.model || null,
+        generatedAt: structure?.generatedAt || null,
+        matched, lost,
+        // Only meaningful once something was asked: before that every line is new.
+        unmarked: structure ? unmarked : 0,
+        outline: structure ? outline(candidates, byKey) : [],
+    };
+}
+
+app.get('/api/projects/:prefix/structure', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    let state;
+    try { state = readJson(statePath(prefix)); } catch { return res.status(404).json({ error: 'Project not found' }); }
+    res.json(structureReport(prefix, state.chunks || []));
+});
+
+app.post('/api/projects/:prefix/structure', async (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — разметка заблокирована' });
+    }
+    let state;
+    try { state = readJson(statePath(prefix)); } catch { return res.status(404).json({ error: 'Project not found' }); }
+    const chunks = state.chunks || [];
+    if (!structureCandidates(chunks).length) return res.status(409).json({ error: 'No lines that could be headings — nothing to mark' });
+
+    let cfg;
+    try { cfg = await loadEffectiveConfig(); } catch (e) { return res.status(500).json({ error: e.message }); }
+    if (cfg.book_model?.enabled === false) {
+        return res.status(409).json({ code: 'book_off', error: 'The large model is switched off (Settings → Large model)' });
+    }
+    const { effective, provider } = bookEffective(cfg);
+    if (!effective) return res.status(400).json({ error: `Invalid provider in book_model: ${provider}` });
+    const built = buildStructurePrompt(chunks, getPrompts(cfg.translation?.promptLang));
+
+    try {
+        // Picking headings out of a list is light work. At the book profile's
+        // usual "high" even "Reply with just: OK" took 217 s, and the longer a
+        // request hangs on a busy model the likelier it ends in "fetch failed".
+        const client = createRawClient(provider, { ...effective, thinkingLevel: 'low' });
+        const ask = () => Promise.race([
+            client.invoke([
+                { role: 'system', content: built.system },
+                { role: 'user', content: built.user },
+            ]),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 600000)),
+        ]);
+        // The raw client has none of the pipeline's retries, and a "503 high
+        // demand" is exactly what clears if waited out: measured on the first
+        // press, the key was fine and Google was simply busy.
+        let result;
+        for (let attempt = 1; ; attempt++) {
+            try { result = await ask(); break; }
+            catch (e) {
+                if (attempt >= STRUCTURE_ATTEMPTS || !isTransientServerError(e)) throw e;
+                console.warn(`[GUI] Structure for "${prefix}": ${failureSummary(e)} — retrying in ${attempt * 20}s (${attempt}/${STRUCTURE_ATTEMPTS - 1}).`);
+                await new Promise(r => setTimeout(r, attempt * 20000));
+            }
+        }
+        const content = result?.content;
+        const text = typeof content === 'string' ? content
+            : Array.isArray(content) ? content.map(p => p?.text || '').join('') : '';
+        const { marks } = applyStructureAnswer(chunks, extractJson(text), structurePath(prefix), {
+            model: effective.modelName, fingerprint: built.fingerprint,
+        });
+        console.log(`[GUI] Structure for "${prefix}": ${marks.length} heading(s) among ${built.candidates.length} candidate line(s), by ${effective.modelName}.`);
+        res.json(structureReport(prefix, chunks));
+    } catch (e) {
+        res.status(502).json({ error: failureSummary(e) || String(e) });
+    }
+});
+
 // --- API: export download ---
 
 app.get('/api/projects/:prefix/output', async (req, res) => {
@@ -2363,6 +2462,8 @@ app.get('/api/projects/:prefix/output', async (req, res) => {
             ? { base64: fs.readFileSync(coverFile.path).toString('base64'), mime: coverFile.mime }
             : null;
         const { xml } = assembleBookFb2(chunks, {
+            // The model's marks when the book has been marked; keywords otherwise.
+            headingAt: headingLookup(chunks, loadStructure(structurePath(prefix))) || undefined,
             title: book.title || prefix,
             author: book.author || '',
             annotation: book.annotation || '',

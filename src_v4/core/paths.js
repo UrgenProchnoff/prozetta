@@ -43,6 +43,7 @@ export function projectPaths(workDir, prefix) {
         passport: path.join(dir, 'passport.json'),
         review: path.join(dir, 'glossary_review.json'),
         translationReview: path.join(dir, 'translation_review.json'),
+        structure: path.join(dir, 'structure.json'),
         log: path.join(dir, 'run.log'),
         cover: (ext) => path.join(dir, `cover.${ext}`),
     };

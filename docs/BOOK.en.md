@@ -23,12 +23,23 @@ just grey.
 
 ## Chapters
 
-Found **automatically from headings in the text**: "Chapter 7", "Prologue", SHORT
-LINES IN CAPS, numbers standing alone. A "* * *" separator becomes a scene break.
+Two ways.
 
-Which means something simple: how good the table of contents is depends on how the
-source text is marked up. If the original marks chapters some other way, the
-contents will be thin — that is not a fault but what the program could make of it.
+**Marked by the model** — the "Mark the structure" button in the "Structure for
+FB2" card. The program picks the short lines that stand as paragraphs of their own,
+and the large model decides which are headings and at what level: part, chapter,
+subchapter. The book itself is not sent — only those lines with the paragraphs
+either side, around twenty thousand tokens even for a long book. Chapters go inside parts, and a heading
+over two lines ("Part One:" / "The Makers") stays one heading. The resulting
+contents are shown under the button: a wrong mark is better caught there than in a
+reader. If the translation is edited after marking, the card says how many lines
+the model has not seen.
+
+**Without marks** headings are guessed by words: "Chapter 7", "Prologue", SHORT
+LINES IN CAPS, numbers standing alone. "Part One" is not recognised this way and
+stays a paragraph.
+
+Either way, a "* * *" separator becomes a scene break.
 
 ## Two buttons
 

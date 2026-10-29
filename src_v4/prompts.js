@@ -30,6 +30,8 @@ ${bookText}
 <book>
 ${bookText}
 </book>`,
+    // Разметка заголовков для FB2: строки-кандидаты с соседями (core/book_structure.js).
+    bookStructure: (candidates) => JSON.stringify(candidates.map(c => ({ id: c.id, before: c.before, line: c.text, after: c.after })), null, 0),
     consolidation: (items) => JSON.stringify(items),
     // Заметки форм одного имени для редактора глоссария (src_gui/server.js).
     glossaryNote: (entries) => JSON.stringify(entries, null, 1),
@@ -163,6 +165,7 @@ const ru = {
            что уже сказано в полях выше, и заметки из <evidence> под
            "acceptedNotes" — они уже приняты. Нечего добавить — пустой список.
 
+
         Рассуждай шаг за шагом.
         JSON должен быть обёрнут в тройные кавычки (markdown block).
 
@@ -225,6 +228,43 @@ const ru = {
         }
         \`\`\``,
         user: userBuilders.povMap,
+    },
+
+    // --- Заголовки книги для FB2 (core/book_structure.js) ---
+    // Не вся книга: только короткие строки, стоящие отдельным абзацем, с соседями.
+    bookStructure: {
+        system: () => `
+        Ты - верстальщик книги. Тебе дан список строк из перевода книги: каждая стоит
+        отдельным абзацем и короткая, поэтому МОЖЕТ быть заголовком. "before" и "after" -
+        абзацы до и после неё.
+
+        Отметь, какие из строк - заголовки, и какого уровня:
+        1 - крупнейшее деление книги: часть, книга, том;
+        2 - глава;
+        3 - деление внутри главы, если у него есть свой заголовок.
+        Если частей в книге нет, главы - уровень 1. Пролог, эпилог, предисловие,
+        послесловие и интерлюдии - того же уровня, что и соседние с ними деления.
+
+        Заголовок, разбитый на две строки подряд («Часть первая:» и следом «Создатели»),
+        - это ОДИН заголовок: вторую строку отметь с "joinPrev": true и тем же уровнем.
+
+        НЕ заголовки: даты и места в начале главы, подписи, реплики и мысли персонажей,
+        строки писем и чатов, выкрики, титульные данные (имя автора, ISBN, издание).
+
+        Верни только заголовки; строки, которых нет в ответе, считаются обычным текстом.
+        JSON должен быть обёрнут в тройные кавычки (markdown block).
+
+        Пример ответа:
+        \`\`\`json
+        {
+          "headings": [
+            { "id": 3, "level": 1 },
+            { "id": 4, "level": 1, "joinPrev": true },
+            { "id": 5, "level": 2 }
+          ]
+        }
+        \`\`\``,
+        user: userBuilders.bookStructure,
     },
 
     // --- Ревизия глоссария: один вызов на книгу (04_glossary_review.js) ---
@@ -648,6 +688,7 @@ const en = {
            fields above already say, nor the notes under "acceptedNotes" in
            <evidence> — those are already accepted. Nothing to add — an empty list.
 
+
         Reason step by step.
         The JSON must be wrapped in triple backticks (markdown block).
 
@@ -707,6 +748,45 @@ const en = {
         }
         \`\`\``,
         user: userBuilders.povMap,
+    },
+
+    // --- The book's headings for FB2 (core/book_structure.js) ---
+    bookStructure: {
+        system: () => `
+        You are typesetting a book. You are given a list of lines from its translation:
+        each stands as a paragraph of its own and is short, so it MAY be a heading.
+        "before" and "after" are the paragraphs either side of it.
+
+        Mark which of the lines are headings, and at what level:
+        1 - the largest division of the book: a part, a book, a volume;
+        2 - a chapter;
+        3 - a division inside a chapter, if it has a heading of its own.
+        If the book has no parts, chapters are level 1. A prologue, an epilogue, a
+        foreword, an afterword and interludes take the level of the divisions next
+        to them.
+
+        A heading split over two consecutive lines ("Part One:" followed by "The
+        Makers") is ONE heading: mark the second line with "joinPrev": true and the
+        same level.
+
+        NOT headings: dates and places opening a chapter, signatures, characters'
+        lines and thoughts, lines of letters and chats, exclamations, title-page
+        data (the author's name, ISBN, edition).
+
+        Return the headings only; lines left out of the answer are ordinary text.
+        The JSON must be wrapped in triple backticks (markdown block).
+
+        Example response:
+        \`\`\`json
+        {
+          "headings": [
+            { "id": 3, "level": 1 },
+            { "id": 4, "level": 1, "joinPrev": true },
+            { "id": 5, "level": 2 }
+          ]
+        }
+        \`\`\``,
+        user: userBuilders.bookStructure,
     },
 
     // --- Glossary review: one call over the whole book (04_glossary_review.js) ---
