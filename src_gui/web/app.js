@@ -184,8 +184,21 @@ function usagePanelHtml(usage) {
 // --- Router ---
 
 let cleanup = null; // page teardown (close SSE etc.)
+// Asked before leaving a page with unsaved edits; false keeps the person there.
+// It has to run here, before the page is torn down: the glossary used to ask
+// from its teardown, when the address had already changed, so "Cancel" left
+// just the same as "OK" and the edits went with it.
+let leaveGuard = null;
+let currentUrl = location.href;
 
 function route() {
+    if (leaveGuard && !leaveGuard()) {
+        // Put the address back without a second hashchange; the page is untouched.
+        history.replaceState(null, '', currentUrl);
+        return;
+    }
+    leaveGuard = null;
+    currentUrl = location.href;
     if (cleanup) { cleanup(); cleanup = null; }
     const raw = location.hash.replace(/^#/, '') || '/';
     // A finding sends the reader to a chunk and says which quote it meant. The
@@ -211,6 +224,15 @@ function route() {
 }
 
 window.addEventListener('hashchange', route);
+// Closing the tab or reloading is leaving too; the browser asks in its own words.
+window.addEventListener('beforeunload', (e) => {
+    if (leaveGuard && !leaveGuard.quiet()) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/** Guard the page against leaving with unsaved edits; `isDirty` says whether there are any. */
+function guardLeaving(isDirty, message) {
+    leaveGuard = Object.assign(() => !isDirty() || confirm(message), { quiet: () => !isDirty() });
+}
 
 function setCrumbs(html) { breadcrumbs.innerHTML = html; }
 
@@ -1682,10 +1704,8 @@ async function renderGlossary(prefix) {
         // elements that no longer exist.
         for (const stop of cleanupTimers) stop();
         cleanupTimers.length = 0;
-        if (dirty && !confirm(t('gloss.leaveConfirm'))) {
-            // too late to cancel hash navigation cleanly — just warn
-        }
     };
+    guardLeaving(() => dirty, t('gloss.leaveConfirm'));
 }
 
 // ============================================================
@@ -3015,6 +3035,7 @@ async function renderPassport(prefix) {
     });
 
     cleanup = () => { app.removeEventListener('input', onPassportInput); };
+    guardLeaving(() => dirty, t('pass.leaveConfirm'));
 }
 
 // ============================================================

@@ -194,6 +194,7 @@
             'gloss.saved': 'Глоссарий сохранён ({count} терминов)',
             'gloss.saveError': 'Ошибка сохранения: {msg}',
             'gloss.leaveConfirm': 'Есть несохранённые изменения глоссария. Уйти без сохранения?',
+            'pass.leaveConfirm': 'Есть несохранённые изменения паспорта. Уйти без сохранения?',
 
             'mon.heading': 'Монитор',
             'mon.modelLabel': 'Модель',
@@ -869,6 +870,7 @@
             'gloss.saved': 'Glossary saved ({count} terms)',
             'gloss.saveError': 'Save error: {msg}',
             'gloss.leaveConfirm': 'You have unsaved glossary changes. Leave without saving?',
+            'pass.leaveConfirm': 'The passport has unsaved changes. Leave without saving?',
 
             'mon.heading': 'Monitor',
             'mon.modelLabel': 'Model',
