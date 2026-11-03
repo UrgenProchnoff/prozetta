@@ -11,6 +11,13 @@ predates the practice and carries none.
 
 **2026-11-03**
 
+- `d1e5608` — Translation review findings: a typography finding now closes when
+  the line is split by hand, and "Done" or "Dismiss" survives a second review
+  even when the model quotes the same place a word earlier or later. A quote
+  that crosses a line break is shown as the translation has it, breaks marked ⏎,
+  so a complaint about a reply "run into the narration" that already stands on
+  its own line is visible at a glance.
+
 - `773f1bb` — The glossary can be imported from another book of the series: the
   "Import from project…" button in the editor. Only entries this book uses come
   across; new ones are listed with ticks, and where the two books render a name
