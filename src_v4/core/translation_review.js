@@ -148,6 +148,16 @@ export function verifyFindings(raw, chunks, glossary = []) {
             }
         }
 
+        // The passage as it stands in the chunk, line breaks and all. The quote
+        // is found tolerant of whitespace, which is right for finding it and
+        // wrong for telling whether it was acted on: a line break put in by hand
+        // left the quote "still there", and a typography finding stayed open
+        // after the very fix it asked for. Absent for a quote that straddles a
+        // chunk boundary — it has no single passage to keep.
+        const own = chunks[hits[0]].translation;
+        const at = locateQuote(own, quote);
+        const seen = at.occurrences ? own.slice(at.offset, at.end) : null;
+
         findings.push({
             scope,
             chunk: hits[0],
@@ -156,6 +166,7 @@ export function verifyFindings(raw, chunks, glossary = []) {
             advice: advice.slice(0, 400) || null,
             ...(term ? { term } : {}),
             quote,
+            ...(seen ? { seen } : {}),
         });
     }
 
@@ -172,6 +183,87 @@ export function verifyFindings(raw, chunks, glossary = []) {
  */
 export function findingKey(f) {
     return [f.scope, f.issue, String(f.quote || '').slice(0, 120)].join('|').toLowerCase();
+}
+
+/**
+ * Where a finding's passage sits in a text now, as [from, to], or null.
+ *
+ * The exact passage first, when one was kept. `exact` stops there: asked
+ * whether a finding was acted on, a passage whose line breaks have changed is a
+ * passage that was edited. Otherwise the quote is looked for the forgiving way,
+ * which is what a finding saved before passages were kept has to go on, and
+ * what still finds a place whose line breaks somebody has just fixed.
+ */
+export function spanIn(text, f, exact = false) {
+    const t = String(text || '');
+    if (f?.seen) {
+        const i = t.indexOf(f.seen);
+        if (i >= 0) return [i, i + f.seen.length];
+        if (exact) return null;
+    }
+    const at = locateQuote(t, f?.quote);
+    return at.occurrences ? [at.offset, at.end] : null;
+}
+
+/**
+ * Carry decisions over to new findings about the same place.
+ *
+ * A decision is keyed by the quote, and a model asked again quotes the same
+ * passage a word earlier or a word later: a new key, and a finding somebody had
+ * already dismissed — or fixed and marked done — came back looking undecided.
+ * Typography suffered most, being raised again and again at places where the
+ * line breaks had been put in by hand. So the decision is also carried by
+ * place: a new finding with the same scope and issue whose passage overlaps a
+ * decided one inherits that decision.
+ *
+ * Decided passages outlive the review whose findings they came from — the file
+ * is overwritten every time — so they are kept in `decided` and passed on. One
+ * whose key has left its list (restored) is dropped, and so is one whose
+ * passage is no longer anywhere in the book: it can never match again.
+ *
+ * `carriedFrom` maps an inherited key to the key it inherited from, so that
+ * taking the inherited decision back takes back its source as well — or the
+ * next review would carry it straight over again.
+ *
+ * @returns {{dismissed: string[], handled: string[], decided: Array, carriedFrom: object, carried: number}}
+ */
+export function carryDecisions(previous, findings, chunks) {
+    const lower = (list) => new Set((list || []).map(k => String(k).toLowerCase()));
+    const lists = { dismissed: lower(previous?.dismissed), handled: lower(previous?.handled) };
+    const listOf = (key) => lists.dismissed.has(key) ? 'dismissed' : lists.handled.has(key) ? 'handled' : null;
+
+    const records = new Map();
+    for (const r of previous?.decided || []) if (r?.key) records.set(r.key, r);
+    for (const f of previous?.findings || []) {
+        const key = findingKey(f);
+        const list = listOf(key);
+        if (list) records.set(key, { key, list, scope: f.scope, issue: f.issue, quote: f.quote, ...(f.seen ? { seen: f.seen } : {}) });
+    }
+    const texts = (chunks || []).map(c => c?.translation || '').filter(Boolean);
+    const decided = [...records.values()]
+        .filter(r => lists[r.list]?.has(r.key))
+        .filter(r => texts.some(text => spanIn(text, r)));
+
+    const carriedFrom = {};
+    for (const [k, from] of Object.entries(previous?.carriedFrom || {})) if (listOf(k)) carriedFrom[k] = from;
+    let carried = 0;
+    for (const f of findings || []) {
+        const key = findingKey(f);
+        if (listOf(key)) continue;
+        const text = chunks[f.chunk]?.translation || '';
+        const mine = spanIn(text, f);
+        if (!mine) continue;
+        const hit = decided.find(r => {
+            if (r.scope !== f.scope || r.issue !== f.issue) return false;
+            const theirs = spanIn(text, r);
+            return theirs && theirs[0] < mine[1] && mine[0] < theirs[1];
+        });
+        if (!hit) continue;
+        lists[hit.list].add(key);
+        carriedFrom[key] = hit.key;
+        carried++;
+    }
+    return { dismissed: [...lists.dismissed], handled: [...lists.handled], decided, carriedFrom, carried };
 }
 
 
@@ -272,9 +364,10 @@ export function outstandingFindings(review, chunks) {
         // after it had been done. So the history is asked as well: a fix records
         // which findings it was for, and one that has been applied and approved
         // (queued no longer, since approval clears it) is finished whatever the
-        // text now reads like.
+        // text now reads like. And the passage is compared as it was, line
+        // breaks included, so an edit by hand that only split a line counts too.
         if (!queued && appliedInHistory(chunk, key, f.advice, review?.generatedAt)) { done++; continue; }
-        if (!queued && locateQuote(text, f.quote).occurrences === 0) { done++; continue; }
+        if (!queued && !spanIn(text, f, true)) { done++; continue; }
 
         open.push({ ...f, key, queued, rank: rank.get(f) });
     }

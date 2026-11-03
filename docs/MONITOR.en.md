@@ -152,7 +152,19 @@ review it came from, since a second pass writes new findings while what was
 accepted from the first stays on its chunks.
 
 A finding leaves the list on its own once the text it complained about is gone.
-Nothing is applied without you.
+That includes an edit by hand that only split a line: the passage is compared with
+its line breaks. Nothing is applied without you.
+
+When a quote crosses a line break, the card shows the passage **as the
+translation has it**, with the breaks marked ⏎. The model writes its quotes on
+one line and sometimes judges by them, complaining that a reply is "run into the
+narration" when it is already on a line of its own. With the breaks in view, a
+finding like that is plain at once.
+
+**Dismiss** and **Done** survive a second review. A new finding of the same kind
+about the same place in the text — even quoted a word earlier or a word later —
+gets the earlier decision. Taking such a finding back takes back the one it
+inherited from as well.
 
 ## Your own correction
 

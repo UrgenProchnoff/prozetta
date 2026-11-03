@@ -24,7 +24,7 @@ import { buildGlossaryReviewPrompt, applyGlossaryReview } from '../src_v4/stages
 import { buildPassportPrompt, applyPassportAnswer, buildPovMapPrompt, applyPovMapAnswer } from '../src_v4/stages/03_passport.js';
 import { extractJson, describeJsonError, extractFromTags } from '../src_v4/utils/parsers.js';
 import { writeFileAtomic } from '../src_v4/utils/atomic_write.js';
-import { outstandingFindings as reviewOutstanding, findingKey, adviceQueue } from '../src_v4/core/translation_review.js';
+import { outstandingFindings as reviewOutstanding, findingKey, adviceQueue, spanIn } from '../src_v4/core/translation_review.js';
 import { manualKey, parseChunkList, chunksContaining } from '../src_v4/core/manual_advice.js';
 import { locateQuote } from '../src_v4/core/quoted_spans.js';
 import { wordDiff, condense, diffSize } from '../src_v4/core/text_diff.js';
@@ -656,6 +656,8 @@ function projectSummary(prefix) {
             // it has to be on screen before the button is pressed.
             let glossary = null;
             for (const f of open) {
+                const inText = passageWithBreaks(chunks[f.chunk]?.translation, f);
+                if (inText) f.inText = inText;
                 if (f.scope !== 'glossary' || !f.term) continue;
                 glossary = glossary || readGlossaryOrEmpty(prefix);
                 f.affects = chunksUsingTerm(chunks, f.term, glossary).length;
@@ -882,6 +884,21 @@ app.get('/api/projects/:prefix/chunks/:i', (req, res) => {
 });
 
 /**
+ * The quoted passage as the translation has it now, when it crosses a line
+ * break — otherwise null, and the quote is shown as the model wrote it.
+ *
+ * A model writes its quotes on one line, and then judges the text by them: a
+ * reply already on a line of its own was reported as run into the narration.
+ * Shown with its breaks, a finding like that answers itself.
+ */
+function passageWithBreaks(text, f) {
+    const at = spanIn(text, f);
+    if (!at) return null;
+    const passage = String(text).slice(at[0], at[1]);
+    return passage.includes('\n') ? passage : null;
+}
+
+/**
  * What the whole-book review has to say about one chunk, with each quote's place
  * in the translation.
  *
@@ -901,8 +918,10 @@ function chunkFindings(prefix, chunks, i) {
         const text = chunks[i]?.translation || '';
         return open.filter(f => f.chunk === i).map(f => {
             const { offset, end, occurrences } = locateQuote(text, f.quote);
+            const inText = passageWithBreaks(text, f);
             return {
                 key: f.key, scope: f.scope, issue: f.issue, quote: f.quote,
+                ...(inText ? { inText } : {}),
                 problem: f.problem, advice: f.advice, queued: !!f.queued,
                 // Absent when the quote cannot be pointed at: a fix may have
                 // changed the words while leaving the finding open, and offering
@@ -1756,11 +1775,15 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
     // in a hurry over sixty findings is one a person may want back — the finding
     // itself was never deleted, only hidden. Both lists are cleared because both
     // close a finding, and taking it back means taking back whichever one closed
-    // it; a key sits in one of them or in neither.
+    // it; a key sits in one of them or in neither. A decision inherited by place
+    // (see carryDecisions) is taken back together with the ones it came from,
+    // or the next review would hand it straight back.
     if (action === 'restore') {
-        const k = String(key).toLowerCase();
-        review.dismissed = (review.dismissed || []).filter(x => String(x).toLowerCase() !== k);
-        review.handled = (review.handled || []).filter(x => String(x).toLowerCase() !== k);
+        const gone = new Set();
+        for (let k = String(key).toLowerCase(); k && !gone.has(k); k = review.carriedFrom?.[k]) gone.add(k);
+        review.dismissed = (review.dismissed || []).filter(x => !gone.has(String(x).toLowerCase()));
+        review.handled = (review.handled || []).filter(x => !gone.has(String(x).toLowerCase()));
+        if (review.carriedFrom) for (const k of gone) delete review.carriedFrom[k];
         writeJsonAtomic(file, review);
         return res.json({ ok: true, dismissed: review.dismissed.length });
     }

@@ -1263,6 +1263,7 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
     border-left: 2px solid var(--border);
     padding-left: 10px;
 }
+.rev-nl { color: var(--muted); font-style: normal; margin-left: 2px; }
 .rev-problem { font-size: 13px; color: var(--muted); }
 .rev-advice { margin-top: 4px; font-size: 13px; color: var(--green); }
 

@@ -22,7 +22,7 @@ import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
 import { writeFileAtomic } from '../utils/atomic_write.js';
 import { countTokens, chunkTokens } from '../core/tokenizer.js';
-import { verifyFindings } from '../core/translation_review.js';
+import { verifyFindings, carryDecisions } from '../core/translation_review.js';
 import { loadPassport, isEmptyPassport, acceptedNotes } from '../core/passport.js';
 import { fingerprint, fingerprintMismatch, nextReviewRound, reviewScore } from '../core/book_call.js';
 import config from '../config.js';
@@ -176,20 +176,20 @@ export function applyTranslationReview(state, raw, meta) {
     const reviewPath = state.getTranslationReviewPath();
     // Counted before the file is replaced: the number lives inside it.
     const round = nextReviewRound(reviewPath);
-    let carriedDismissals = [];
-    let carriedHandled = [];
+    let previous = null;
     if (fs.existsSync(reviewPath)) {
-        try {
-            const previous = JSON.parse(fs.readFileSync(reviewPath, 'utf-8'));
-            carriedDismissals = Array.isArray(previous.dismissed) ? previous.dismissed : [];
-            carriedHandled = Array.isArray(previous.handled) ? previous.handled : [];
-            if (carriedDismissals.length) notes.push(`Carrying over ${carriedDismissals.length} finding(s) you had dismissed.`);
-            if (carriedHandled.length) notes.push(`Carrying over ${carriedHandled.length} finding(s) you had marked done.`);
-        } catch { /* an unreadable previous review must not block a new one */ }
+        try { previous = JSON.parse(fs.readFileSync(reviewPath, 'utf-8')); }
+        catch { /* an unreadable previous review must not block a new one */ }
     }
 
     const list = Array.isArray(raw?.findings) ? raw.findings : (Array.isArray(raw) ? raw : []);
     const { findings, rejected, rejectedFindings } = verifyFindings(list, chunks, readGlossary(state));
+
+    // And by place, for the findings that quote a decided passage differently.
+    const carry = carryDecisions(previous, findings, chunks);
+    if (previous?.dismissed?.length) notes.push(`Carrying over ${previous.dismissed.length} finding(s) you had dismissed.`);
+    if (previous?.handled?.length) notes.push(`Carrying over ${previous.handled.length} finding(s) you had marked done.`);
+    if (carry.carried) notes.push(`${carry.carried} new finding(s) are about a passage already decided, and keep that decision.`);
 
     // An answer that was not empty but survived nothing is a pasted mistake far
     // more often than a book with nothing wrong in it, and overwriting the last
@@ -223,8 +223,10 @@ export function applyTranslationReview(state, raw, meta) {
         // findings in the block; that verdict is what was asked for, and throwing
         // it away because of where it was written would be pedantry.
         summary: String(raw?.summary || '').trim() || proseAround(meta.answerText) || null,
-        dismissed: carriedDismissals,
-        handled: carriedHandled,
+        dismissed: carry.dismissed,
+        handled: carry.handled,
+        decided: carry.decided,
+        carriedFrom: carry.carriedFrom,
         rejected,
         findings,
         // Deliberately last and under a name nothing else reads: these failed

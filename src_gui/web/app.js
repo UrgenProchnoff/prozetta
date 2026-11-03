@@ -16,6 +16,16 @@ function roundPrefix(round) {
     return round ? t('rev.round', { n: round }) + ' · ' : '';
 }
 
+// A review finding's quote. When the passage crosses a line break it is shown
+// as the translation has it, breaks marked: the model quotes on one line and
+// judges by its quote, so "run into the narration" about a reply already on its
+// own line can only be seen to be wrong with the line breaks in view.
+function findingQuote(f) {
+    if (!f.inText) return `<div class="rev-quote">«${esc(f.quote)}»</div>`;
+    const lines = esc(f.inText).split(/\n+/).join('<span class="rev-nl">⏎</span><br>');
+    return `<div class="rev-quote" title="${esc(t('rev.inTextHint'))}">«${lines}»</div>`;
+}
+
 async function api(url, opts = {}) {
     if (opts.body !== undefined) {
         opts.headers = { 'Content-Type': 'application/json', ...opts.headers };
@@ -2413,7 +2423,7 @@ async function renderMonitor(prefix) {
                     ${f.queued ? '' : `<button data-rev="dismiss" data-key="${esc(f.key)}">${esc(t('rev.dismiss'))}</button>`}
                 </div>
                 ${f.term ? `<div class="rev-term">${esc(t('rev.term', { term: f.term }))}</div>` : ''}
-                <div class="rev-quote">«${esc(f.quote)}»</div>
+                ${findingQuote(f)}
                 <div class="rev-problem">${esc(f.problem)}</div>
                 ${f.advice ? `<div class="rev-advice">→ ${esc(f.advice)}</div>` : ''}
             </div>`;
@@ -3369,7 +3379,7 @@ async function renderChunk(prefix, i, params = new URLSearchParams()) {
                 ${f.start === undefined ? `<span class="cfg-hint">${esc(t('chunk.quoteGone'))}</span>`
                     : `<button data-cf="show" data-start="${f.start}" data-end="${f.end}">${esc(t('chunk.showQuote'))}</button>`}
             </div>
-            <div class="rev-quote">«${esc(f.quote)}»</div>
+            ${findingQuote(f)}
             <div class="rev-problem">${esc(f.problem)}</div>
             ${f.advice ? `<div class="rev-advice">→ ${esc(f.advice)}</div>` : ''}
         </div>`).join('')}
