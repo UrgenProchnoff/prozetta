@@ -917,6 +917,7 @@ async function renderGlossary(prefix) {
         <div class="toolbar">
             <input id="g-search" type="search" placeholder="${esc(t('gloss.search'))}" style="width:220px">
             <button id="g-add">${esc(t('gloss.addTerm'))}</button>
+            <button id="g-import">${esc(t('gloss.import'))}</button>
             <span id="g-count" class="badge"></span>
             <span class="badge" title="${esc(t('gloss.junkHintTitle'))}">${esc(t('gloss.junkHint'))}</span>
             <select id="g-issues" class="issues-select" title="${esc(t('gloss.issuesTitle'))}"></select>
@@ -930,6 +931,7 @@ async function renderGlossary(prefix) {
             <span id="g-dirty" class="dirty" hidden>${esc(t('gloss.unsaved'))}</span>
             <button id="g-save" class="primary">${esc(t('common.save'))}</button>
         </div>
+        <div id="g-import-panel" class="card" hidden></div>
         <div id="g-review"></div>
         <div id="g-bookcall">${bookCallCard('glossary', { runId: 'g-ask' })}</div>
         <table class="glossary">
@@ -1002,14 +1004,16 @@ async function renderGlossary(prefix) {
         if (!box) return;
         const defects = countDefects(), policy = countPolicy(), model = countModel();
         const formCount = new Set(forms.filter(Boolean).map(f => f.group)).size;
-        box.hidden = !(defects || policy || model || formCount || people.length);
+        const imported = terms.filter(x => x.from).length;
+        box.hidden = !(defects || policy || model || formCount || people.length || imported);
         const keep = box.value || rowFilter;
         box.innerHTML = `<option value="all">${esc(t('gloss.filterAll'))}</option>`
             + (model ? `<option value="model">${esc(t('gloss.filterModel', { n: model }))}</option>` : '')
             + (defects ? `<option value="defects">${esc(t('gloss.filterDefects', { n: defects }))}</option>` : '')
             + (formCount ? `<option value="forms">${esc(t('gloss.filterForms', { n: formCount }))}</option>` : '')
             + (people.length ? `<option value="people">${esc(t('gloss.filterPeople', { n: people.length }))}</option>` : '')
-            + (policy ? `<option value="untranslated">${esc(t('gloss.filterUntranslated', { n: policy }))}</option>` : '');
+            + (policy ? `<option value="untranslated">${esc(t('gloss.filterUntranslated', { n: policy }))}</option>` : '')
+            + (imported ? `<option value="imported">${esc(t('gloss.filterImported', { n: imported }))}</option>` : '');
         // A filter whose category just emptied falls back to showing everything.
         box.value = [...box.options].some(o => o.value === keep) ? keep : 'all';
         rowFilter = box.value;
@@ -1029,6 +1033,7 @@ async function renderGlossary(prefix) {
                 if (rowFilter === 'model') return f.some(isModel);
                 if (rowFilter === 'defects') return f.some(isDefect);
                 if (rowFilter === 'forms') return !!forms[idx];
+                if (rowFilter === 'imported') return !!terms[idx].from;
                 return f.some(isPolicy);
             })
             .filter(({ t }) => !q
@@ -1074,7 +1079,8 @@ async function renderGlossary(prefix) {
             const groupTitle = g ? ` title="${esc(t('gloss.formsRow', { n: g.size }))}"` : '';
             return `<tr data-idx="${idx}"${groupTitle} class="${worst ? 'has-issue issue-' + worst : ''}${groupClass}">
                 <td><input data-f="original" value="${esc(term.original)}">${issues.length
-                    ? `<span class="issue-flag" title="${esc(issueTitle)}">${worst === 'note' ? '·' : issues.length > 1 ? issues.length : '!'}</span>` : ''}</td>
+                    ? `<span class="issue-flag" title="${esc(issueTitle)}">${worst === 'note' ? '·' : issues.length > 1 ? issues.length : '!'}</span>` : ''}${term.from
+                    ? `<span class="badge" title="${esc(t('gloss.fromTitle', { from: term.from }))}">${esc(t('gloss.fromBadge'))}</span>` : ''}</td>
                 <td><input data-f="translation" value="${esc(term.translation)}"></td>
                 <td><select data-f="type">${typeOpts}</select></td>
                 <td><select data-f="gender">
@@ -1660,6 +1666,90 @@ async function renderGlossary(prefix) {
         renderRows();
         tbody.querySelector('input')?.focus();
     });
+
+    // --- Import from another book of the series ---
+    //
+    // The server plans against the glossary on disk, so unsaved edits would be
+    // planned around as if they did not exist; the panel asks for a save first.
+    // Applying changes only this page: the usual Save writes it, and leaving
+    // without saving asks, as for any edit.
+    const importPanel = document.getElementById('g-import-panel');
+    const closeImport = () => { importPanel.hidden = true; importPanel.innerHTML = ''; };
+
+    async function openImport() {
+        if (dirty) { toast(t('gloss.importSaveFirst'), 'error'); return; }
+        let list;
+        try { list = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary/import-sources`); }
+        catch (e) { toast(e.message, 'error'); return; }
+        importPanel.hidden = false;
+        importPanel.innerHTML = `<div class="title">${esc(t('gloss.importHeading'))}</div>
+            <div class="cfg-hint">${esc(t('gloss.importHint', { lang: list.language }))}</div>
+            ${list.sources.length ? `<div class="row" style="margin:8px 0">
+                <select id="g-import-from">${list.sources.map(x =>
+                    `<option value="${esc(x.prefix)}">${esc(x.prefix)} (${esc(t('gloss.importTerms', { n: x.terms }))})</option>`).join('')}</select>
+                <button id="g-import-preview" class="primary">${esc(t('gloss.importPreview'))}</button>
+                <button id="g-import-close">${esc(t('rev.err.close'))}</button>
+            </div>` : `<div class="cfg-hint" style="margin:8px 0">${esc(t('gloss.importNone'))}</div>
+                <button id="g-import-close">${esc(t('rev.err.close'))}</button>`}
+            <div id="g-import-plan"></div>`;
+        document.getElementById('g-import-close').addEventListener('click', closeImport);
+        document.getElementById('g-import-preview')?.addEventListener('click', previewImport);
+    }
+
+    async function previewImport() {
+        const from = document.getElementById('g-import-from').value;
+        const box = document.getElementById('g-import-plan');
+        box.innerHTML = `<div class="cfg-hint">${esc(t('common.loading'))}</div>`;
+        let plan;
+        try { plan = await api(`/api/projects/${encodeURIComponent(prefix)}/glossary/import-preview?from=${encodeURIComponent(from)}`); }
+        catch (e) { box.innerHTML = `<div class="cfg-hint">${esc(t('common.error', { msg: e.message }))}</div>`; return; }
+
+        // The series' rendering is the default: consistency across the books is
+        // what the import is for.
+        const conflicts = plan.conflicts.map((c, i) => `<tr>
+            <td>${esc(c.original)}</td>
+            <td><label><input type="radio" name="g-imp-${i}" value="mine"> ${esc(c.current.translation || '—')}</label></td>
+            <td><label><input type="radio" name="g-imp-${i}" value="series" checked> ${esc(c.incoming.translation || '—')}</label></td>
+        </tr>`).join('');
+        const nothing = !plan.add.length && !plan.conflicts.length && !plan.fill.length;
+        box.innerHTML = `<div class="cfg-hint" style="margin:8px 0">${esc(t('gloss.importSummary', {
+                add: plan.add.length, conflicts: plan.conflicts.length, fill: plan.fill.length,
+                same: plan.same, absent: plan.absent }))}${plan.primes ? ' ' + esc(t('gloss.importPrimes', { n: plan.primes })) : ''}</div>
+            ${plan.add.length ? `<details style="margin:8px 0"><summary>${esc(t('gloss.importNew', { n: plan.add.length }))}</summary>
+                <div style="max-height:260px;overflow:auto">${plan.add.map((e, i) => `<label style="display:block">
+                    <input type="checkbox" data-imp-add="${i}" checked> ${esc(e.original)} → ${esc(e.translation || '—')}
+                    <span class="cfg-hint">${esc(e.notes || '')}</span></label>`).join('')}</div></details>` : ''}
+            ${conflicts ? `<table class="glossary" style="margin:8px 0"><thead><tr>
+                <th>${esc(t('gloss.colOriginal'))}</th><th>${esc(t('gloss.importMine'))}</th><th>${esc(t('gloss.importSeries', { from }))}</th>
+            </tr></thead><tbody>${conflicts}</tbody></table>` : ''}
+            ${nothing ? '' : `<button id="g-import-apply" class="primary">${esc(t('gloss.importApply'))}</button>`}`;
+
+        document.getElementById('g-import-apply')?.addEventListener('click', () => {
+            let replaced = 0;
+            plan.conflicts.forEach((c, i) => {
+                if (box.querySelector(`input[name="g-imp-${i}"]:checked`)?.value !== 'series') return;
+                const entry = terms[c.index];
+                entry.translation = c.incoming.translation;
+                if (!entry.gender && c.incoming.gender) entry.gender = c.incoming.gender;
+                entry.from = from;
+                replaced++;
+            });
+            for (const f of plan.fill) Object.assign(terms[f.index], f.fields);
+            const chosen = plan.add.filter((_, i) => box.querySelector(`[data-imp-add="${i}"]`)?.checked);
+            for (const e of chosen) {
+                terms.push({ ...e, from });
+                counts.push(null);
+                findings.push([]);
+            }
+            markDirty();
+            renderFilter();
+            renderRows();
+            closeImport();
+            toast(t('gloss.importDone', { add: chosen.length, replaced, fill: plan.fill.length }), 'ok');
+        });
+    }
+
+    document.getElementById('g-import').addEventListener('click', openImport);
 
     document.getElementById('g-save').addEventListener('click', async () => {
         const cleaned = terms.filter(t => (t.original || '').trim());

@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { jobManager, clockTime } from './jobs.js';
 import { createRawClient, PROVIDER_CONFIG_KEY, BOOK_OWN_PROVIDER, isTransientServerError, failureSummary } from '../src_v4/core/llm_client.js';
 import { assembleBookText, assembleBookFb2 } from '../src_v4/core/book_assembler.js';
+import { planImport } from '../src_v4/core/glossary_import.js';
 import { structureCandidates, matchStructure, outline, loadStructure, headingLookup, buildStructurePrompt, applyStructureAnswer } from '../src_v4/core/book_structure.js';
 import { glossaryFindings } from '../src_v4/tools/glossary_hygiene.js';
 import { personGroups, MAX_NOTE_CHARS } from '../src_v4/core/glossary_links.js';
@@ -1371,6 +1372,61 @@ app.put('/api/projects/:prefix/passport', (req, res) => {
 });
 
 // --- API: glossary ---
+
+// --- API: glossary import from another book of the series ---
+//
+// Read-only: the editor applies the plan in memory and the person saves it with
+// the usual button, so the unsaved-changes guard covers an import like any edit.
+
+function projectTargetLanguage(prefix) {
+    try { return readJson(statePath(prefix)).metadata?.targetLanguage || config.translation.targetLanguage; }
+    catch { return config.translation.targetLanguage; }
+}
+
+/** This book's original text: its chunks, or the source file before it is split. */
+function projectSourceText(prefix) {
+    try {
+        const chunks = readJson(statePath(prefix)).chunks || [];
+        if (chunks.length) return chunks.map(c => c.original || '').join('\n');
+    } catch { /* fall back to the file */ }
+    const file = resolveSourceFile(prefix);
+    if (!file) return '';
+    try { return fs.readFileSync(path.isAbsolute(file) ? file : path.join(ROOT, file), 'utf-8'); } catch { return ''; }
+}
+
+app.get('/api/projects/:prefix/glossary/import-sources', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    // Another language's glossary renders the names into that language, which is
+    // never what a series wants carried across.
+    const lang = projectTargetLanguage(prefix);
+    const sources = [];
+    for (const other of listProjects(ROOT)) {
+        if (other === prefix || !fs.existsSync(glossaryPath(other))) continue;
+        if (projectTargetLanguage(other) !== lang) continue;
+        let terms = 0;
+        try { const g = readJson(glossaryPath(other)); terms = Array.isArray(g) ? g.length : 0; } catch { continue; }
+        if (terms) sources.push({ prefix: other, terms });
+    }
+    res.json({ language: lang, sources });
+});
+
+app.get('/api/projects/:prefix/glossary/import-preview', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    const from = String(req.query.from || '');
+    if (!isValidPrefix(from) || from === prefix || !fs.existsSync(glossaryPath(from))) {
+        return res.status(400).json({ error: 'Unknown source project' });
+    }
+    let incoming, current = [];
+    try { incoming = readJson(glossaryPath(from)); } catch (e) { return res.status(500).json({ error: e.message }); }
+    if (fs.existsSync(glossaryPath(prefix))) {
+        try { current = readJson(glossaryPath(prefix)); } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+    const text = projectSourceText(prefix);
+    if (!text.trim()) return res.status(409).json({ error: 'This book has no text to match the glossary against yet' });
+    res.json({ from, ...planImport(current, incoming, text) });
+});
 
 app.get('/api/projects/:prefix/glossary', async (req, res) => {
     const prefix = validPrefix(req, res);

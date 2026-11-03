@@ -264,6 +264,32 @@ If the book and glossary do not fit the API quota, the button goes grey and
 AI Studio, for instance), where the limits are larger. The answer is pasted back
 and goes through the same checks.
 
+## Import from another book of the series
+
+The second book of a series has to name its people and things the way the first
+did, and a glossary extracted afresh promises nothing of the kind. "Import from
+project…" takes the glossary of another project translated into the same
+language.
+
+Only entries this book uses come across — found by the same whole-word search
+that puts terms into the prompt. A clone that comes across brings its prime, so
+the link stays whole. Before anything is applied you see:
+
+- **new entries** — listed with ticks; untick any you do not want;
+- **different renderings** — one original translated differently in the two
+  books; the series' rendering is selected by default, for consistency;
+- **fill-ins** — the rendering matches, and this book's entry has no gender or
+  note.
+
+The import changes the glossary on the page only: the usual Save writes it.
+Entries that came across are marked "series", and the "from another book" filter
+gathers them. Their notes describe that book — in a sequel ranks, relationships
+and fates may have changed, and the glossary review by the model helps bring
+them up to date.
+
+The best moment is right after term extraction: the book has its glossary, and
+translation has not started.
+
 ## Deleting
 
 The ✕ on the right deletes a row at once, without asking — but only on screen:
