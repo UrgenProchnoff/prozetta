@@ -9,6 +9,14 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-11-03**
+
+- `773f1bb` — The glossary can be imported from another book of the series: the
+  "Import from project…" button in the editor. Only entries this book uses come
+  across; new ones are listed with ticks, and where the two books render a name
+  differently the series' choice is selected by default. Imported entries are
+  marked "series" and have their own filter. The idea is Pavel's.
+
 **2026-10-29**
 
 - `bb409f2` — Leaving the glossary with unsaved edits: "Cancel" now keeps you on
