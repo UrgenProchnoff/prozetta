@@ -164,7 +164,7 @@ export function splitTextIntoChunks(text, extraBreakOffsets = []) {
         chunks.push({ original: pending, tokens });
     };
 
-    // Simple accumulator logic adapted from index10.js but cleaned up
+    // Simple accumulator logic
     for (let i = 0; i < lines.length; i++) {
         // Splitting on '\n' leaves a final empty element for a text that ends
         // with one, and appending a newline to that element invented a character
@@ -211,7 +211,7 @@ export function splitTextIntoChunks(text, extraBreakOffsets = []) {
     return chunks;
 }
 
-// Reuse logic from index10.js for smart splitting
+// Smart splitting
 function splitFragment(fragment) {
     let split_fragment = {
         base_fragment: '',

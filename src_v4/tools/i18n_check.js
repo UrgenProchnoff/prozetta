@@ -10,8 +10,9 @@
  * dead weight nobody could tell from live weight by looking, and every edit to
  * the dictionary carried it along.
  *
- * A key is live when it is named outright, or when something builds it at run
- * time. Two forms of building are in use, and both have to be recognised or the
+ * A key is live when it is named outright — in the call, or as a whole string
+ * elsewhere that a condition or a table hands to the call — or when something
+ * builds it at run time. Two forms of building are in use, and both have to be recognised or the
  * tool reports live strings as dead:
  *
  *   t('status.' + s)              — a prefix and a variable
@@ -80,7 +81,15 @@ function main() {
         ...[...code.matchAll(/[`']([\w.]*\.)\$\{/g)].map(m => m[1]),
     ];
     const prefixes = [...new Set(built)].filter(Boolean);
-    const dead = ru.filter(k => !literal.has(k) && !prefixes.some(p => k.startsWith(p)));
+    // A key can also be named away from the call that uses it: picked by a
+    // condition — t(done ? 'book.structureRerun' : 'book.structureRun') — or
+    // kept in a table and looked up, as STAGE_LABEL does. Neither is t('key'),
+    // and five live keys were reported dead for it; deleting them on the tool's
+    // word would have blanked two buttons and a step's name. So a dictionary
+    // key written out whole as a string anywhere in the code counts as asked
+    // for. Dotted names of this shape are not used for anything else there.
+    const quoted = new Set([...code.matchAll(/['"`]([\w]+(?:\.[\w]+)+)['"`]/g)].map(m => m[1]));
+    const dead = ru.filter(k => !literal.has(k) && !quoted.has(k) && !prefixes.some(p => k.startsWith(p)));
     if (dead.length) problems.push(`in the dictionary but nothing asks for them:\n    ${dead.join('\n    ')}`);
 
     if (!problems.length) {
