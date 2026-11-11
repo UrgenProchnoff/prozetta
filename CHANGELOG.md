@@ -9,6 +9,29 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-11-11**
+
+- `8c4a5d0` — Housekeeping: the Google client library the program imports is
+  now declared as its own dependency, two unused ones are gone, and so is the
+  second lock file — the launchers install with npm. The interface-strings check
+  no longer reports as unused the strings chosen by a condition or kept in a
+  table.
+
+- `c46b831` — The interface server is split into one file per part of the
+  interface, in `src_gui/routes/`, instead of a single file of three thousand
+  lines. Nothing changes in how it behaves: the same requests get the same
+  answers.
+
+- `ed233c5` — The translation loop's rules — when to approve, fix, redraft or
+  call a dispute — are separated from the model calls and can be checked on
+  their own. The translation itself is unchanged. The run log no longer carries
+  the `[DEBUG]` lines with the first hundred characters of every draft.
+
+- `f764a89` — The program has tests: `npm test`. They cover reading model
+  answers, telling apart the ways a model call fails, the glossary cheat sheet,
+  the point-of-view map, and the whole translation loop run against a model
+  that answers from a script. No key or network is needed.
+
 **2026-11-03**
 
 - `d1e5608` — Translation review findings: a typography finding now closes when
