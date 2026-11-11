@@ -290,6 +290,7 @@ src_v4/                 the pipeline
                         token accounting
   tools/                utility commands and checks
 src_gui/                the web interface over the same pipeline
+  routes/               the server's routes, one file per part of the interface
 test/                   tests (npm test)
 docs/                   help articles, one per screen
 projects/<book>/        a book's state, glossary, passport and reviews

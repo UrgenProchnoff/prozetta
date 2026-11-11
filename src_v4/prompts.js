@@ -33,7 +33,7 @@ ${bookText}
     // Разметка заголовков для FB2: строки-кандидаты с соседями (core/book_structure.js).
     bookStructure: (candidates) => JSON.stringify(candidates.map(c => ({ id: c.id, before: c.before, line: c.text, after: c.after })), null, 0),
     consolidation: (items) => JSON.stringify(items),
-    // Заметки форм одного имени для редактора глоссария (src_gui/server.js).
+    // Заметки форм одного имени для редактора глоссария (src_gui/routes/glossary.js).
     glossaryNote: (entries) => JSON.stringify(entries, null, 1),
     // Ревизия глоссария книжной моделью: весь текст плюс весь глоссарий с
     // посчитанными по тексту фактами (см. core/glossary_review.js).

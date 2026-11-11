@@ -31,6 +31,17 @@ function shape(url) {
         .replace(/\/+$/, '');
 }
 
+/**
+ * Everything on the server side that can register a route: the entry point and
+ * the files under routes/, where the routes moved when server.js was split up.
+ */
+function serverCode() {
+    const routesDir = path.join(GUI, 'routes');
+    const files = [path.join(GUI, 'server.js'),
+        ...fs.readdirSync(routesDir).filter(f => f.endsWith('.js')).map(f => path.join(routesDir, f))];
+    return files.map(f => fs.readFileSync(f, 'utf-8')).join('\n');
+}
+
 function serverRoutes(code) {
     const routes = new Set();
     for (const m of code.matchAll(/\bapp\.(get|put|post|delete|patch)\(\s*['"`]([^'"`]+)['"`]/g)) {
@@ -62,7 +73,7 @@ function clientCalls(code) {
 }
 
 function main() {
-    const server = fs.readFileSync(path.join(GUI, 'server.js'), 'utf-8');
+    const server = serverCode();
     const routes = serverRoutes(server);
 
     const problems = [];
@@ -74,7 +85,7 @@ function main() {
             checked++;
             const want = `${call.method} ${shape(call.url)}`;
             if (!routes.has(want)) {
-                problems.push(`${file}:${call.line} calls ${want} — no such route in server.js`);
+                problems.push(`${file}:${call.line} calls ${want} — no such route on the server`);
             }
         }
     }
