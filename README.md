@@ -251,6 +251,7 @@ Utility commands:
 ```bash
 node src_v4/tools/reset_to_stage1.js --file=txt/My_Book.txt   # drop the translation, keep the extraction
 node src_v4/tools/glossary_hygiene.js --file=txt/My_Book.txt  # a report on the glossary's state
+npm test            # tests: parsing model answers, classifying failures, the translation loop on a scripted model
 npm run i18n        # interface strings: both languages present, none unused
 npm run routes      # every interface request has a handler on the server
 npm run changelog   # every commit is recorded in the changelog, in both languages
@@ -289,6 +290,7 @@ src_v4/                 the pipeline
                         token accounting
   tools/                utility commands and checks
 src_gui/                the web interface over the same pipeline
+test/                   tests (npm test)
 docs/                   help articles, one per screen
 projects/<book>/        a book's state, glossary, passport and reviews
 txt/                    source texts and results
