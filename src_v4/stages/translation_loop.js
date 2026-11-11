@@ -3,8 +3,9 @@ import { llmManager } from '../core/llm_client.js';
 import { usageTracker } from '../core/usage_tracker.js';
 import { HumanMessage } from "@langchain/core/messages";
 import { extractFromTags, extractTagOptional, extractCheckResult } from '../utils/parsers.js';
-import { entryRegex } from '../core/text_stats.js';
-import { resolveLinks, linkTarget, MAX_NOTE_CHARS } from '../core/glossary_links.js';
+import { resolveLinks } from '../core/glossary_links.js';
+import { cheatSheet, contradictedNames } from '../core/cheat_sheet.js';
+import { nextStep, bestAttempt } from '../core/loop_decision.js';
 import { countTokens } from '../core/tokenizer.js';
 import { loadPassport, buildStyleBlock, isEmptyPassport } from '../core/passport.js';
 import { adviceForChunk } from '../core/translation_review.js';
@@ -108,287 +109,18 @@ export async function runTranslationLoopStage(state) {
 
         // A copy, so that a run which ends in a refusal can be left out of the
         // record — see the catch below.
-        let history = [...(chunk.history || [])];
+        const history = [...(chunk.history || [])];
         let exhausted = false;
 
         try {
-
-        // 1. DRAFTING
-        let currentTranslation = "";
-        let currentComment = ""; // New field
-        let globalContext = getLocalContextString(chunk.original, glossary, contradicted, links.prime);
-        // Whole-book constraints for THIS chunk (narrator + gender come from the
-        // POV map; other cast members named in the chunk bring their dossiers,
-        // so the block differs between chapters and scenes).
-        const styleBlock = buildStyleBlock(passport, i, config.translation.promptLang, chunk.original);
-
-        // A chunk carrying advice already has a translation somebody wants kept
-        // and corrected. It goes straight to a fix with that advice as the
-        // instruction: redrafting would throw away the nine tenths of the chunk
-        // nobody complained about, and the reviewer that would then judge the
-        // redraft approves everything anyway (median 10 across five books).
-        const currentText = chunk.translation || history[history.length - 1]?.text || '';
-        if (advice && currentText) {
-            console.log(`   -> Fixing on ${chunk.advice.length} piece(s) of advice from the whole-book review...`);
-            const fixed = await fixTranslation(client, prompts, targetLang, chunk.original,
-                currentText, globalContext, advice, styleBlock);
-            currentTranslation = fixed.translation;
-            currentComment = fixed.comment;
-            history.push({
-                step: 'advice_fix',
-                text: currentTranslation,
-                translator_comment: currentComment,
-                advice,
-                // Which findings this fix was for. A finding leaves the review
-                // list when the text it quoted is gone, and that is not the same
-                // as being dealt with: a typography fix changes the punctuation
-                // around the quoted words and leaves the words alone, so the
-                // finding came back looking undecided after being done. The keys
-                // say what was acted on regardless of what the text now looks like.
-                keys: (chunk.advice || []).map(a => a.key).filter(Boolean),
-                timestamp: new Date().toISOString(),
+            await translateChunk({
+                state, index: i, history, advice, client, prompts, targetLang,
+                // Whole-book constraints for THIS chunk (narrator + gender come
+                // from the POV map; other cast members named in the chunk bring
+                // their dossiers, so the block differs between chapters and scenes).
+                style: buildStyleBlock(passport, i, config.translation.promptLang, chunk.original),
+                context: cheatSheet(chunk.original, glossary, contradicted, links.prime),
             });
-        } else if (history.length === 0) {
-            console.log(`   -> Drafting...`);
-            const draft = await draftTranslation(client, prompts, targetLang, chunk.original, globalContext, styleBlock);
-            currentTranslation = draft.translation;
-            currentComment = draft.comment;
-            console.log(`   [DEBUG] After draft: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
-            console.log(`   [DEBUG] After draft: comment="${currentComment}"`);
-
-            history.push({
-                step: 'draft',
-                text: currentTranslation,
-                translator_comment: currentComment,
-                timestamp: new Date().toISOString()
-            });
-
-        } else {
-            // Take the last text from history
-            const lastItem = history[history.length - 1];
-            currentTranslation = lastItem.text;
-            currentComment = lastItem.translator_comment || "";
-        }
-
-        // 2. THE LOOP
-        let attempts = 0;
-        const MAX_RETRIES = config.pipeline.translationMaxRetries;
-        const REDRAFT_SCORE_THRESHOLD = config.pipeline.redraftScoreThreshold;
-        const APPROVAL_SCORE_THRESHOLD = config.pipeline.approvalScoreThreshold;
-        const MAX_REDRAFTS = config.pipeline.translationMaxRedrafts ?? 3;
-        let success = false;
-        // Deadlock detection. A redraft repeats the exact same draft call, so
-        // when the reviewer rejects redrafts with the same complaint over and
-        // over, the two prompts are in conflict — the translator will keep
-        // producing the same answer and the reviewer will keep refusing it.
-        // Measured on a real run: one chunk burned 9 redrafts on a complaint the
-        // human proofread later proved wrong. Burning budget cannot resolve a
-        // rules conflict; a human can, so mark the chunk disputed and move on.
-        let redrafts = 0;
-        let lastRedraftComplaint = null;
-        let lastFixComplaint = null;
-        let dispute = null;
-
-        while (attempts < MAX_RETRIES && !success) {
-            attempts++;
-            console.log(`   -> Loop Iteration ${attempts} (Check)...`);
-
-            console.log(`   [DEBUG] Before check: currentTranslation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
-            // CHECK
-            const checkResult = await checkTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, currentComment, styleBlock, advice);
-            history.push({
-                step: `check_${attempts}`,
-                result: checkResult,
-                text: currentTranslation,
-                translator_comment: currentComment,
-                timestamp: new Date().toISOString()
-            });
-
-            // DECISION
-            // success criteria from index10.js: !error && !misspell && correctness && like && (score >= 9.1 if not perfect)
-            // if (successfully == 0 && dataJson.data.like && dataJson.data.score >= 9.1) successfully = 1;
-
-            const isPerfect = (checkResult.error === 0 && checkResult.misspell === 0 && checkResult.correctness === 1 && checkResult.like === 1);
-            let passed = isPerfect;
-
-            if (!passed && checkResult.like === 1 && checkResult.score >= APPROVAL_SCORE_THRESHOLD) {
-                passed = true;
-            }
-
-            if (passed) {
-                console.log(`   -> APPROVED (Score: ${checkResult.score})`);
-                success = true;
-                state.updateChunk(i, {
-                    translation: currentTranslation,
-                    // Counted here, where one more tokenisation of four thousand
-                    // characters is nothing beside the model call that just
-                    // happened. Counted later, for the whole book at once, it is
-                    // nine seconds — and the question it answers ("does the
-                    // whole-book review fit?") is asked on a click.
-                    translationTokens: countTokens(currentTranslation),
-                    translation_status: 'success',
-                    history: history,
-                    // This model got through where another was refused; leaving
-                    // the old block behind would keep the chunk skipped forever.
-                    ...(chunk.translation_blocked_by ? { translation_blocked_by: null } : {}),
-                    // The advice has been acted on and approved. Left in place it
-                    // would re-fix this chunk on every run from here on.
-                    ...(advice ? { advice: null } : {}),
-                    // A dispute is a standing request for a human to settle
-                    // something, and this chunk has just been settled without
-                    // one. Over five or ten rounds of fixing, a chunk that
-                    // deadlocked once and agreed later would keep the mark for
-                    // the rest of the book's life — the map would show a quarrel
-                    // that ended rounds ago, and the marks that mean something
-                    // would be read past.
-                    ...(chunk.dispute ? { dispute: null } : {})
-                });
-            } else {
-                // Break if max retries reached to avoid wasted fix/redraft
-                if (attempts >= MAX_RETRIES) {
-                    console.warn(`   -> Max retries reached.`);
-                    break;
-                }
-
-                // Decide: FIX (доработка) vs REDRAFT (перевод заново)
-                // Fix only if checker likes the direction AND score is above threshold
-                // Otherwise retranslate from scratch — no point fixing a fundamentally broken translation
-                //
-                // Except under advice, where a redraft is never the right repair.
-                // That chunk is not a failed attempt: it was translated, reviewed,
-                // approved, and then one thing in it was objected to. Measured on
-                // the first real run of this path, chunk 27 of Morphotrophic
-                // scored 9 with "соблюдены все стилистические и терминологические
-                // требования" and was rewritten from nothing because a single word
-                // came out «сухо» instead of «коротко». Correcting is what was
-                // asked for; starting over answers a question nobody put.
-                const shouldFix = advice
-                    ? true
-                    : (checkResult.like === 1 && checkResult.score >= REDRAFT_SCORE_THRESHOLD);
-
-                if (shouldFix) {
-                    // Under advice the redraft cap does not apply, so a fixer and
-                    // a reviewer who disagree could trade the same objection until
-                    // the retry budget runs out. The same deadlock the redraft path
-                    // already recognises, and the same answer: two identical
-                    // complaints mean a human should look, not that a third attempt
-                    // will land.
-                    if (advice && lastFixComplaint && complaintsAlike(lastFixComplaint, checkResult.comment)) {
-                        dispute = { reason: checkResult.comment, kind: 'advice_not_met' };
-                        console.warn(`   -> DISPUTED: the reviewer repeats the same objection after a fix — the advice ` +
-                            `and the text are in conflict, a human should settle it. | "${String(checkResult.comment).slice(0, 120)}"`);
-                        break;
-                    }
-                    lastFixComplaint = checkResult.comment;
-
-                    // Checker likes the direction, score is acceptable → FIX (доработка)
-                    console.log(`   -> REJECTED for fixing (Score: ${checkResult.score}, Errors: ${checkResult.error}) | Reason: "${checkResult.comment}". Fixing...`);
-
-                    // The advice travels with every attempt. On the first one the
-                    // comment already was the advice; from here the comment is
-                    // the reviewer's objection, and without the advice beside it
-                    // the fixer would be working from a paraphrase.
-                    const fixResult = await fixTranslation(client, prompts, targetLang, chunk.original, currentTranslation, globalContext, checkResult.comment, styleBlock, advice);
-                    currentTranslation = fixResult.translation;
-                    currentComment = fixResult.comment;
-                    console.log(`   [DEBUG] After fix: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
-                    console.log(`   [DEBUG] After fix: comment="${currentComment}"`);
-
-                    history.push({
-                        step: `fix_${attempts}`,
-                        text: currentTranslation,
-                        translator_comment: currentComment,
-                        timestamp: new Date().toISOString()
-                    });
-                } else {
-                    // Checker doesn't like it at all → REDRAFT (перевод заново).
-                    // But first, recognize a deadlock: the same complaint about a
-                    // fresh draft means the next draft will earn it again.
-                    if (lastRedraftComplaint && complaintsAlike(lastRedraftComplaint, checkResult.comment)) {
-                        dispute = { reason: checkResult.comment, kind: 'repeated_complaint' };
-                        console.warn(`   -> DISPUTED: reviewer repeats the same complaint about a fresh draft — translator and reviewer are in conflict, a human should decide. | "${String(checkResult.comment).slice(0, 120)}"`);
-                        break;
-                    }
-                    if (redrafts >= MAX_REDRAFTS) {
-                        dispute = { reason: checkResult.comment, kind: 'redraft_cap' };
-                        console.warn(`   -> DISPUTED: ${redrafts} redrafts spent without agreement — stopping instead of burning budget.`);
-                        break;
-                    }
-                    console.log(`   -> REJECTED for redraft (Score: ${checkResult.score}, Like: ${checkResult.like}) | Reason: "${checkResult.comment}". Retranslating from scratch...`);
-                    redrafts++;
-                    lastRedraftComplaint = checkResult.comment;
-
-                    const draft = await draftTranslation(client, prompts, targetLang, chunk.original, globalContext, styleBlock);
-                    currentTranslation = draft.translation;
-                    currentComment = draft.comment;
-                    console.log(`   [DEBUG] After redraft: translation length=${currentTranslation?.length || 0}, first 100 chars: "${(currentTranslation || '').substring(0, 100)}"`);
-                    console.log(`   [DEBUG] After redraft: comment="${currentComment}"`);
-
-                    history.push({
-                        step: `redraft_${attempts}`,
-                        text: currentTranslation,
-                        translator_comment: currentComment,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-
-            }
-        }
-
-        if (!success) {
-            // Find best version in history.
-            //
-            // Not the whole of it when this run fixed on advice. The attempts
-            // before that fix scored a text the whole-book review has since
-            // found wrong, and it found it on evidence the per-chunk checker
-            // never had — the rest of the book. Those scores are honest and
-            // stale: chunk 7 of Morphotrophic scored 10 before the review and
-            // 9.5 after, and a scan of the whole history would have restored the
-            // 10 — putting back the very sentence the review complained about,
-            // while the fix stayed in the history to mark the finding handled.
-            // The defect returns and the finding reports itself dealt with.
-            //
-            // So the fix is the floor: past it lies a decision already made. The
-            // last fix, not the first — a chunk can be sent back by a second
-            // review, and the round before that one is just as stale.
-            let fixedAt = -1;
-            for (let k = history.length - 1; k >= 0; k--) {
-                if (history[k]?.step === 'advice_fix') { fixedAt = k; break; }
-            }
-            const considered = advice && fixedAt >= 0 ? history.slice(fixedAt) : history;
-
-            let bestScore = -1;
-            let bestText = currentTranslation; // Default to the last attempted translation
-
-            considered.forEach(h => {
-                if (h.result && h.result.score > bestScore && h.text) {
-                    bestScore = h.result.score;
-                    bestText = h.text;
-                }
-            });
-
-            console.warn(dispute
-                ? `   -> Saving best effort (Score: ${bestScore}) and marking the chunk DISPUTED for human review.`
-                : `   -> Failed to reach perfection. Saving best effort (Score: ${bestScore}).`);
-
-            state.updateChunk(i, {
-                translation: bestText,
-                translationTokens: countTokens(bestText),
-                // The GUI knows this status; the dispute flag rides alongside so
-                // a conflict of rules is distinguishable from a genuinely weak
-                // translation.
-                translation_status: 'failed_best_effort',
-                // This run's verdict, not the last one that had a quarrel. A
-                // disputed chunk is picked up by every run until approved, and
-                // a run that fails without deadlocking says the text is weak,
-                // not that the rules conflict — keeping the old mark, with its
-                // old reason, would claim a conflict this run did not find.
-                dispute: dispute || null,
-                history: history,
-                ...(chunk.translation_blocked_by ? { translation_blocked_by: null } : {})
-            });
-        }
-
         } catch (error) {
             // A content filter refuses the text, not the request, and it refuses
             // it every time. Until now one refused chunk killed the whole run:
@@ -483,138 +215,181 @@ export async function runTranslationLoopStage(state) {
     console.log('--- SYSTEM: Translation completed ---');
 }
 
-// --- HELPERS ---
-
-// Substring matching turned nearly half the cheat sheet into noise: "HA" fired
-// inside "charles", "M" inside "memory", "ICE" inside "noticed". entryRegex
-// matches whole words, falls back to a plain substring in Chinese or Japanese,
-// where nothing is space-separated, and matches a name with its case, so the
-// narrator Face is not handed over for every "face".
-const termRegexCache = new Map();
-
-function cachedTermRegex(term) {
-    const key = `${term.type === 'name' ? 'name' : 'term'}|${term.original}`;
-    let re = termRegexCache.get(key);
-    if (!re) {
-        re = entryRegex(term);
-        termRegexCache.set(key, re);
-    }
-    return re;
-}
-
-
 /**
- * Names whose gender the glossary states two ways.
+ * Translate one chunk: get a starting text, then check and repair it until the
+ * reviewer approves, the budget runs out or the two fall into a dispute.
  *
- * Extraction files one character under several entries, and they can disagree —
- * "Detective Sergeant Smith"=m beside "Sue Smith"=f for the same woman. Passing
- * that into the prompt is worse than passing nothing: it would order masculine
- * agreement in a female narrator's chapters. The hygiene tool reports these for
- * a human to settle, but the pipeline must stay safe on a glossary nobody has
- * cleaned yet, so a contradicted name simply travels without its gender.
- *
- * Only the bare name loses it. "Kay Coolidge" is one person whatever "Coolidge"
- * says — it is the surname that can belong to her or to her husband — and
- * dropping the full name's gender too sent the translator a widow with no
- * gender at all.
+ * Writes the outcome onto the chunk. `history` is the caller's working copy of
+ * the chunk's steps and is appended to as the work goes, so that when a call
+ * throws the caller still holds everything done up to that point and decides
+ * how much of it to keep. What to do after each check is decided in
+ * core/loop_decision.js.
  */
-function contradictedNames(glossary, prime = []) {
-    // A clone's own gender is never sent — its prime's is — so it can contradict
-    // nothing.
-    const own = glossary.filter((_, i) => prime[i] == null);
-    const singles = new Map();
-    for (const term of own) {
-        const name = String(term?.original || '').trim();
-        if (term?.type === 'name' && name && !/\s/.test(name)) singles.set(name.toLowerCase(), term);
+async function translateChunk({ state, index, history, advice, client, prompts, targetLang, style, context }) {
+    const chunk = state.getChunks()[index];
+    const original = chunk.original;
+    const underAdvice = !!advice;
+    const stamp = () => new Date().toISOString();
+
+    // 1. THE STARTING TEXT
+    let translation = '';
+    let comment = '';
+
+    // A chunk carrying advice already has a translation somebody wants kept
+    // and corrected. It goes straight to a fix with that advice as the
+    // instruction: redrafting would throw away the nine tenths of the chunk
+    // nobody complained about, and the reviewer that would then judge the
+    // redraft approves everything anyway (median 10 across five books).
+    const currentText = chunk.translation || history[history.length - 1]?.text || '';
+    if (advice && currentText) {
+        console.log(`   -> Fixing on ${chunk.advice.length} piece(s) of advice from the whole-book review...`);
+        ({ translation, comment } = await fixTranslation(client, prompts, targetLang, original,
+            currentText, context, advice, style));
+        history.push({
+            step: 'advice_fix',
+            text: translation,
+            translator_comment: comment,
+            advice,
+            // Which findings this fix was for. A finding leaves the review
+            // list when the text it quoted is gone, and that is not the same
+            // as being dealt with: a typography fix changes the punctuation
+            // around the quoted words and leaves the words alone, so the
+            // finding came back looking undecided after being done. The keys
+            // say what was acted on regardless of what the text now looks like.
+            keys: (chunk.advice || []).map(a => a.key).filter(Boolean),
+            timestamp: stamp(),
+        });
+    } else if (history.length === 0) {
+        console.log(`   -> Drafting...`);
+        ({ translation, comment } = await draftTranslation(client, prompts, targetLang, original, context, style));
+        history.push({ step: 'draft', text: translation, translator_comment: comment, timestamp: stamp() });
+    } else {
+        // An earlier run stopped partway: resume from the last text it reached.
+        const last = history[history.length - 1];
+        translation = last.text;
+        comment = last.translator_comment || '';
     }
 
-    const contradicted = new Set();
-    for (const term of own) {
-        const name = String(term?.original || '').trim();
-        if (term?.type !== 'name' || !name || !/\s/.test(name)) continue;
-        for (const part of name.split(/\s+/)) {
-            if (part.length <= 2) continue;
-            const inner = singles.get(part.toLowerCase());
-            if (inner && term.gender && inner.gender && term.gender !== inner.gender) {
-                contradicted.add(String(inner.original).toLowerCase());
+    // 2. CHECK AND REPAIR
+    const limits = {
+        maxRetries: config.pipeline.translationMaxRetries,
+        maxRedrafts: config.pipeline.translationMaxRedrafts ?? 3,
+        approvalThreshold: config.pipeline.approvalScoreThreshold,
+        redraftThreshold: config.pipeline.redraftScoreThreshold,
+    };
+    let attempts = 0;
+    let redrafts = 0;
+    let lastFixComplaint = null;
+    let lastRedraftComplaint = null;
+    let dispute = null;
+
+    while (attempts < limits.maxRetries) {
+        attempts++;
+        console.log(`   -> Loop Iteration ${attempts} (Check)...`);
+
+        const check = await checkTranslation(client, prompts, targetLang, original, translation, context, comment, style, advice);
+        history.push({
+            step: `check_${attempts}`,
+            result: check,
+            text: translation,
+            translator_comment: comment,
+            timestamp: stamp(),
+        });
+
+        const step = nextStep({ check, attempts, underAdvice, redrafts, lastFixComplaint, lastRedraftComplaint, limits });
+
+        if (step.action === 'approve') {
+            console.log(`   -> APPROVED (Score: ${check.score})`);
+            state.updateChunk(index, {
+                translation,
+                // Counted here, where one more tokenisation of four thousand
+                // characters is nothing beside the model call that just
+                // happened. Counted later, for the whole book at once, it is
+                // nine seconds — and the question it answers ("does the
+                // whole-book review fit?") is asked on a click.
+                translationTokens: countTokens(translation),
+                translation_status: 'success',
+                history,
+                // This model got through where another was refused; leaving
+                // the old block behind would keep the chunk skipped forever.
+                ...(chunk.translation_blocked_by ? { translation_blocked_by: null } : {}),
+                // The advice has been acted on and approved. Left in place it
+                // would re-fix this chunk on every run from here on.
+                ...(advice ? { advice: null } : {}),
+                // A dispute is a standing request for a human to settle
+                // something, and this chunk has just been settled without
+                // one. Over five or ten rounds of fixing, a chunk that
+                // deadlocked once and agreed later would keep the mark for
+                // the rest of the book's life — the map would show a quarrel
+                // that ended rounds ago, and the marks that mean something
+                // would be read past.
+                ...(chunk.dispute ? { dispute: null } : {}),
+            });
+            return;
+        }
+
+        if (step.action === 'stop') {
+            console.warn(`   -> Max retries reached.`);
+            break;
+        }
+
+        if (step.action === 'dispute') {
+            dispute = { reason: check.comment, kind: step.kind };
+            const said = `"${String(check.comment).slice(0, 120)}"`;
+            if (step.kind === 'advice_not_met') {
+                console.warn(`   -> DISPUTED: the reviewer repeats the same objection after a fix — the advice ` +
+                    `and the text are in conflict, a human should settle it. | ${said}`);
+            } else if (step.kind === 'repeated_complaint') {
+                console.warn(`   -> DISPUTED: reviewer repeats the same complaint about a fresh draft — translator and reviewer are in conflict, a human should decide. | ${said}`);
+            } else {
+                console.warn(`   -> DISPUTED: ${redrafts} redrafts spent without agreement — stopping instead of burning budget.`);
             }
+            break;
+        }
+
+        if (step.action === 'fix') {
+            lastFixComplaint = check.comment;
+            console.log(`   -> REJECTED for fixing (Score: ${check.score}, Errors: ${check.error}) | Reason: "${check.comment}". Fixing...`);
+            // The advice travels with every attempt. On the first one the
+            // comment already was the advice; from here the comment is
+            // the reviewer's objection, and without the advice beside it
+            // the fixer would be working from a paraphrase.
+            ({ translation, comment } = await fixTranslation(client, prompts, targetLang, original, translation, context, check.comment, style, advice));
+            history.push({ step: `fix_${attempts}`, text: translation, translator_comment: comment, timestamp: stamp() });
+        } else {
+            redrafts++;
+            lastRedraftComplaint = check.comment;
+            console.log(`   -> REJECTED for redraft (Score: ${check.score}, Like: ${check.like}) | Reason: "${check.comment}". Retranslating from scratch...`);
+            ({ translation, comment } = await draftTranslation(client, prompts, targetLang, original, context, style));
+            history.push({ step: `redraft_${attempts}`, text: translation, translator_comment: comment, timestamp: stamp() });
         }
     }
-    return contradicted;
-}
 
-const GENDER_WORD = { m: 'муж', f: 'жен', n: 'ср' };
+    // 3. NEVER APPROVED: keep the best of what there is.
+    const best = bestAttempt(history, underAdvice, translation);
+    console.warn(dispute
+        ? `   -> Saving best effort (Score: ${best.score}) and marking the chunk DISPUTED for human review.`
+        : `   -> Failed to reach perfection. Saving best effort (Score: ${best.score}).`);
 
-/**
- * The cheat sheet for one chunk: every glossary entry the text mentions.
- *
- * Carries more than the translation. Gender is what Russian agreement needs for
- * any character named in the chunk ("Элейн сказала", not "сказал"), and the
- * note is what tells a translator which of two same-named people this is. Both
- * sat unused in the glossary while the prompt saw only "original -> translation".
- *
- * Forms of one person share a line: a chunk saying "Maria Johnson" also matches
- * "Johnson", and listing both repeats the person, once with the thin note. The
- * line names the forms found, and the gender and note are the prime's — so a
- * chunk that says only "Johnson" still learns who she is.
- */
-function getLocalContextString(text, glossary, contradicted = new Set(), prime = []) {
-    const groups = new Map(); // prime index -> indices of its forms found here
-    glossary.forEach((term, index) => {
-        const original = String(term?.original || '').trim();
-        if (!original) return;
-        if (!cachedTermRegex({ original, type: term.type }).test(text)) return;
-        const root = prime[index] ?? index;
-        if (!groups.has(root)) groups.set(root, []);
-        groups.get(root).push(index);
+    state.updateChunk(index, {
+        translation: best.text,
+        translationTokens: countTokens(best.text),
+        // The GUI knows this status; the dispute flag rides alongside so
+        // a conflict of rules is distinguishable from a genuinely weak
+        // translation.
+        translation_status: 'failed_best_effort',
+        // This run's verdict, not the last one that had a quarrel. A
+        // disputed chunk is picked up by every run until approved, and
+        // a run that fails without deadlocking says the text is weak,
+        // not that the rules conflict — keeping the old mark, with its
+        // old reason, would claim a conflict this run did not find.
+        dispute: dispute || null,
+        history,
+        ...(chunk.translation_blocked_by ? { translation_blocked_by: null } : {}),
     });
-
-    const hits = [];
-    for (const [root, found] of groups) {
-        // The prime first when it is among them: it is the full form.
-        found.sort((a, b) => (a === root ? -1 : b === root ? 1 : a - b));
-        const head = glossary[root];
-        const originals = found.map(i => String(glossary[i].original).trim());
-        let line = `${originals.join(' / ')} -> ${found.map(i => glossary[i].translation).join(' / ')}`;
-
-        // Gender only for people: on a term it is the grammatical gender of the
-        // translation, which the model can see for itself and which is wrong
-        // often enough in the glossary to be worth leaving out.
-        const gender = head.type === 'name' ? GENDER_WORD[head.gender] : null;
-        if (gender && !contradicted.has(String(head.original).trim().toLowerCase())) line += ` (${gender})`;
-
-        // A link that resolved to nothing tells the translator nothing either.
-        const note = linkTarget(head.notes) === null ? String(head.notes || '').trim() : '';
-        if (note) line += ` — ${note.length > MAX_NOTE_CHARS ? note.slice(0, MAX_NOTE_CHARS) + '…' : note}`;
-
-        hits.push(line);
-    }
-    return hits.join('\n');
 }
 
-
-/**
- * Do two reviewer complaints say the same thing?
- *
- * LLM wording varies («использовал обращение на вы» vs «используется обращение
- * на Вы»), so words are lightly stemmed — lowercased, truncated to 6 chars —
- * before comparing. Overlap is measured against the shorter complaint. Applied
- * only to redraft rejections: repeated fix complaints are usually genuine
- * errors taking several passes, repeated redraft complaints mean the reviewer
- * keeps refusing what the translator keeps producing.
- */
-function complaintsAlike(a, b) {
-    const words = s => new Set(
-        String(s).toLowerCase().match(/[\p{L}]{4,}/gu)?.map(w => w.slice(0, 6)) || []
-    );
-    const wa = words(a), wb = words(b);
-    if (!wa.size || !wb.size) return false;
-    let common = 0;
-    for (const w of wa) if (wb.has(w)) common++;
-    return common / Math.min(wa.size, wb.size) >= 0.4;
-}
-
-// --- LLM FUNCTIONS (Prompts from index10.js) ---
+// --- MODEL CALLS ---
 
 /**
  * One call, asked again once if the model reasoned until the limit and wrote
@@ -677,11 +452,6 @@ async function checkTranslation(client, prompts, targetLang, original, translati
         new HumanMessage(prompt),
         new HumanMessage(input)
     ]);
-    //console.log("check tr input=", input);
-    //console.log("check tr prompt=", prompt);
-    //console.log("check tr response=", response.content);
-
-    // Normalize keys just in case
     return extractCheckResult(response.content);
 }
 
