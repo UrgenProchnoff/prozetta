@@ -5,7 +5,7 @@ import path from 'path';
 import { jobManager } from '../jobs.js';
 import { createRawClient, PROVIDER_CONFIG_KEY, isTransientServerError, failureSummary } from '../../src_v4/core/llm_client.js';
 import { assembleBookText, assembleBookFb2 } from '../../src_v4/core/book_assembler.js';
-import { structureCandidates, matchStructure, outline, loadStructure, headingLookup, buildStructurePrompt, applyStructureAnswer } from '../../src_v4/core/book_structure.js';
+import { structureCandidates, structureLines, matchStructure, outline, loadStructure, headingLookup, buildStructurePrompt, applyStructureAnswer, applyHandEdit, findLines } from '../../src_v4/core/book_structure.js';
 import { getPrompts } from '../../src_v4/prompts.js';
 import { extractJson } from '../../src_v4/utils/parsers.js';
 import { writeFileAtomic } from '../../src_v4/utils/atomic_write.js';
@@ -111,22 +111,64 @@ app.delete('/api/projects/:prefix/cover', (req, res) => {
 const STRUCTURE_ATTEMPTS = 4;
 
 function structureReport(prefix, chunks) {
-    const candidates = structureCandidates(chunks);
     const structure = loadStructure(structurePath(prefix));
+    const candidates = structureLines(chunks, structure);
     const { byKey, matched, lost, unmarked } = matchStructure(structure, candidates);
+    const outlined = structure ? outline(candidates, byKey) : [];
     return {
-        candidates: candidates.length,
+        candidates: structureCandidates(chunks).length,
         tokens: candidates.length
             ? buildStructurePrompt(chunks, getPrompts(config.translation.promptLang)).tokens.total : 0,
         marked: !!structure,
         model: structure?.model || null,
         generatedAt: structure?.generatedAt || null,
+        editedAt: structure?.editedAt || null,
+        hand: outlined.filter(r => r.hand).length,
         matched, lost,
-        // Only meaningful once something was asked: before that every line is new.
-        unmarked: structure ? unmarked : 0,
-        outline: structure ? outline(candidates, byKey) : [],
+        // Only meaningful once a model was asked: before that every line is new.
+        unmarked: structure?.model ? unmarked : 0,
+        outline: outlined,
     };
 }
+
+// A line as the editor needs it: long ones cut, since a heading found by search
+// is short and a paragraph that matched is only there to be passed over.
+const lineForEditor = (l) => ({ key: l.key, pos: l.pos, chunk: l.chunk, text: l.text.slice(0, 200),
+    before: l.before, after: l.after });
+
+// Every candidate line, for the editor's "add a heading here".
+app.get('/api/projects/:prefix/structure/candidates', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    let state;
+    try { state = readJson(statePath(prefix)); } catch { return res.status(404).json({ error: 'Project not found' }); }
+    const structure = loadStructure(structurePath(prefix));
+    res.json({ lines: structureLines(state.chunks || [], structure).map(lineForEditor) });
+});
+
+// Any line of the translation, for a heading the candidates do not include.
+app.get('/api/projects/:prefix/structure/find', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    let state;
+    try { state = readJson(statePath(prefix)); } catch { return res.status(404).json({ error: 'Project not found' }); }
+    res.json({ lines: findLines(state.chunks || [], req.query.q).map(lineForEditor) });
+});
+
+// The outline as corrected by hand: the whole set of headings wanted.
+app.put('/api/projects/:prefix/structure', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    if (jobManager.isRunning(prefix)) {
+        return res.status(409).json({ error: 'Этап выполняется — разметка заблокирована' });
+    }
+    let state;
+    try { state = readJson(statePath(prefix)); } catch { return res.status(404).json({ error: 'Project not found' }); }
+    const chunks = state.chunks || [];
+    try { applyHandEdit(chunks, structurePath(prefix), req.body?.headings); }
+    catch (e) { return res.status(400).json({ error: e.message }); }
+    res.json(structureReport(prefix, chunks));
+});
 
 app.get('/api/projects/:prefix/structure', (req, res) => {
     const prefix = validPrefix(req, res);

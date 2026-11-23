@@ -1467,3 +1467,21 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
    the next screen, since these were written in an order a reader cannot see. */
 .help-index { font-size: 15px; line-height: 2; }
 .help-next { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+/* Structure editor (Book page) */
+.btn-sm { padding: 1px 7px; font-size: 12px; }
+.st-edit { max-height: 520px; overflow: auto; }
+.st-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; flex-wrap: wrap; }
+.st-row select { width: auto; }
+.st-title { font-weight: 600; }
+.st-gap { padding: 1px 0; }
+.st-gap > .btn-sm { opacity: 0.5; }
+.st-gap > .btn-sm:hover { opacity: 1; }
+.st-gap-list { margin: 4px 0 6px 20px; border-left: 2px solid var(--border); padding-left: 10px; }
+.st-search { margin: 10px 0 14px; padding: 10px 12px; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; }
+.st-search input { flex: 1 1 260px; min-width: 0; }
+.st-found { margin-top: 6px; max-height: 260px; overflow: auto; }
+.st-outline-title { font-weight: 600; margin: 4px 0; }
+.st-flash { background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 6px; }
+.st-line { display: flex; align-items: center; gap: 8px; padding: 2px 0; flex-wrap: wrap; }
+.st-text { flex: 1 1 200px; min-width: 0; }

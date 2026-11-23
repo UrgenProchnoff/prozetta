@@ -35,6 +35,22 @@ contents are shown under the button: a wrong mark is better caught there than in
 reader. If the translation is edited after marking, the card says how many lines
 the model has not seen.
 
+**Corrected by hand** — the "✎ Edit" button under the contents. You edit the
+contents themselves:
+
+- a heading's level — "Part", "Chapter", "Subchapter";
+- **Remove** — the line becomes a paragraph again;
+- **Join with previous** — for a heading over two lines, when the lines are
+  consecutive; ✂ splits them again;
+- **+** between two headings — shows the candidate lines in that stretch of the
+  book, and any of them can be made a heading;
+- **Find a line** — for a heading that is not among the candidates: a long one,
+  or one ending in a full stop. Searches the whole translation.
+
+Edits are kept with "Save"; leaving the page with unsaved edits asks first.
+Corrected headings are marked ✎, and marking again with the model leaves them
+alone: what was corrected or added stays, what was removed does not come back.
+
 **Without marks** headings are guessed by words: "Chapter 7", "Prologue", SHORT
 LINES IN CAPS, numbers standing alone. "Part One" is not recognised this way and
 stays a paragraph.

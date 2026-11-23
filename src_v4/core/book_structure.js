@@ -15,6 +15,14 @@
  *
  * The result is stored per project and keyed by chunk and text, not by
  * position, so editing one chunk leaves the marks on the others standing.
+ *
+ * A person can correct it, on the outline itself: a level changed, a heading
+ * taken out or added, two lines joined into one title or split apart. Those
+ * marks are `hand` and a later model run leaves them be; a model's heading
+ * taken out by hand is listed in `removed` so the model cannot put it back. A
+ * heading can be any line of the book, not only a candidate — a title ending
+ * in a full stop or longer than the limit is still a title — and such a line
+ * is kept in `extra`, so it is found again as one.
  */
 
 import fs from 'fs';
@@ -47,10 +55,12 @@ function keyOf(chunk, text, nth) {
 }
 
 /**
- * Every line that could be a heading, in book order, with its neighbours.
- * @returns {Array<{id: number, chunk: number, key: string, text: string, before: string, after: string}>}
+ * Every non-empty line of the book, in order, with its neighbours. `pos` counts
+ * these lines across the whole book, so two lines are next to each other — as a
+ * two-line title has to be — exactly when their positions differ by one.
+ * @returns {Array<{pos: number, chunk: number, key: string, text: string, before: string, after: string}>}
  */
-export function structureCandidates(chunks) {
+export function bookLines(chunks) {
     const out = [];
     let prevLine = '';
     for (let ci = 0; ci < chunks.length; ci++) {
@@ -59,19 +69,35 @@ export function structureCandidates(chunks) {
         for (let li = 0; li < lines.length; li++) {
             const text = lines[li];
             const before = li > 0 ? lines[li - 1] : prevLine;
-            if (isCandidate(text)) {
-                const nth = seen.get(text) || 0;
-                seen.set(text, nth + 1);
-                out.push({
-                    id: out.length + 1, chunk: ci, key: keyOf(ci, text, nth), text,
-                    before: before.slice(0, CONTEXT),
-                    after: (lines[li + 1] ?? chunkLines(chunks[ci + 1]).find(Boolean) ?? '').slice(0, CONTEXT),
-                });
-            }
+            const nth = seen.get(text) || 0;
+            seen.set(text, nth + 1);
+            out.push({
+                pos: out.length, chunk: ci, key: keyOf(ci, text, nth), text,
+                before: before.slice(0, CONTEXT),
+                after: (lines[li + 1] ?? chunkLines(chunks[ci + 1]).find(Boolean) ?? '').slice(0, CONTEXT),
+            });
         }
         if (lines.length) prevLine = lines[lines.length - 1];
     }
     return out;
+}
+
+/**
+ * Every line that could be a heading, in book order, with its neighbours.
+ * `extra` — keys of lines a person made headings although they are not
+ * candidates by shape; they count as candidates for everything but the model.
+ * @returns {Array<{id: number, pos: number, chunk: number, key: string, text: string, before: string, after: string}>}
+ */
+export function structureCandidates(chunks, extra = []) {
+    const forced = new Set(extra || []);
+    return bookLines(chunks)
+        .filter(l => isCandidate(l.text) || forced.has(l.key))
+        .map((l, i) => ({ id: i + 1, ...l }));
+}
+
+/** The candidates a stored structure is matched against: its extra lines included. */
+export function structureLines(chunks, structure) {
+    return structureCandidates(chunks, structure?.extra);
 }
 
 /**
@@ -120,15 +146,24 @@ export function matchStructure(structure, candidates) {
 
 /**
  * The outline the marks give: one row per heading, joined titles together.
- * @returns {Array<{level: number, title: string[], chunk: number}>}
+ * `parts` are the lines of the title, for editing it; `hand` — some of them
+ * were marked or changed by a person.
+ * @returns {Array<{level: number, title: string[], chunk: number, parts: Array<{key, text, pos, hand}>, hand: boolean}>}
  */
 export function outline(candidates, byKey) {
     const rows = [];
     for (const c of candidates) {
         const m = byKey.get(c.key);
         if (!m) continue;
-        if (m.joinPrev && rows.length) rows[rows.length - 1].title.push(c.text);
-        else rows.push({ level: m.level, title: [c.text], chunk: c.chunk });
+        const part = { key: c.key, text: c.text, pos: c.pos, ...(m.hand ? { hand: true } : {}) };
+        const last = rows[rows.length - 1];
+        if (m.joinPrev && last) {
+            last.title.push(c.text);
+            last.parts.push(part);
+            last.hand = last.hand || !!m.hand;
+        } else {
+            rows.push({ level: m.level, title: [c.text], chunk: c.chunk, parts: [part], hand: !!m.hand });
+        }
     }
     return rows;
 }
@@ -146,7 +181,7 @@ export function loadStructure(file) {
 /** For the assembler: chunk → line text → mark, for lines that are headings. */
 export function headingLookup(chunks, structure) {
     if (!structure?.marks?.length) return null;
-    const { byKey } = matchStructure(structure, structureCandidates(chunks));
+    const { byKey } = matchStructure(structure, structureLines(chunks, structure));
     if (!byKey.size) return null;
     return (chunkIndex, text, nth) => byKey.get(keyOf(chunkIndex, text, nth)) || null;
 }
@@ -177,7 +212,14 @@ export function applyStructureAnswer(chunks, answer, file, meta = {}) {
     const candidates = structureCandidates(chunks);
     const stale = fingerprintMismatch(fingerprint(...candidates.map(c => c.key)), meta.fingerprint);
     if (stale) throw new Error(stale);
-    const marks = marksFromAnswer(answer, candidates);
+    // What a person decided stays: their marks are kept as they are, and the
+    // model's word on those lines and on the ones they took out is not asked.
+    const previous = loadStructure(file);
+    const hand = (previous?.marks || []).filter(m => m.hand);
+    const settled = new Set([...hand.map(m => m.key), ...(previous?.removed || [])]);
+    const proposed = marksFromAnswer(answer, candidates).filter(m => !settled.has(m.key));
+    const order = new Map(structureLines(chunks, previous).map(c => [c.key, c.pos]));
+    const marks = [...proposed, ...hand].sort((a, b) => (order.get(a.key) ?? Infinity) - (order.get(b.key) ?? Infinity));
     writeFileAtomic(file, JSON.stringify({
         model: meta.model || null,
         generatedAt: new Date().toISOString(),
@@ -185,6 +227,76 @@ export function applyStructureAnswer(chunks, answer, file, meta = {}) {
         // judged and left out.
         asked: candidates.map(c => c.key),
         marks,
+        ...(previous?.removed?.length ? { removed: previous.removed } : {}),
+        ...(previous?.extra?.length ? { extra: previous.extra } : {}),
+        ...(previous?.editedAt ? { editedAt: previous.editedAt } : {}),
     }, null, 2));
     return { marks, candidates };
+}
+
+/**
+ * Store the outline as a person corrected it.
+ *
+ * `headings` is the whole set wanted, not a list of changes: the editor holds
+ * the outline and sends it back. A mark that is new, or whose level or joining
+ * differs from what was stored, becomes `hand`, and stays so; one the model put
+ * there and this list leaves out goes into `removed`.
+ *
+ * @param {Array<{key: string, level: number, joinPrev?: boolean}>} headings
+ * @throws {Error} when a heading names a line the book does not have
+ */
+export function applyHandEdit(chunks, file, headings) {
+    const lines = new Map(bookLines(chunks).map(l => [l.key, l]));
+    const previous = loadStructure(file);
+    const before = new Map((previous?.marks || []).map(m => [m.key, m]));
+
+    const marks = [];
+    const seen = new Set();
+    for (const h of (Array.isArray(headings) ? headings : [])) {
+        const line = lines.get(h?.key);
+        if (!line) throw new Error('A heading names a line that is not in the translation — reload the page.');
+        const level = Math.round(Number(h.level));
+        if (!(level >= 1 && level <= 3) || seen.has(line.key)) continue;
+        seen.add(line.key);
+        const joinPrev = !!h.joinPrev;
+        const old = before.get(line.key);
+        const hand = !!old?.hand || !old || old.level !== level || !!old.joinPrev !== joinPrev;
+        marks.push({ key: line.key, text: line.text, level, ...(joinPrev ? { joinPrev: true } : {}), ...(hand ? { hand: true } : {}), pos: line.pos });
+    }
+    marks.sort((a, b) => a.pos - b.pos);
+    // A joined line has to follow the line it joins, or there is nothing to join.
+    marks.forEach((m, i) => { if (m.joinPrev && !(i > 0 && marks[i - 1].pos === m.pos - 1)) delete m.joinPrev; });
+
+    const removed = new Set(previous?.removed || []);
+    for (const m of previous?.marks || []) if (!seen.has(m.key) && !m.hand) removed.add(m.key);
+    for (const k of seen) removed.delete(k);
+    const extra = marks.filter(m => !isCandidate(m.text)).map(m => m.key);
+
+    const structure = {
+        model: previous?.model ?? null,
+        generatedAt: previous?.generatedAt ?? null,
+        asked: previous?.asked ?? structureCandidates(chunks).map(c => c.key),
+        marks: marks.map(({ pos, ...m }) => m),
+        ...(removed.size ? { removed: [...removed] } : {}),
+        ...(extra.length ? { extra } : {}),
+        editedAt: new Date().toISOString(),
+    };
+    writeFileAtomic(file, JSON.stringify(structure, null, 2));
+    return structure;
+}
+
+/**
+ * Lines of the book containing `query`, for making one a heading by hand. Any
+ * line at all: the candidates are what the model is shown, and the title it
+ * could not be shown is exactly the one being looked for.
+ */
+export function findLines(chunks, query, limit = 30) {
+    const q = String(query || '').trim().toLowerCase();
+    if (q.length < 2) return [];
+    const out = [];
+    for (const l of bookLines(chunks)) {
+        if (l.text.toLowerCase().includes(q)) out.push(l);
+        if (out.length >= limit) break;
+    }
+    return out;
 }

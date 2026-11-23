@@ -2760,21 +2760,32 @@ async function renderBook(prefix) {
     // shown as the outline they give, so a wrong mark is seen before the book
     // reaches a reader rather than in it.
     const structureBody = document.getElementById('b-structure-body');
+    // Unsaved corrections to the outline, or null when it is only being shown.
+    let editing = null;
+    guardLeaving(() => !!editing?.dirty, t('book.structureLeave'));
     const drawStructure = (rep) => {
+        editing = null;
         const status = !rep.candidates ? t('book.structureEmpty')
             : !rep.marked ? t('book.structureNone')
-            : t('book.structureStatus', { n: rep.outline.length, model: rep.model || '—', date: fmtDate(rep.generatedAt) });
+            : rep.model ? t('book.structureStatus', { n: rep.outline.length, model: rep.model, date: fmtDate(rep.generatedAt) })
+            : t('book.structureStatusHand', { n: rep.outline.length });
+        const edited = rep.editedAt
+            ? `<div class="cfg-hint">${esc(t('book.structureEdited', { n: rep.hand, date: fmtDate(rep.editedAt) }))}</div>` : '';
         const stale = rep.marked && (rep.unmarked || rep.lost)
             ? `<div class="cfg-hint">⚠ ${esc(t('book.structureStale', { unmarked: rep.unmarked, lost: rep.lost }))}</div>` : '';
         const rows = rep.outline.map(r => `<div class="outline-row" style="padding-left:${(r.level - 1) * 20}px">`
-            + `${esc(r.title.join(' '))} <span class="cfg-hint">#${r.chunk + 1}</span></div>`).join('');
+            + `${esc(r.title.join(' '))} <span class="cfg-hint">#${r.chunk + 1}</span>`
+            + `${r.hand ? ` <span class="cfg-hint" title="${esc(t('book.structureHandHint'))}">✎</span>` : ''}</div>`).join('');
         structureBody.innerHTML = `
-            <div class="cfg-hint" style="margin:8px 0">${esc(status)}</div>${stale}
+            <div class="cfg-hint" style="margin:8px 0">${esc(status)}</div>${edited}${stale}
             ${rep.candidates ? `<div class="row" style="margin:8px 0">
                 <button id="b-structure-run" class="primary">${esc(t(rep.marked ? 'book.structureRerun' : 'book.structureRun'))}</button>
+                <button id="b-structure-edit">${esc(t('book.structureEdit'))}</button>
                 <span class="cfg-hint">${esc(t('book.structureCost', { n: rep.candidates, tokens: fmtNum(rep.tokens) }))}</span>
             </div>` : ''}
+            ${rep.hand && rep.marked ? `<div class="cfg-hint">${esc(t('book.structureRerunKeeps'))}</div>` : ''}
             ${rows ? `<div class="outline" style="max-height:360px;overflow:auto">${rows}</div>` : ''}`;
+        document.getElementById('b-structure-edit')?.addEventListener('click', () => editStructure(rep));
         document.getElementById('b-structure-run')?.addEventListener('click', async (e) => {
             const btn = e.currentTarget;
             btn.disabled = true;
@@ -2789,6 +2800,173 @@ async function renderBook(prefix) {
             }
         });
     };
+    // Correcting the outline. The marks are held flat, one per line, in book
+    // order; a title of two lines is the second marked joinPrev. Everything is
+    // drawn from that list, and saving sends it back whole.
+    const editStructure = async (rep) => {
+        let lines;
+        try { lines = (await api(`/api/projects/${encodeURIComponent(prefix)}/structure/candidates`)).lines; }
+        catch (e) { toast(e.message, 'error'); return; }
+        const byKey = new Map(lines.map(l => [l.key, l]));
+        editing = {
+            dirty: false, gap: null, found: null, query: '',
+            marks: rep.outline.flatMap(r => r.parts.map((p, i) => ({
+                key: p.key, text: p.text, pos: p.pos, chunk: byKey.get(p.key)?.chunk ?? r.chunk,
+                level: r.level, joinPrev: i > 0,
+            }))),
+        };
+        const groups = () => {
+            const out = [];
+            for (const m of editing.marks) {
+                const last = out[out.length - 1];
+                if (m.joinPrev && last && last[last.length - 1].pos === m.pos - 1) last.push(m);
+                else out.push([m]);
+            }
+            return out;
+        };
+        const changed = () => { editing.dirty = true; draw(); };
+        const add = (line, level) => {
+            if (editing.marks.some(m => m.key === line.key)) return;
+            editing.marks.push({ key: line.key, text: line.text, pos: line.pos, chunk: line.chunk, level, joinPrev: false });
+            editing.marks.sort((a, b) => a.pos - b.pos);
+            // Shown where it landed: a line found by search goes somewhere far
+            // down the outline, out of sight of the button that put it there.
+            editing.flash = line.key;
+            changed();
+        };
+        const levelButtons = (key) => [1, 2, 3].map(n =>
+            `<button class="btn-sm" data-add="${esc(key)}" data-level="${n}">+ ${esc(t('book.level.' + n))}</button>`).join(' ');
+        const lineRow = (l) => `<div class="st-line" title="${esc(`${l.before}\n▶ ${l.text}\n${l.after}`)}">
+                <a class="cfg-hint" href="#/chunk/${encodeURIComponent(prefix)}/${l.chunk}">#${l.chunk + 1}</a>
+                <span class="st-text">${esc(l.text)}</span>
+                ${editing.marks.some(m => m.key === l.key)
+                    ? `<span class="cfg-hint">${esc(t('book.structureAlready'))}</span>` : levelButtons(l.key)}
+            </div>`;
+        const gapRow = (lo, hi) => {
+            const open = editing.gap === lo;
+            const inside = open ? lines.filter(l => l.pos > lo && l.pos < hi && !editing.marks.some(m => m.key === l.key)) : [];
+            return `<div class="st-gap">
+                <button class="btn-sm" data-gap="${lo}">${open ? '−' : '+'}</button>
+                ${open ? `<div class="st-gap-list">${inside.length ? inside.map(lineRow).join('')
+                    : `<div class="cfg-hint">${esc(t('book.structureGapEmpty'))}</div>`}</div>` : ''}
+            </div>`;
+        };
+        const draw = () => {
+            const gs = groups();
+            let html = '';
+            gs.forEach((g, gi) => {
+                const prevLast = gi > 0 ? gs[gi - 1][gs[gi - 1].length - 1].pos : -1;
+                html += gapRow(prevLast, g[0].pos);
+                const adjacent = gi > 0 && g[0].pos === prevLast + 1;
+                html += `<div class="st-row${g.some(m => m.key === editing.flash) ? ' st-flash' : ''}" style="margin-left:${(g[0].level - 1) * 20}px">
+                    <select data-level-of="${gi}">${[1, 2, 3].map(n =>
+                        `<option value="${n}" ${g[0].level === n ? 'selected' : ''}>${esc(t('book.level.' + n))}</option>`).join('')}</select>
+                    <span class="st-title">${g.map((m, i) => `${i ? `<button class="btn-sm" data-split="${esc(m.key)}" title="${esc(t('book.structureSplit'))}">✂</button> ` : ''}${esc(m.text)}`).join(' ')}</span>
+                    <a class="cfg-hint" href="#/chunk/${encodeURIComponent(prefix)}/${g[0].chunk}">#${g[0].chunk + 1}</a>
+                    <span class="spacer"></span>
+                    ${adjacent ? `<button class="btn-sm" data-join="${gi}">${esc(t('book.structureJoin'))}</button>` : ''}
+                    <button class="btn-sm" data-remove="${gi}">${esc(t('book.structureRemove'))}</button>
+                </div>`;
+            });
+            html += gapRow(gs.length ? gs[gs.length - 1][gs[gs.length - 1].length - 1].pos : -1, Infinity);
+            structureBody.innerHTML = `
+                <div class="row" style="margin:8px 0">
+                    <button id="st-save" class="primary" ${editing.dirty ? '' : 'disabled'}>${esc(t('common.save'))}</button>
+                    <button id="st-cancel">${esc(t('book.structureCancel'))}</button>
+                </div>
+                <div class="cfg-hint">${esc(t('book.structureEditHint'))}</div>
+                <div class="st-search">
+                    <div class="row">
+                        <input id="st-query" type="search" placeholder="${esc(t('book.structureFind'))}" value="${esc(editing.query)}">
+                        <button id="st-find">${esc(t('book.structureFindBtn'))}</button>
+                        ${editing.found ? `<button id="st-found-close" class="btn-sm" title="${esc(t('book.structureFindClose'))}">✕</button>` : ''}
+                    </div>
+                    ${editing.found ? `<div class="cfg-hint" style="margin-top:6px">${esc(editing.found.length
+                        ? t('book.structureFound', { q: editing.foundFor, n: editing.found.length })
+                        : t('book.structureFindNone', { q: editing.foundFor }))}</div>
+                        ${editing.found.length ? `<div class="st-found">${editing.found.map(lineRow).join('')}</div>` : ''}` : ''}
+                </div>
+                <div class="st-outline-title">${esc(t('book.structureOutline'))}</div>
+                <div class="outline st-edit">${html}</div>`;
+            wire(gs);
+            if (editing.focusQuery) {
+                const q = document.getElementById('st-query');
+                q.focus();
+                q.setSelectionRange(q.value.length, q.value.length);
+                editing.focusQuery = false;
+            }
+            if (editing.flash) {
+                structureBody.querySelector('.st-flash')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                editing.flash = null;
+            }
+        };
+        const wire = (gs) => {
+            const find = async () => {
+                editing.query = document.getElementById('st-query').value;
+                const q = editing.query.trim();
+                if (q.length < 2) { toast(t('book.structureFindShort'), 'error'); return; }
+                try {
+                    editing.found = (await api(`/api/projects/${encodeURIComponent(prefix)}/structure/find?q=${encodeURIComponent(q)}`)).lines;
+                } catch (e) { toast(e.message, 'error'); return; }
+                editing.foundFor = q;
+                editing.focusQuery = true;
+                draw();
+            };
+            document.getElementById('st-found-close')?.addEventListener('click', () => {
+                editing.found = null;
+                draw();
+            });
+            document.getElementById('st-find').addEventListener('click', find);
+            document.getElementById('st-query').addEventListener('keydown', (e) => { if (e.key === 'Enter') find(); });
+            document.getElementById('st-cancel').addEventListener('click', () => {
+                if (editing.dirty && !confirm(t('book.structureLeave'))) return;
+                drawStructure(rep);
+            });
+            document.getElementById('st-save').addEventListener('click', async (e) => {
+                e.currentTarget.disabled = true;
+                try {
+                    const next = await api(`/api/projects/${encodeURIComponent(prefix)}/structure`, {
+                        method: 'PUT',
+                        body: { headings: editing.marks.map(m => ({ key: m.key, level: m.level, joinPrev: m.joinPrev })) },
+                    });
+                    drawStructure(next);
+                    toast(t('book.structureSaved'), 'ok');
+                } catch (err) { toast(err.message, 'error'); e.currentTarget.disabled = false; }
+            });
+            structureBody.querySelectorAll('[data-level-of]').forEach(sel => sel.addEventListener('change', () => {
+                for (const m of gs[+sel.dataset.levelOf]) m.level = +sel.value;
+                changed();
+            }));
+            structureBody.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => {
+                const gone = new Set(gs[+b.dataset.remove].map(m => m.key));
+                editing.marks = editing.marks.filter(m => !gone.has(m.key));
+                changed();
+            }));
+            structureBody.querySelectorAll('[data-join]').forEach(b => b.addEventListener('click', () => {
+                const g = gs[+b.dataset.join];
+                const level = gs[+b.dataset.join - 1][0].level;
+                for (const m of g) m.level = level;
+                g[0].joinPrev = true;
+                changed();
+            }));
+            structureBody.querySelectorAll('[data-split]').forEach(b => b.addEventListener('click', () => {
+                const m = editing.marks.find(x => x.key === b.dataset.split);
+                if (m) m.joinPrev = false;
+                changed();
+            }));
+            structureBody.querySelectorAll('[data-gap]').forEach(b => b.addEventListener('click', () => {
+                const lo = Number(b.dataset.gap);
+                editing.gap = editing.gap === lo ? null : lo;
+                draw();
+            }));
+            structureBody.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => {
+                const line = byKey.get(b.dataset.add) || editing.found?.find(l => l.key === b.dataset.add);
+                if (line) add(line, +b.dataset.level);
+            }));
+        };
+        draw();
+    };
+
     const loadStructure = () => api(`/api/projects/${encodeURIComponent(prefix)}/structure`)
         .then(drawStructure)
         .catch(e => { structureBody.innerHTML = `<div class="cfg-hint">${esc(t('common.error', { msg: e.message }))}</div>`; });
