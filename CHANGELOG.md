@@ -9,6 +9,15 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-11-23**
+
+- `a884755` — The FB2 structure can be corrected by hand: "✎ Edit" under the
+  contents on the Book page. A heading's level can be changed, a heading
+  removed, a two-line title joined or split, a heading added from the candidate
+  lines between two others, and any line of the translation found by search and
+  made a heading — a long one or one ending in a full stop too. Marking again
+  with the model keeps the hand edits.
+
 **2026-11-11**
 
 - `8c4a5d0` — Housekeeping: the Google client library the program imports is
