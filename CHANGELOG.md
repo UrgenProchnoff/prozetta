@@ -9,6 +9,22 @@ predates the practice and carries none.
 
 ## 1.1.0 — 2026-08-28
 
+**2026-11-27**
+
+- `ecf33d4` — Glossary and passport findings of the translation review carry
+  what they propose: an edit of a glossary entry or a note for the translator.
+  "Move to the glossary" and "Move to the passport" put it on that page as a
+  proposal to accept or reject there; "Open …" is now only the link. A passport
+  note can hold for a stretch of the book — "from a place…" and "up to a
+  place…", found by searching the original or the translation — and each chunk
+  is given only the notes that hold for it; the review sees these boundaries
+  and can propose its own. The point-of-view map comes only from the model's
+  quoted boundaries: the count of names in dialogue was dropped after it gave
+  Halting State a wrong narrator in 23 chapters of 38, and maps it drew read as
+  none. "Accept all" in the glossary editor takes every proposal that needs no
+  choice. The reviews have no cap on the number of findings. An accepted
+  finding moves from the review list to the fix queue.
+
 **2026-11-23**
 
 - `a884755` — The FB2 structure can be corrected by hand: "✎ Edit" under the
