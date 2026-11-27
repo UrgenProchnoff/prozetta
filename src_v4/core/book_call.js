@@ -44,7 +44,11 @@ import fs from 'fs';
 export function nextReviewRound(reviewPath) {
     if (!fs.existsSync(reviewPath)) return 1;
     try {
-        const round = JSON.parse(fs.readFileSync(reviewPath, 'utf-8')).round;
+        const previous = JSON.parse(fs.readFileSync(reviewPath, 'utf-8'));
+        // A file with no review in it — only proposals sent from elsewhere
+        // (the glossary's `transferred`) — counts no round.
+        if (!previous.generatedAt) return 1;
+        const round = previous.round;
         return Number.isInteger(round) && round > 0 ? round + 1 : 2;
     } catch {
         return 2;

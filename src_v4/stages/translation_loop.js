@@ -8,6 +8,7 @@ import { cheatSheet, contradictedNames } from '../core/cheat_sheet.js';
 import { nextStep, bestAttempt } from '../core/loop_decision.js';
 import { countTokens } from '../core/tokenizer.js';
 import { loadPassport, buildStyleBlock, isEmptyPassport } from '../core/passport.js';
+import { placeNotes } from '../core/note_bounds.js';
 import { adviceForChunk } from '../core/translation_review.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
@@ -41,6 +42,19 @@ export async function runTranslationLoopStage(state) {
     } else {
         const n = passport.narration || {};
         console.log(`[Translation] Passport loaded: narration ${n.person || '—'}/${n.tense || '—'}, ${passport.characters.length} POV character(s), ${passport.povMap.length} map span(s).`);
+        // Notes with boundaries reach only the chunks between them. Worked out
+        // here, against the chunks as they are cut now.
+        passport.notes = placeNotes(passport.notes, chunks);
+        for (const note of passport.notes) {
+            if (!note.place || note.status !== 'accepted') continue;
+            const lost = [['from', note.place.from], ['until', note.place.until]].filter(([, p]) => p && !p.found);
+            for (const [side, p] of lost) {
+                console.warn(`[Translation] Note "${note.topic || note.advice.slice(0, 40)}": its "${side}" place is ${p.ambiguous ? 'in the text more than once' : 'not in the text'} — that boundary is ignored.`);
+            }
+            if (note.place.first > note.place.last) {
+                console.warn(`[Translation] Note "${note.topic || note.advice.slice(0, 40)}" begins after it ends — it reaches no chunk.`);
+            }
+        }
     }
 
     // Clones (a note reading "= Maria Johnson") speak through their prime —

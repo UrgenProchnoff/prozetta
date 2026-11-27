@@ -1,4 +1,4 @@
-/** The small deterministic pieces: diff, state, atomic writes, POV map, advice. */
+/** The small deterministic pieces: diff, state, atomic writes, note boundaries, advice. */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
@@ -6,7 +6,7 @@ import path from 'path';
 import { wordDiff, condense, diffSize } from '../src_v4/core/text_diff.js';
 import { ProjectState, withoutTranslation, TRANSLATION_FIELDS } from '../src_v4/core/state_manager.js';
 import { renameWithRetry, writeFileAtomic } from '../src_v4/utils/atomic_write.js';
-import { buildSegments, buildPovMap } from '../src_v4/core/pov_map.js';
+import { placeNotes, notesForChunk } from '../src_v4/core/note_bounds.js';
 import { adviceForChunk, adviceQueue } from '../src_v4/core/translation_review.js';
 import { parseChunkList, chunksContaining } from '../src_v4/core/manual_advice.js';
 import { locateQuote } from '../src_v4/core/quoted_spans.js';
@@ -137,51 +137,35 @@ test('renameWithRetry does not retry an error that waiting cannot cure', () => {
     assert.equal(calls, 1);
 });
 
-// --- pov_map ---
+// --- note boundaries ---
 
-const chapter = (heading, body) => ({ original: `${heading}\n\n${body}` });
-
-test('buildSegments starts a segment at every chunk that opens with a speaker heading', () => {
+test('a bounded note reaches only the chunks between its places, and the chunk a place cuts is told where', () => {
     const chunks = [
-        chapter('SUE: One', 'Text.'), { original: 'More text.' },
-        chapter('JACK: Two', 'Text.'),
+        { original: 'Socrates said he was glad. ' },
+        { original: 'More of the same. From here on call me Crystal. She smiled. ' },
+        { original: 'Crystal walked on. ' },
     ];
-    assert.deepEqual(buildSegments(chunks), [{ from: 0, to: 1 }, { from: 2, to: 2 }]);
+    const place = 'From here on call me Crystal.';
+    const notes = placeNotes([
+        { advice: 'masculine', until: place },
+        { advice: 'feminine', from: place },
+        { advice: 'everywhere' },
+        { advice: 'lost boundary', from: 'nothing like this is in the text' },
+    ], chunks);
+    const given = i => notesForChunk(notes, i).map(x => [x.note.advice, x.from || x.until ? 'cut' : '']);
+    assert.deepEqual(given(0), [['masculine', ''], ['everywhere', ''], ['lost boundary', '']]);
+    assert.deepEqual(given(1), [['masculine', 'cut'], ['feminine', 'cut'], ['everywhere', ''], ['lost boundary', '']]);
+    assert.deepEqual(given(2), [['feminine', ''], ['everywhere', ''], ['lost boundary', '']]);
 });
 
-test('buildPovMap carries the rotation through chapters where nobody says the name', () => {
-    // Chapters alternate Sue, Jack, Sue, Jack…; only some have the narrator
-    // addressed by name in dialogue. The numbered headings carry no name.
-    const said = (who) => `You walk in. "Morning, ${who}," says the desk sergeant. You nod.`;
-    const silent = 'You walk on. Nobody says a word to you all day.';
-    const chunks = [
-        chapter('ONE: Monday', said('Sue')),
-        chapter('TWO: Tuesday', said('Jack')),
-        chapter('THREE: Wednesday', said('Sue')),
-        chapter('FOUR: Thursday', silent),
-        chapter('FIVE: Friday', silent),
-        chapter('SIX: Saturday', said('Jack')),
-    ];
-    const map = buildPovMap(chunks, ['Sue', 'Jack']);
-
-    assert.deepEqual(map.map(s => [s.fromChunk, s.toChunk, s.character, s.source]), [
-        [0, 0, 'Sue', 'anchor'],
-        [1, 1, 'Jack', 'anchor'],
-        [2, 2, 'Sue', 'anchor'],
-        [3, 3, 'Jack', 'inferred'],
-        [4, 4, 'Sue', 'inferred'],
-        [5, 5, 'Jack', 'anchor'],
-    ]);
+test('a place that opens a chunk leaves that chunk wholly on its own side', () => {
+    const chunks = [{ original: 'Before the change, all of it. ' }, { original: 'The change begins right here. After.' }];
+    const notes = placeNotes([{ advice: 'a', until: 'The change begins right here.' }, { advice: 'b', from: 'The change begins right here.' }], chunks);
+    assert.deepEqual(notes.map(n => [n.place.first, n.place.last]), [[0, 0], [1, 1]]);
+    assert.deepEqual(notesForChunk(notes, 1).map(x => [x.note.advice, x.from]), [['b', null]]);
 });
 
-test('buildPovMap decides nothing with one narrator or no anchors at all', () => {
-    const chunks = [chapter('ONE: Monday', 'You walk on.'), chapter('TWO: Tuesday', 'You walk on.')];
-    assert.deepEqual(buildPovMap(chunks, ['Sue']), []);
-    assert.deepEqual(buildPovMap(chunks, ['Sue', 'Jack']), []);
-    assert.deepEqual(buildPovMap([], ['Sue', 'Jack']), []);
-});
-
-// --- advice ---
+// --- advice ---// --- advice ---
 
 test('adviceForChunk gives one instruction as it is and numbers several', () => {
     assert.equal(adviceForChunk(undefined), '');

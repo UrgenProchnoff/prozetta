@@ -100,11 +100,15 @@ export function applyGlossaryReview(state, raw, meta) {
     // Counted before the file is replaced: the number lives inside it.
     const round = nextReviewRound(reviewPath);
     let carriedDismissals = [];
+    let carriedTransfers = [];
     if (fs.existsSync(reviewPath)) {
         try {
             const previous = JSON.parse(fs.readFileSync(reviewPath, 'utf-8'));
             carriedDismissals = Array.isArray(previous.dismissed) ? previous.dismissed : [];
             if (carriedDismissals.length) notes.push(`Carrying over ${carriedDismissals.length} finding(s) you had dismissed.`);
+            // Sent here from the translation review by a person: theirs, not the
+            // previous review's, so a new review does not replace them.
+            carriedTransfers = Array.isArray(previous.transferred) ? previous.transferred : [];
         } catch { /* an unreadable previous review must not block a new one */ }
     }
 
@@ -132,6 +136,7 @@ export function applyGlossaryReview(state, raw, meta) {
         glossarySize: glossary.length,
         returned: list.length,
         dismissed: carriedDismissals,
+        ...(carriedTransfers.length ? { transferred: carriedTransfers } : {}),
         rejected,
         findings,
         // Deliberately last, and deliberately under a name nothing else reads:

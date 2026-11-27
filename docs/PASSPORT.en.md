@@ -39,13 +39,31 @@ published translation, the Book page says so — worth checking.
 **Notes for the translator.** Whatever else the model thinks a translator of this
 book should know: its own markup, recurring devices, traps. You accept or reject
 each note; only accepted ones go into every chunk's prompt. You can add your own.
+Notes also come from the translation review, by the "Move to the passport" button
+on the monitor; those are marked "from the translation review" and, like the
+model's own, wait for your decision.
 
-**The point-of-view map.** Who narrates each chunk. Worked out from anchors plus a
-prior on how narrators alternate, rather than by asking the model chunk by chunk,
-which is measurably less reliable. When there are several narrators and the book
-has no anchors, a separate call appears under the map: the model finds the
-boundaries by quoting across the whole book. While nothing is translated, the text
-is re-split on them so that no chunk is shared by two narrators.
+**A note's boundaries.** Sometimes a rule changes in the course of a book: a
+character takes a new name and with it a new gender, two people go from formal to
+informal address. A note can then be given "from a place…" and "up to a place…":
+find the place by searching the original or the translation and press "Pick". The
+note goes only into the chunks between its boundaries, and the chunk a boundary
+falls inside is told the phrase the rule starts or stops holding at. A rule with
+two halves is two notes: the first "up to a place", the second "from a place", the
+same place for both. A boundary is kept as a quote from the original, so it
+survives the text being cut into chunks again. If the quote is not in the text,
+the page warns you, and the note holds for the whole book as if it had no
+boundary. The translation review sees the boundaries and can propose its own —
+the "Move to the passport" button then carries the note over with them.
+
+**The point-of-view map.** Who narrates each chunk. When there are several
+narrators, a separate whole-book call sits under the map: the model reads the book
+through and quotes the start of each stretch, and the program checks that every
+quote occurs in the text exactly once. While nothing is translated, the text is
+re-split on these boundaries so that no chunk is shared by two narrators. The call
+can be repeated. Until there is a map, the translator is told to avoid gendered
+forms around the narrator. Maps counted earlier from names in dialogue are no
+longer used — for such books, ask for the boundaries again.
 
 ## Editing by hand
 

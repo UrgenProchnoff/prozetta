@@ -3,6 +3,7 @@ import fs from 'fs';
 import { jobManager } from '../jobs.js';
 import { acceptedNotes, povMapNeeded } from '../../src_v4/core/passport.js';
 import { countTokens } from '../../src_v4/core/tokenizer.js';
+import { bookText, placeQuote, findBoundaries } from '../../src_v4/core/note_bounds.js';
 import { app } from '../app.js';
 import { statePath, passportPath, readJson, writeJsonAtomic, validPrefix, speechAdherence } from '../helpers.js';
 
@@ -19,6 +20,8 @@ app.get('/api/projects/:prefix/passport', (req, res) => {
     if (!fs.existsSync(pp)) return res.json({ exists: false, passport: null });
     try {
         const passport = readJson(pp);
+        // As loadPassport reads it: a map counted from names is no map.
+        if (passport.source?.povMapFrom === 'anchors') { passport.povMap = []; delete passport.source.povMapFrom; }
         // Chunk count lets the map be drawn to scale even where spans are sparse.
         let total = 0;
         let chunks = [];
@@ -34,10 +37,39 @@ app.get('/api/projects/:prefix/passport', (req, res) => {
         const notesTokens = notes.length
             ? countTokens(notes.map(n => `- ${n.topic ? `${n.topic}: ` : ''}${n.advice}`).join('\n')) : 0;
         const translated = chunks.filter(c => c.translation).length;
-        res.json({ exists: true, passport, totalChunks: total, translated, povMapNeeded: povMapNeeded(passport), notesTokens, speech: speechAdherence(chunks, passport?.dialogue?.marker || null) });
+        res.json({ exists: true, passport, totalChunks: total, translated, povMapNeeded: povMapNeeded(passport), notesTokens,
+            bounds: noteBounds(passport, chunks), speech: speechAdherence(chunks, passport?.dialogue?.marker || null) });
     } catch (e) {
         res.status(500).json({ error: `Не удалось прочитать паспорт: ${e.message}` });
     }
+});
+
+// Where each note boundary falls, by its quote: the page shows the chunk and
+// warns about a quote the text does not hold. Keyed by the quote rather than by
+// the note, so it stays right while notes are added and removed unsaved.
+function noteBounds(passport, chunks) {
+    const quotes = new Set();
+    for (const n of passport?.notes || []) for (const q of [n?.from, n?.until]) if (q) quotes.add(String(q).trim());
+    if (!quotes.size) return {};
+    const book = bookText(chunks);
+    const out = {};
+    for (const q of quotes) {
+        const at = placeQuote(book, q);
+        out[q] = at.found ? { found: true, chunk: at.chunk, cut: at.cut } : { found: false, ambiguous: at.ambiguous };
+    }
+    return out;
+}
+
+// A place in the book to bound a note by, found by what a person remembers of
+// it — in the original or in the translation.
+app.get('/api/projects/:prefix/passport/find', (req, res) => {
+    const prefix = validPrefix(req, res);
+    if (!prefix) return;
+    let chunks;
+    try { chunks = readJson(statePath(prefix)).chunks || []; } catch { return res.status(404).json({ error: 'Project not found' }); }
+    const hits = findBoundaries(chunks, req.query.q);
+    const book = hits.length ? bookText(chunks) : null;
+    res.json({ hits: hits.map(h => ({ ...h, cut: placeQuote(book, h.quote).cut })) });
 });
 
 app.put('/api/projects/:prefix/passport', (req, res) => {

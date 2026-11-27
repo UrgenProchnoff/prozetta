@@ -1328,8 +1328,6 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 .rev-dismissed > summary { font-size: 13px; color: var(--muted); }
 .rev-dismissed .rev-quote, .rev-dismissed .rev-problem { opacity: 0.75; }
 
-.rev-item.rev-done { opacity: 0.55; }
-.rev-item.rev-done .rev-quote { border-left-color: var(--green); }
 /* Findings on one chunk are adjacent; a rule closes each chunk's block. */
 .rev-item.rev-chunk-end { border-bottom: 1px solid var(--border); padding-bottom: 14px; }
 .rev-term { margin-top: 4px; font-size: 12px; color: var(--violet); font-family: ui-monospace, monospace; }
@@ -1485,3 +1483,8 @@ a.cm-ref:hover { color: var(--accent); border-bottom-color: var(--accent); }
 .st-flash { background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 6px; }
 .st-line { display: flex; align-items: center; gap: 8px; padding: 2px 0; flex-wrap: wrap; }
 .st-text { flex: 1 1 200px; min-width: 0; }
+
+/* Passport notes: where a note starts and stops holding. */
+.note-bounds { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; font-size: 12px; }
+.note-bound { color: var(--muted); }
+.warn-text { color: var(--yellow); flex-basis: 100%; }

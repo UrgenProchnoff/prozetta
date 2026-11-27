@@ -264,6 +264,18 @@ If the book and glossary do not fit the API quota, the button goes grey and
 AI Studio, for instance), where the limits are larger. The answer is pasted back
 and goes through the same checks.
 
+Proposals also come from the translation review, by the "Move to the glossary" button
+on the monitor. They sit in the same list marked "from the translation review"
+(their quote is from the translation, not the original), pass the same checks and
+are accepted the same way. A new glossary review does not wipe them.
+
+**"Accept all"** above the list takes at once everything that needs no choice:
+edits, additions, removals and links. Left to decide one by one are merges, and
+links where both entries have a note — taking those would throw the clone's note
+away. The program first shows how many of each it is about to do. Nothing reaches
+the glossary file until you press Save, so you can still change your mind by
+leaving the page without saving.
+
 ## Import from another book of the series
 
 The second book of a series has to name its people and things the way the first

@@ -158,7 +158,7 @@ app.get('/api/projects/:prefix/glossary', async (req, res) => {
             round: review.round ?? null,
             score: review.score ?? null,
             summary: review.summary || null,
-            total: (review.findings || []).length,
+            total: (review.findings || []).length + (review.transferred || []).length,
             outstanding,
             hidden,
             // Proposals that belong to no row: terms the book uses and the

@@ -156,9 +156,11 @@ function linked(prime, a, b) {
  * @param {Array} raw            the model's findings, as parsed
  * @param {Array} glossary       the glossary they refer to
  * @param {string} bookText      the joined source text
+ * @param {{checkQuote?: boolean}} [options]  `checkQuote: false` for proposals
+ *   whose quote is from the translation, not the source
  * @returns {{findings: Array, rejected: object, rejectedFindings: Array}}
  */
-export function verifyFindings(raw, glossary, bookText) {
+export function verifyFindings(raw, glossary, bookText, { checkQuote = true } = {}) {
     const rejected = {
         malformed: 0,        // not an object, or an action we do not implement
         unknownEntry: 0,     // names a glossary entry that is not there
@@ -211,7 +213,9 @@ export function verifyFindings(raw, glossary, bookText) {
 
         // The quote is the whole point of the contract, so it is checked before
         // anything else is considered.
-        if (locateQuote(bookText, item.quote).occurrences === 0) { drop('badQuote', item); continue; }
+        // Skipped for a proposal carried over from the translation review: its
+        // quote is from the translation, and was checked against it there.
+        if (checkQuote && locateQuote(bookText, item.quote).occurrences === 0) { drop('badQuote', item); continue; }
 
         const finding = {
             action,
@@ -399,7 +403,10 @@ export function outstandingFindings(review, glossary, bookText = '') {
     const has = value => byOriginal.has(String(value || '').trim().toLowerCase());
     const { prime } = resolveLinks(glossary);
 
-    for (const recorded of review?.findings || []) {
+    // Proposals carried over from the translation review sit in their own list:
+    // a new glossary review overwrites `findings`, and these are a person's
+    // decision to bring something here, not the model's word to be replaced.
+    for (const recorded of [...(review?.findings || []), ...(review?.transferred || [])]) {
         // Keyed as recorded, so a dismissal made before a merge was recast as a
         // link still holds.
         const key = findingKey(recorded);
@@ -455,6 +462,7 @@ export function outstandingFindings(review, glossary, bookText = '') {
 
         byRow[target.index].push({
             kind: 'model',
+            ...(f.from ? { from: f.from } : {}),
             detail: f.problem,
             action: f.action,
             issue: f.issue,

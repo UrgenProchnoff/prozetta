@@ -2,9 +2,10 @@
 import fs from 'fs';
 import { jobManager } from '../jobs.js';
 import { findingKey } from '../../src_v4/core/translation_review.js';
+import { findingKey as glossaryFindingKey } from '../../src_v4/core/glossary_review.js';
 import { manualKey, parseChunkList, chunksContaining } from '../../src_v4/core/manual_advice.js';
 import { app } from '../app.js';
-import { statePath, transReviewPath, readJson, readGlossaryOrEmpty, writeJsonAtomic, validPrefix, chunksUsingTerm } from '../helpers.js';
+import { statePath, transReviewPath, reviewPath, passportPath, readJson, readGlossaryOrEmpty, writeJsonAtomic, validPrefix, chunksUsingTerm } from '../helpers.js';
 
 /**
  * Decide a finding from the whole-book review.
@@ -26,8 +27,8 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
         return res.status(409).json({ error: 'Этап выполняется — решения заблокированы' });
     }
     const { key, action } = req.body || {};
-    if (!key || !['accept', 'dismiss', 'restore', 'undo', 'handled', 'queueTerm'].includes(action)) {
-        return res.status(400).json({ error: 'Expected { key, action: accept|dismiss|restore|undo|handled|queueTerm }' });
+    if (!key || !['accept', 'dismiss', 'restore', 'handled', 'queueTerm', 'toGlossary', 'toPassport'].includes(action)) {
+        return res.status(400).json({ error: 'Expected { key, action: accept|dismiss|restore|handled|queueTerm|toGlossary|toPassport }' });
     }
     const file = transReviewPath(prefix);
     if (!fs.existsSync(file)) return res.status(404).json({ error: 'No review for this project' });
@@ -72,20 +73,87 @@ app.post('/api/projects/:prefix/translation-review/decide', (req, res) => {
         return res.json({ ok: true, handled: review.handled.length });
     }
 
+    // The glossary edit the finding proposes, sent to the glossary editor's list
+    // of proposals, where it is accepted like any glossary review finding — one
+    // place, one set of checks. The finding stays open, marked as sent: what is
+    // left is the translation already written with the old entry, and queueing
+    // those chunks (or "Done") is what closes it.
+    if (action === 'toGlossary') {
+        if (!finding.glossaryEdits?.length) {
+            return res.status(400).json({ error: 'This finding proposes no glossary edit' });
+        }
+        let glossaryReview = { findings: [], dismissed: [] };
+        if (fs.existsSync(reviewPath(prefix))) {
+            try { glossaryReview = readJson(reviewPath(prefix)); }
+            catch (e) { return res.status(500).json({ error: `Could not read the glossary review: ${e.message}` }); }
+        }
+        const transferred = Array.isArray(glossaryReview.transferred) ? glossaryReview.transferred : [];
+        const known = new Set([...(glossaryReview.findings || []), ...transferred].map(glossaryFindingKey));
+        // Sent before and dismissed in the editor: sending it again is a new
+        // decision, so the dismissal goes.
+        const keys = finding.glossaryEdits.map(glossaryFindingKey);
+        glossaryReview.dismissed = (glossaryReview.dismissed || []).filter(k => !keys.includes(String(k).toLowerCase()));
+        for (const edit of finding.glossaryEdits) {
+            if (!known.has(glossaryFindingKey(edit))) transferred.push({ ...edit, from: 'translation' });
+        }
+        glossaryReview.transferred = transferred;
+        writeJsonAtomic(reviewPath(prefix), glossaryReview);
+        const k = String(key).toLowerCase();
+        review.sent = [...new Set([...(review.sent || []), k])];
+        writeJsonAtomic(file, review);
+        return res.json({ ok: true, sent: finding.glossaryEdits.length });
+    }
+
+    // A passport finding becomes a note for the translator, proposed: it is
+    // accepted or rejected on the passport page, like the model's own notes.
+    // Once accepted it reaches every chunk translated from now on (between its
+    // boundaries, if it has them);
+    // what is already translated is the chunk findings' business.
+    if (action === 'toPassport') {
+        const note = finding.note || (finding.advice ? { topic: finding.issue, advice: finding.advice } : null);
+        if (finding.scope !== 'passport' || !note) {
+            return res.status(400).json({ error: 'This finding carries no note for the passport' });
+        }
+        if (!fs.existsSync(passportPath(prefix))) {
+            return res.status(409).json({ error: 'This project has no passport yet' });
+        }
+        let passport;
+        try { passport = readJson(passportPath(prefix)); } catch (e) { return res.status(500).json({ error: e.message }); }
+        passport.notes = Array.isArray(passport.notes) ? passport.notes : [];
+        const same = passport.notes.find(n => String(n.advice || '').trim().toLowerCase() === note.advice.trim().toLowerCase());
+        // Where it starts and stops holding, if the reviewer saw that it changes.
+        const bounds = { ...(note.from ? { from: note.from } : {}), ...(note.until ? { until: note.until } : {}) };
+        // A note already there keeps the decision made about it.
+        if (same) Object.assign(same, bounds);
+        else passport.notes.push({ topic: note.topic || '', advice: note.advice, status: 'proposed', source: 'review', ...bounds });
+        writeJsonAtomic(passportPath(prefix), { ...passport, updatedAt: new Date().toISOString() });
+        const k = String(key).toLowerCase();
+        review.handled = [...new Set([...(review.handled || []), k])];
+        writeJsonAtomic(file, review);
+        return res.json({ ok: true });
+    }
+
     // Fixing a glossary entry changes nothing already translated. This queues the
     // chunks that use the term, so the correction reaches the book — offered
     // rather than done automatically, because on Morphotrophic one of these terms
     // sits in 21 chunks of 169 and that is a real bill.
     if (action === 'queueTerm') {
-        if (finding.scope !== 'glossary' || !finding.term) {
+        const term = finding.term || finding.glossaryEdits?.find(e => e.action !== 'add')?.entry;
+        if (finding.scope !== 'glossary' || !term) {
             return res.status(400).json({ error: 'This finding names no glossary entry, so there is nothing to look for' });
         }
         const k = String(key).toLowerCase();
-        const affected = chunksUsingTerm(state.chunks || [], finding.term, readGlossaryOrEmpty(prefix));
+        const glossary = readGlossaryOrEmpty(prefix);
+        const affected = chunksUsingTerm(state.chunks || [], term, glossary);
+        // What the entry says now, beside the complaint: the chunk is fixed to
+        // the glossary as corrected, and the complaint alone does not say what
+        // the correction was.
+        const entry = glossary.find(e => String(e.original || '').trim().toLowerCase() === term.trim().toLowerCase());
+        const advice = entry?.translation ? `${finding.problem} (${term} → ${entry.translation})` : finding.problem;
         for (const i of affected) {
             const chunk = state.chunks[i];
             chunk.advice = (chunk.advice || []).filter(a => a.key !== k);
-            chunk.advice.push({ key: k, issue: finding.issue, advice: finding.problem, quote: finding.quote, term: finding.term });
+            chunk.advice.push({ key: k, issue: finding.issue, advice, quote: finding.quote, term });
         }
         state.metadata = state.metadata || {};
         state.metadata.updatedAt = new Date().toISOString();

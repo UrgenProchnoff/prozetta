@@ -14,8 +14,11 @@
  * from the true chapter start 3 characters.
  */
 
-/** Collapse whitespace runs and remember where each kept character came from. */
-function flatten(text) {
+/**
+ * Collapse whitespace runs and remember where each kept character came from.
+ * Exported so that a caller locating many quotes in one text flattens it once.
+ */
+export function flatten(text) {
     let flat = '';
     const origin = [];
     let prevSpace = false;

@@ -19,6 +19,7 @@ import { writeFileAtomic } from '../utils/atomic_write.js';
 import { nameRegex } from './text_stats.js';
 import { countTokens } from './tokenizer.js';
 import config from '../config.js';
+import { notesForChunk } from './note_bounds.js';
 
 export const PASSPORT_VERSION = 1;
 
@@ -66,8 +67,8 @@ const dossierTokens = () => config.pipeline.dossierMaxTokens || 600;
  *   three — role, rank, workplace, relations — and it is exactly what a model
  *   asked to identify a narrator cold does not have.
  * @property {Array<{fromChunk: number, toChunk: number, character: string|null,
- *                   source: 'anchor'|'inferred'|'manual'}>} povMap
- *   Inclusive chunk ranges. `character: null` means undetermined — a working
+ *                   source: 'quoted'}>} povMap
+ *   Inclusive chunk ranges, drawn from the boundaries a whole-book call quotes. `character: null` means undetermined — a working
  *   mode, not a failure: the prompt is then told to avoid gendered forms rather
  *   than guess, which yields flatter but consistent text.
  * @property {Array<{from: string, to: string, form: string}>} addressRegistry
@@ -100,7 +101,8 @@ const dossierTokens = () => config.pipeline.dossierMaxTokens || 600;
  *   indistinguishable from either without this flag. `null` means nobody has
  *   looked, which is what a name typed by hand gets.
  * @property {Array<{topic: string, advice: string,
- *                   status: 'proposed'|'accepted'|'rejected', source: 'model'|'hand'}>} notes
+ *                   status: 'proposed'|'accepted'|'rejected', source: 'model'|'hand'|'review',
+ *                   from?: string, until?: string}>} notes
  *   Whatever else a translator of this book should know that no field above
  *   asks for. The model proposes, a person accepts or rejects each one, and only
  *   accepted notes reach a prompt. Free text on purpose: the useful findings are
@@ -142,6 +144,8 @@ export function emptyPassport() {
 }
 
 const NOTE_STATUSES = new Set(['proposed', 'accepted', 'rejected']);
+// 'review' — accepted from a finding of the translation review.
+const NOTE_SOURCES = new Set(['model', 'hand', 'review']);
 
 /** Keep only notes that say something, with a known status. */
 function cleanNotes(raw) {
@@ -152,7 +156,11 @@ function cleanNotes(raw) {
             topic: String(n.topic || '').trim(),
             advice: String(n.advice).trim(),
             status: NOTE_STATUSES.has(n.status) ? n.status : 'proposed',
-            source: n.source === 'hand' ? 'hand' : 'model',
+            source: NOTE_SOURCES.has(n.source) ? n.source : 'model',
+            // Quotes from the original the note holds from and up to — see
+            // core/note_bounds.js. Absent: the whole book.
+            ...(String(n.from || '').trim() ? { from: String(n.from).trim() } : {}),
+            ...(String(n.until || '').trim() ? { until: String(n.until).trim() } : {}),
         }));
 }
 
@@ -211,7 +219,10 @@ export function loadPassport(passportPath) {
                 }
                 : base.author,
             characters: Array.isArray(raw.characters) ? raw.characters : [],
-            povMap: Array.isArray(raw.povMap) ? raw.povMap : [],
+            // A map counted from names in dialogue is no longer trusted: it put
+            // 23 of Halting State's 38 chapters in the wrong narrator's mouth.
+            // Read as no map, which is what asks for the model's.
+            povMap: Array.isArray(raw.povMap) && raw.source?.povMapFrom !== 'anchors' ? raw.povMap : [],
             addressRegistry: Array.isArray(raw.addressRegistry) ? raw.addressRegistry : [],
             voices: Array.isArray(raw.voices) ? raw.voices : [],
             // Only a real marker counts. An entry without one would put an empty
@@ -350,6 +361,8 @@ const STYLE_WORDS = {
             + (sample ? `\nОбразец оформления: ${sample}` : ''),
         undetermined: 'Кто повествователь этого фрагмента — НЕ определено. НЕ приписывай повествователю род: держи время повествования и перестраивай фразы так, чтобы родовые формы не требовались.',
         notes: 'Заметки к этой книге:',
+        noteFrom: (quote) => `[в этом фрагменте — начиная с места «${quote}», раньше него не действует]`,
+        noteUntil: (quote) => `[в этом фрагменте — только до места «${quote}», с него уже не действует]`,
     },
     en: {
         person: { first: 'first person', second: 'second person', third: 'third person' },
@@ -384,6 +397,8 @@ const STYLE_WORDS = {
             + (sample ? `\nExample of the setting: ${sample}` : ''),
         undetermined: 'The narrator of this fragment is NOT determined. Do not assign the narrator a gender: keep the narrative tense and rephrase so gendered forms are not needed.',
         notes: 'Notes on this book:',
+        noteFrom: (quote) => `[in this fragment — from the place "${quote}" on, not before it]`,
+        noteUntil: (quote) => `[in this fragment — only up to the place "${quote}", not from it on]`,
     },
 };
 
@@ -422,11 +437,14 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
     // spelled out rather than left to the model to infer.
     if (person === 'second') lines.push(words.secondPerson[nonfiction ? 'nonfiction' : 'fiction']);
 
-    // Accepted by a person, so said on every chunk as written: a note cannot be
-    // matched to the chunks it concerns the way a dossier is by name.
-    const notes = acceptedNotes(passport);
+    // Accepted by a person, so said as written. A note matches no name the way a
+    // dossier does; it reaches a chunk by its boundaries, if it has any, once
+    // placeNotes has worked them out — unplaced, it goes everywhere.
+    const notes = notesForChunk(acceptedNotes(passport), chunkIndex);
     if (notes.length) {
-        lines.push([words.notes, ...notes.map(n => `- ${n.topic ? `${n.topic}: ` : ''}${n.advice}`)].join('\n'));
+        lines.push([words.notes, ...notes.map(({ note: n, from, until }) => '- '
+            + [from && words.noteFrom(from), until && words.noteUntil(until)].filter(Boolean).map(x => x + ' ').join('')
+            + `${n.topic ? `${n.topic}: ` : ''}${n.advice}`)].join('\n'));
     }
 
     const cast = passport.characters || [];
@@ -505,17 +523,12 @@ export function buildStyleBlock(passport, chunkIndex, promptLang = 'ru', chunkTe
 }
 
 /**
- * Should the point-of-view boundaries be asked for — a whole-book call of
- * their own?
- *
- * Only when there is more than one narrator and the anchors drew no map. Not
- * asked of the model: the passport names the cast, the anchors are counted, so
- * the answer is a fact rather than a judgement. A map already drawn from quoted
- * boundaries still answers yes — it can be asked for again.
+ * Should the point-of-view boundaries be offered — a whole-book call of their
+ * own? Whenever there is more than one narrator: the map is the model's to draw,
+ * and one already drawn can be asked for again.
  */
 export function povMapNeeded(passport) {
-    if ((passport?.characters || []).length < 2) return false;
-    return !(passport?.source?.povMapFrom === 'anchors' && (passport?.povMap || []).length);
+    return (passport?.characters || []).length > 1;
 }
 
 /** True when the passport carries nothing worth injecting into a prompt. */

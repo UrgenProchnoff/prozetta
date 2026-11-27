@@ -127,9 +127,27 @@ open, 35 closed by editing, 14 rejected · 7 queued`.
 Inside is the list of findings. Each one is **a decision, not a notification**:
 
 - **Accept** — the advice is queued on that chunk, and the next Translation run
-  fixes it. The chunk's cell gets a violet frame.
+  fixes it. The chunk's cell gets a violet frame, and the finding moves from the
+  list to the "Queued for fixing" block; take it out of there and it comes back
+  to the list.
 - **Dismiss** — the finding is wrong; hide it.
 - **Done** — you dealt with it yourself, by hand.
+- **Move to the glossary** — a glossary finding comes with a ready edit of the entry
+  (shown as a "✎ Glossary: …" line). The edit goes to the glossary editor's list
+  of proposals and is accepted there, like a glossary review finding. The finding
+  stays, marked "in the glossary": the edit does not change chunks already
+  translated — queue them with the button showing the chunk count, or mark it
+  "Done".
+- **Move to the passport** — a passport finding becomes a note for the
+  translator and goes into the passport as a proposal, marked "from the
+  translation review". Accept or reject it on the passport page; the finding on
+  the monitor is closed.
+- **Open the glossary / Open the passport** — only a link to the page. It stands
+  where the move button would, when there is nothing to move or it has been
+  moved.
+
+Ready edits for the glossary and the passport come with reviews made after this
+version; earlier reviews have no such buttons.
 
 The button with the chunk number opens that chunk **on the quote itself**, which
 arrives selected in the editable text.

@@ -327,7 +327,7 @@ const ru = {
           "link", в "linkTo" - основная запись этого человека.
         - Сливать можно, только если оставшаяся запись находится везде, где находилась
           удаляемая: "The Exchange" в "exchange" можно, "wards" в "ward" нельзя.
-        - Не перечисляй то, что в порядке. Самое вредное - первым, не больше 80 находок.
+        - Не перечисляй то, что в порядке. Самое вредное - первым.
         - Поставь глоссарию общий балл от 1 до 10 и обоснуй его одной-двумя фразами.
 
         Ответ - JSON в блоке \`\`\`json. Пример:
@@ -372,6 +372,8 @@ ${withOriginal ? `
         Паспорт и глоссарий - это ЗАМЫСЕЛ. Текст, который им противоречит, неправ не
         потому, что тебе так кажется, а потому что противоречит принятому решению.
         Но и сам замысел может быть плох - тогда находка про него, а не про текст.
+        У заметки в паспорте могут быть "from" и "until" - место, с которого она
+        действует, и место, до которого. Вне этого отрезка она не действует.
 
         Переводили по кускам примерно по 4000 знаков. Каждый кусок отдельно проверяли,
         и почти каждый признан хорошим - и это честная оценка того, что видно внутри
@@ -422,10 +424,21 @@ ${withOriginal ? `
         термин по всей книге. И не отправляй в "passport" то, что паспорт уже
         говорит, - если решение принято, а нарушено в одном месте, это "chunk".
 
+        К находке "glossary" приложи "glossary" - правку одной записи: "action" (edit,
+        add, merge, remove, link), "entry" - оригинал записи ровно как в глоссарии,
+        "fix" - только то, что меняется (для add - с "original" ровно как в книге),
+        "mergeInto" или "linkTo" - для merge и link. Задета не одна запись - по
+        находке на каждую. К находке "passport" приложи "note": заметку переводчику,
+        "topic" и "advice". Если правило держится не во всей книге, а с какого-то
+        места или до него, добавь в "note" "from" и/или "until" - дословную цитату
+        ${withOriginal ? 'из оригинала (<src>)' : 'из перевода'}, 8-25 слов, с места, где
+        правило начинает или перестаёт действовать. Правило меняется по ходу книги -
+        по заметке на каждую часть, с одной цитатой на стыке.
+
         Дай также общую оценку: балл от 1 до 10 и разбор в несколько абзацев -
         что удалось, что мешает публикации.
 
-        Не перечисляй то, что в порядке. Начинай с самого вредного, не больше 60 находок.
+        Не перечисляй то, что в порядке. Начинай с самого вредного.
 
         Рассуждай шаг за шагом.
         JSON должен быть обёрнут в тройные кавычки (markdown block).
@@ -448,13 +461,15 @@ ${withOriginal ? `
               "issue": "terminology",
               "term": "запись глоссария, о которой речь, ровно как она там написана",
               "quote": "дословная цитата из перевода, 8-25 слов",
-              "problem": "термин переведён здесь иначе, чем в остальной книге"
+              "problem": "что не так в записи глоссария",
+              "glossary": { "action": "edit", "entry": "та же запись", "fix": { "translation": "…" } }
             },
             {
               "scope": "passport",
               "issue": "typography",
               "quote": "дословная цитата из перевода, 8-25 слов",
-              "problem": "реплики здесь оформлены не так, как в остальной книге"
+              "problem": "о чём паспорт молчит или что говорит неверно",
+              "note": { "topic": "о чём заметка", "advice": "что переводчику делать" }
             }
           ]
         }
@@ -866,7 +881,7 @@ const en = {
           merged: "link", with the person's main entry in "linkTo".
         - Merge only when the surviving entry is found everywhere the removed one was:
           "The Exchange" into "exchange" is fine, "wards" into "ward" is not.
-        - Do not list what is fine. Worst first, at most 80 findings.
+        - Do not list what is fine. Worst first.
         - Give the glossary an overall score from 1 to 10 and a reason in one or two
           sentences.
 
@@ -914,7 +929,9 @@ ${withOriginal ? `
         The passport and the glossary are the INTENT. A text that contradicts them is
         wrong not because it seems so to you but because it contradicts a decision that
         was made. The intent itself can be wrong too — then the finding is about the
-        intent, not about the text.
+        intent, not about the text. A passport note may carry "from" and "until": the
+        place it holds from and the place it holds up to. Outside that stretch it does
+        not hold.
 
         It was translated in pieces of about 4000 characters. Each piece was reviewed on
         its own and nearly all were judged good — an honest verdict on what is visible
@@ -969,10 +986,22 @@ ${withOriginal ? `
         across a book. And do not send to "passport" what the passport already says — a
         decision that was made and broken in one place is "chunk".
 
+        Attach to a "glossary" finding a "glossary" object, the edit of one entry:
+        "action" (edit, add, merge, remove, link), "entry" — the entry's original
+        exactly as in the glossary, "fix" — only what changes (for add, with "original"
+        exactly as in the book), "mergeInto" or "linkTo" for merge and link. More than
+        one entry affected — one finding for each. Attach to a "passport" finding a
+        "note": a note to the translator, "topic" and "advice". If the rule holds not
+        for the whole book but from some place on or up to it, add "from" and/or
+        "until" to the "note" — a verbatim quotation ${withOriginal ? 'from the original (<src>)' : 'from the translation'},
+        8-25 words, from the place where the rule starts or stops holding. A rule that
+        changes in the course of the book — one note for each part, with one quotation
+        at the join.
+
         Give an overall verdict too: a score from 1 to 10 and a few paragraphs on what
         works and what stands between this and publication.
 
-        Do not list what is fine. Start with the worst, no more than 60 findings.
+        Do not list what is fine. Start with the worst.
 
         Reason step by step.
         The JSON must be wrapped in triple backticks (markdown block).
@@ -995,13 +1024,15 @@ ${withOriginal ? `
               "issue": "terminology",
               "term": "the glossary entry this is about, exactly as it is written there",
               "quote": "verbatim quotation from the translation, 8-25 words",
-              "problem": "the term is rendered here differently from the rest of the book"
+              "problem": "what is wrong with the glossary entry",
+              "glossary": { "action": "edit", "entry": "the same entry", "fix": { "translation": "…" } }
             },
             {
               "scope": "passport",
               "issue": "typography",
               "quote": "verbatim quotation from the translation, 8-25 words",
-              "problem": "dialogue here is set differently from the rest of the book"
+              "problem": "what the passport is silent about or states wrongly",
+              "note": { "topic": "what the note is about", "advice": "what the translator is to do" }
             }
           ]
         }

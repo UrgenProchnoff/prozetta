@@ -26,6 +26,25 @@ function findingQuote(f) {
     return `<div class="rev-quote" title="${esc(t('rev.inTextHint'))}">«${lines}»</div>`;
 }
 
+// Marks a glossary proposal that came from the translation review rather than
+// the glossary's own: its quote is from the translation, not the book.
+function fromTranslation(m) {
+    return m.from === 'translation'
+        ? `<span class="badge b-disputed" title="${esc(t('gloss.fromReviewHint'))}">${esc(t('gloss.fromReview'))}</span> ` : '';
+}
+
+// A proposed glossary edit in one line: what would change, and how.
+function glossaryEditText(g) {
+    const fields = Object.entries(g.fix || {}).map(([k, v]) => `${k} «${v}»`).join(', ');
+    switch (g.action) {
+        case 'add': return `+ ${g.fix?.original} → «${g.fix?.translation}»`;
+        case 'remove': return `− ${g.entry}`;
+        case 'merge': return `${g.entry} ⇒ ${g.mergeInto}`;
+        case 'link': return `${g.entry} = ${g.linkTo}`;
+        default: return `${g.entry}: ${fields}`;
+    }
+}
+
 async function api(url, opts = {}) {
     if (opts.body !== undefined) {
         opts.headers = { 'Content-Type': 'application/json', ...opts.headers };
@@ -1108,8 +1127,10 @@ async function renderGlossary(prefix) {
         }).join('');
 
         // Every path that changes a finding ends here, so the guard on the
-        // "ask the model" button is refreshed in one place rather than six.
+        // "ask the model" button is refreshed in one place rather than six —
+        // and so are the counts above the findings, "accept all" among them.
         updateAsk();
+        renderReview();
     }
 
     // A model finding gets its own row under the entry rather than a tooltip:
@@ -1132,7 +1153,7 @@ async function renderGlossary(prefix) {
 
         return `<tr class="rv-row"><td colspan="7">
             <div class="rv-head"><span class="rv-action rv-${esc(m.action)}">${esc(t('gloss.rv.' + m.action))}</span>
-                ${esc(m.detail)}${m.mergeInto ? ` → <b>${esc(m.mergeInto)}</b>` : ''}${m.linkTo ? ` = <b>${esc(m.linkTo)}</b>` : ''}</div>
+                ${fromTranslation(m)}${esc(m.detail)}${m.mergeInto ? ` → <b>${esc(m.mergeInto)}</b>` : ''}${m.linkTo ? ` = <b>${esc(m.linkTo)}</b>` : ''}</div>
             <div class="rv-quote">${esc(m.quote)}</div>
             ${fix ? `<div class="rv-fix">${fix}</div>` : ''}
             <div class="rv-acts">${buttons.join(' ')}</div>
@@ -1350,12 +1371,15 @@ async function renderGlossary(prefix) {
         const gradeLine = grade
             ? `<div class="rv-grade"><b>${esc(grade)}</b>${review.summary ? ` — ${esc(review.summary)}` : ''}</div>`
             : '';
+        const all = acceptable();
+        const acceptAll = all.count
+            ? ` <button id="rv-accept-all" class="primary" title="${esc(t('gloss.rvAcceptAllTitle'))}">${esc(t('gloss.rvAcceptAll', { n: all.count }))}</button>` : '';
         const head = gradeLine + `<div class="rv-bar">${esc(t('gloss.rvBar', {
-            n: countOutstanding(), total: review.total, model: review.model || '—', when }))}${hidden}</div>`;
+            n: countOutstanding(), total: review.total, model: review.model || '—', when }))}${hidden}${acceptAll}</div>`;
         const adds = (review.additions || []).map((a, i) => `
             <div class="rv-add">
                 <div class="rv-head"><span class="rv-action rv-add-tag">${esc(t('gloss.rv.add'))}</span>
-                    <b>${esc(a.fix?.original || '')}</b> → ${esc(a.fix?.translation || '')} — ${esc(a.problem)}</div>
+                    ${fromTranslation(a)}<b>${esc(a.fix?.original || '')}</b> → ${esc(a.fix?.translation || '')} — ${esc(a.problem)}</div>
                 <div class="rv-quote">${esc(a.quote)}</div>
                 <div class="rv-acts"><button data-add="${i}">${esc(t('gloss.rvAdd'))}</button>
                     <button data-dismiss-add="${i}" data-key="${esc(a.key || '')}" title="${esc(t('gloss.rvDismissTitle'))}">${esc(t('gloss.rvDismiss'))}</button></div>
@@ -1363,7 +1387,82 @@ async function renderGlossary(prefix) {
         box.innerHTML = head + (adds ? `<div class="rv-adds">${adds}</div>` : '');
     }
 
+    // Every proposal that can be taken without a judgement only a person can
+    // make. Left for a person: a merge, which has no single right result, and a
+    // link where both entries carry a note of their own — taking it would drop
+    // the clone's note, and the one-by-one button asks before it does.
+    function acceptable() {
+        const edits = [], removes = [], links = [];
+        let manual = 0;
+        findings.forEach((list, idx) => {
+            for (const m of (list || []).filter(isModel)) {
+                if (m.action === 'edit' && m.fix) edits.push([idx, m]);
+                else if (m.action === 'remove') removes.push([idx, m]);
+                else if (m.action === 'link' && m.linkTo) {
+                    const head = terms.find(x => trimmed(x.original) === trimmed(m.linkTo));
+                    const note = linkOf(terms[idx].notes) === null ? trimmed(terms[idx].notes) : '';
+                    if (head && note && trimmed(head.notes)) manual++;
+                    else links.push([idx, m]);
+                } else manual++;
+            }
+        });
+        const adds = (review?.additions || []).filter(a => a?.fix?.original);
+        // An entry asked both to change and to go is removed: the edit would be
+        // to a row that is no longer there.
+        const removed = new Set(removes.map(([idx]) => idx));
+        const live = ([idx]) => !removed.has(idx);
+        return {
+            edits: edits.filter(live), links: links.filter(live), removes: [...removed], adds, manual,
+            count: edits.filter(live).length + links.filter(live).length + removed.size + adds.length,
+        };
+    }
+
+    function acceptAll() {
+        const all = acceptable();
+        if (!all.count) return;
+        if (!confirm(t('gloss.rvAcceptAllConfirm', {
+            edit: all.edits.length, link: all.links.length, remove: all.removes.length, add: all.adds.length, manual: all.manual,
+        }))) return;
+        for (const [idx, m] of all.edits) {
+            Object.assign(terms[idx], m.fix);
+            findings[idx] = findings[idx].filter(x => x !== m);
+        }
+        for (const [idx, m] of all.links) {
+            const term = terms[idx];
+            const head = terms.find(x => trimmed(x.original) === trimmed(m.linkTo));
+            const note = linkOf(term.notes) === null ? trimmed(term.notes) : '';
+            if (head && note && !trimmed(head.notes)) head.notes = note;
+            if (head && !head.gender && term.gender) head.gender = term.gender;
+            term.notes = `= ${trimmed(m.linkTo)}`;
+            findings[idx] = findings[idx].filter(x => x !== m && !isHint(x));
+        }
+        // From the bottom up, so the indices still to come stay right.
+        for (const idx of [...all.removes].sort((a, b) => b - a)) {
+            terms.splice(idx, 1);
+            counts.splice(idx, 1);
+            findings.splice(idx, 1);
+            reindexPeople(i => (i === idx ? -1 : i > idx ? i - 1 : i));
+        }
+        // Last: each one moves every row down by one.
+        for (const a of [...all.adds].reverse()) {
+            terms.unshift({
+                original: a.fix.original, translation: a.fix.translation || '',
+                type: a.fix.type || 'name', gender: a.fix.gender || null, notes: a.fix.notes || '',
+            });
+            counts.unshift(null);
+            findings.unshift([]);
+            reindexPeople(j => j + 1);
+        }
+        review.additions = (review.additions || []).filter(a => !all.adds.includes(a));
+        markDirty();
+        renderFilter();
+        renderReview();
+        renderRows();
+        toast(t('gloss.rvAcceptedAll', { n: all.count }), 'ok');
+    }
+
     document.getElementById('g-review').addEventListener('click', async (e) => {
+        if (e.target.id === 'rv-accept-all') { acceptAll(); return; }
         if (e.target.id === 'rv-restore') {
             e.preventDefault();
             await dismissFinding(null, true);
@@ -2369,10 +2468,15 @@ async function renderMonitor(prefix) {
         if (!r || r.broken) { reviewEl.innerHTML = queueBox() + manualRunBox(); wireBookCalls(prefix, refreshGrid); return; }
 
         const queued = (summary.adviceQueue || []).reduce((n, q) => n + q.items.length, 0);
+        // An accepted finding leaves the list: it is in the queue above, with
+        // its own way back out, and showing it twice only made the list longer.
+        // It stays a finding until the fix is made and its quote is gone, so
+        // taking it out of the queue brings it back here.
+        const waiting = r.open.filter(f => !f.queued);
         const verdict = [
             r.round ? t('rev.round', { n: r.round }) : null,
             r.score != null ? t('rev.score', { score: r.score }) : null,
-            t('rev.counts', { open: r.open.length, done: r.done, hidden: r.hidden }),
+            t('rev.counts', { open: waiting.length, done: r.done, hidden: r.hidden }),
             queued ? t('rev.queued', { n: queued }) : null,
         ].filter(Boolean).join(' · ');
 
@@ -2385,22 +2489,24 @@ async function renderMonitor(prefix) {
         // A rule under the last finding of each chunk, so a block of findings on
         // one chunk reads as a block. The list is already ordered by chunk.
         const lastOfChunk = new Set();
-        r.open.forEach((f, i) => { if (r.open[i + 1]?.chunk !== f.chunk) lastOfChunk.add(f.key); });
-        const rows = r.open.map(f => {
+        waiting.forEach((f, i) => { if (waiting[i + 1]?.chunk !== f.chunk) lastOfChunk.add(f.key); });
+        const rows = waiting.map(f => {
             // Anything carrying advice can be queued on its chunk, whatever scope
             // the model filed it under — it gets that wrong, and a misrouted
             // finding should be one click from useful rather than a dead end. The
             // link to the page it names stays alongside for the ones that really
             // do belong there.
-            //
-            // A queued finding stays in the list — it only leaves once the fix is
-            // made and its quote is gone — so it has to look different, and its
-            // button has to be the way back out.
+            const transfer = f.glossaryEdits?.length && !f.sent ? 'toGlossary'
+                : f.scope === 'passport' && (f.note || f.advice) ? 'toPassport' : null;
             const act = [
-                f.queued
-                    ? `<button data-rev="undo" data-key="${esc(f.key)}">${esc(t('rev.unqueue'))}</button>`
-                    : (f.advice ? `<button class="primary" data-rev="accept" data-key="${esc(f.key)}">${esc(t('rev.accept'))}</button>` : ''),
-                f.scope !== 'chunk' ? `<a class="btn" href="${where[f.scope]}">${esc(t('rev.goTo.' + f.scope))}</a>` : '',
+                f.advice ? `<button class="primary" data-rev="accept" data-key="${esc(f.key)}">${esc(t('rev.accept'))}</button>` : '',
+                // What the finding proposes for the glossary or the passport is
+                // carried there in one click, as a proposal: it is accepted or
+                // rejected on that page, with the rest. Where there is nothing to
+                // carry — or it has been carried — the page is a link away.
+                transfer
+                    ? `<button class="primary" data-rev="${transfer}" data-key="${esc(f.key)}" title="${esc(t('rev.' + transfer + 'Title'))}">${esc(t('rev.' + transfer))}</button>`
+                    : f.scope !== 'chunk' ? `<a class="btn" href="${where[f.scope]}">${esc(t('rev.goTo.' + f.scope))}</a>` : '',
                 // Fixing the glossary changes nothing already translated, so the
                 // finding also offers the work that would: the chunks using the
                 // term. The count is on the button because it is the bill.
@@ -2408,24 +2514,27 @@ async function renderMonitor(prefix) {
                 // Dealt with, as opposed to wrong. A glossary or passport finding
                 // has no other way to close: what it asks for never shows up in
                 // the text it quoted.
-                f.queued ? '' : `<button data-rev="handled" data-key="${esc(f.key)}">${esc(t('rev.handled'))}</button>`,
+                `<button data-rev="handled" data-key="${esc(f.key)}">${esc(t('rev.handled'))}</button>`,
             ].filter(Boolean).join(' ');
-            return `<div class="rev-item${f.queued ? ' rev-done' : ''}${lastOfChunk.has(f.key) ? ' rev-chunk-end' : ''}">
+            return `<div class="rev-item${lastOfChunk.has(f.key) ? ' rev-chunk-end' : ''}">
                 <div class="rev-head">
                     <span class="badge b-${f.scope === 'chunk' ? 'best_effort' : 'disputed'}">${esc(t('rev.scope.' + f.scope))}</span>
                     <a class="btn" href="#/chunk/${encodeURIComponent(prefix)}/${f.chunk}?finding=${encodeURIComponent(f.key)}"
                        title="${esc(t('rev.goToQuote'))}">${f.chunk + 1}</a>
                     ${rankBadge(f)}
                     <span class="rev-issue">${esc(f.issue)}</span>
-                    ${f.queued ? `<span class="badge b-success">${esc(t('rev.queuedBadge'))}</span>` : ''}
+                    ${f.sent ? `<span class="badge b-success" title="${esc(t('rev.sentHint'))}">${esc(t('rev.sentBadge'))}</span>` : ''}
                     <span class="spacer"></span>
                     ${act}
-                    ${f.queued ? '' : `<button data-rev="dismiss" data-key="${esc(f.key)}">${esc(t('rev.dismiss'))}</button>`}
+                    <button data-rev="dismiss" data-key="${esc(f.key)}">${esc(t('rev.dismiss'))}</button>
                 </div>
                 ${f.term ? `<div class="rev-term">${esc(t('rev.term', { term: f.term }))}</div>` : ''}
                 ${findingQuote(f)}
                 <div class="rev-problem">${esc(f.problem)}</div>
                 ${f.advice ? `<div class="rev-advice">→ ${esc(f.advice)}</div>` : ''}
+                ${(f.glossaryEdits || []).map(g => `<div class="rev-advice">✎ ${esc(t('rev.glossaryEdit', { edit: glossaryEditText(g) }))}</div>`).join('')}
+                ${f.note ? `<div class="rev-advice">📝 ${esc(f.note.topic ? `${f.note.topic}: ${f.note.advice}` : f.note.advice)}${
+                    ['from', 'until'].filter(k => f.note[k]).map(k => `<div class="cfg-hint">${esc(t('rev.noteBound.' + k, { quote: f.note[k] }))}</div>`).join('')}</div>` : ''}
             </div>`;
         }).join('');
 
@@ -2455,7 +2564,7 @@ async function renderMonitor(prefix) {
             </details>`
             : '';
 
-        reviewEl.innerHTML = queueBox() + `<details class="usage-details" ${r.open.length ? 'open' : ''}>
+        reviewEl.innerHTML = queueBox() + `<details class="usage-details" ${waiting.length ? 'open' : ''}>
             <summary>${esc(t('rev.heading'))} <span class="cfg-hint">${esc(verdict)}</span></summary>
             ${r.summary ? `<div class="rev-summary">${esc(r.summary)}</div>` : ''}
             ${rows || `<div class="cfg-hint">${esc(t('rev.allHandled'))}</div>`}
@@ -2559,11 +2668,12 @@ async function renderMonitor(prefix) {
                 { method: 'POST', body: { key: btn.dataset.key, action: btn.dataset.rev } });
             toast({
                 accept: () => t('rev.accepted', { chunk: res.chunk + 1 }),
-                undo: () => t('rev.unqueued'),
                 dismiss: () => t('rev.dismissed'),
                 restore: () => t('rev.restored'),
                 handled: () => t('rev.markedDone'),
                 queueTerm: () => t('rev.termQueued', { n: res.queued }),
+                toGlossary: () => t('rev.sentToGlossary', { n: res.sent }),
+                toPassport: () => t('rev.sentToPassport'),
             }[btn.dataset.rev](), 'ok');
             refreshGrid();
         } catch (err) {
@@ -3209,20 +3319,64 @@ async function renderPassport(prefix) {
     const notesBody = document.getElementById('p-notes');
     const notesCost = document.getElementById('p-notes-cost');
     let notesChanged = false;
+    // Where a note starts and stops holding. A place is a quote from the
+    // original, found here by what a person remembers of it — see
+    // src_v4/core/note_bounds.js. `bounds` says where each quote falls.
+    const bounds = data.bounds || {};
+    let picking = null;   // {i, side, query, hits}
+    const boundChip = (n, i, side) => {
+        const quote = n[side];
+        if (!quote) return `<button class="btn-sm" data-nb-set="${side}" data-ni="${i}">${esc(t('pass.noteSet.' + side))}</button>`;
+        const at = bounds[quote];
+        const where = at?.found ? t('pass.noteAt.' + side, { n: at.chunk + 1 }) : t('pass.noteAtUnknown.' + side);
+        const short = quote.length > 70 ? quote.slice(0, 70) + '…' : quote;
+        const lost = at && !at.found ? `<div class="warn-text">${esc(t(at.ambiguous ? 'pass.noteBoundTwice' : 'pass.noteBoundLost'))}</div>` : '';
+        return `<span class="note-bound" title="${esc(quote)}">${esc(where)} «${esc(short)}»
+            <button class="btn-sm" data-nb-clear="${side}" data-ni="${i}" title="${esc(t('pass.noteBoundClear'))}">✕</button></span>${lost}`;
+    };
+    const boundsRow = (n, i) => {
+        const from = bounds[n.from], until = bounds[n.until];
+        const backwards = from?.found && until?.found && from.chunk > until.chunk;
+        return `<div class="note-bounds">${!n.from && !n.until ? `<span class="cfg-hint">${esc(t('pass.noteWholeBook'))}</span>` : ''}
+            ${boundChip(n, i, 'from')} ${boundChip(n, i, 'until')}
+            ${backwards ? `<div class="warn-text">${esc(t('pass.noteBackwards'))}</div>` : ''}</div>`;
+    };
+    const pickRow = () => {
+        const hits = picking.hits;
+        const hit = (h, k) => `<div class="st-line">
+            <a class="cfg-hint" href="#/chunk/${encodeURIComponent(prefix)}/${h.chunk}">#${h.chunk + 1}</a>
+            <span class="cfg-hint">${esc(t('pass.noteSide.' + h.side))}</span>
+            <span class="st-text">${esc(h.text)}${h.approx ? `<div class="cfg-hint">${esc(t('pass.noteApprox', { quote: h.quote }))}</div>` : ''}</span>
+            <button class="btn-sm" data-nb-pick="${k}">${esc(t('pass.notePick'))}</button></div>`;
+        return `<tr class="nb-find"><td colspan="3"><div class="st-search">
+            <div class="cfg-hint" style="margin-bottom:6px">${esc(t('pass.noteFindHint.' + picking.side))}</div>
+            <div class="row">
+                <input id="nb-query" type="search" placeholder="${esc(t('book.structureFind'))}" value="${esc(picking.query)}">
+                <button id="nb-find">${esc(t('book.structureFindBtn'))}</button>
+                <button id="nb-close" class="btn-sm" title="${esc(t('book.structureFindClose'))}">✕</button>
+            </div>
+            ${hits ? (hits.length ? `<div class="st-found">${hits.map(hit).join('')}</div>`
+                : `<div class="cfg-hint" style="margin-top:6px">${esc(t('book.structureFindNone', { q: picking.query }))}</div>`) : ''}
+        </div></td></tr>`;
+    };
     const renderNotes = () => {
         notesBody.innerHTML = p.notes.length ? p.notes.map((n, i) => {
             const status = n.status || 'proposed';
             const actions = [
                 status !== 'accepted' ? `<button class="primary" data-note="accepted" data-ni="${i}">${esc(t('pass.noteAccept'))}</button>` : '',
                 status !== 'rejected' ? `<button class="btn" data-note="rejected" data-ni="${i}">${esc(t('pass.noteReject'))}</button>` : '',
-                n.source === 'hand' ? `<button class="danger" data-note="delete" data-ni="${i}" title="${esc(t('pass.noteDelete'))}">✕</button>` : '',
+                n.source !== 'model' ? `<button class="danger" data-note="delete" data-ni="${i}" title="${esc(t('pass.noteDelete'))}">✕</button>` : '',
             ].join(' ');
             return `<tr data-ni="${i}" class="note-${status}"${status === 'rejected' ? ' style="opacity:.5"' : ''}>
                 <td><input data-nf="topic" value="${esc(n.topic || '')}"></td>
-                <td><div class="grow" data-val="${esc(n.advice || '')}"><textarea data-nf="advice" rows="1">${esc(n.advice || '')}</textarea></div></td>
-                <td><div class="cfg-hint">${esc(t('pass.noteStatus.' + status))}${n.source === 'hand' ? ' · ' + esc(t('pass.noteHand')) : ''}</div>${actions}</td>
-            </tr>`;
+                <td><div class="grow" data-val="${esc(n.advice || '')}"><textarea data-nf="advice" rows="1">${esc(n.advice || '')}</textarea></div>${boundsRow(n, i)}</td>
+                <td><div class="cfg-hint">${esc(t('pass.noteStatus.' + status))}${n.source === 'hand' ? ' · ' + esc(t('pass.noteHand')) : n.source === 'review' ? ' · ' + esc(t('pass.noteReview')) : ''}</div>${actions}</td>
+            </tr>${picking?.i === i ? pickRow() : ''}`;
         }).join('') : `<tr><td colspan="3" class="cfg-hint">${esc(t('pass.notesNone'))}</td></tr>`;
+        if (picking) {
+            const q = document.getElementById('nb-query');
+            if (q && picking.focus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); picking.focus = false; }
+        }
         const accepted = p.notes.filter(n => n.status === 'accepted').length;
         // The count comes from the server's tokenizer and describes the saved
         // passport; after a change it is stale until the next save.
@@ -3232,12 +3386,56 @@ async function renderPassport(prefix) {
     };
     renderNotes();
 
+    const findPlace = async () => {
+        picking.query = document.getElementById('nb-query').value;
+        const q = picking.query.trim();
+        if (q.length < 3) { toast(t('pass.noteFindShort'), 'error'); return; }
+        try {
+            picking.hits = (await api(`/api/projects/${encodeURIComponent(prefix)}/passport/find?q=${encodeURIComponent(q)}`)).hits;
+        } catch (err) { toast(err.message, 'error'); return; }
+        picking.focus = true;
+        renderNotes();
+    };
+    notesBody.addEventListener('keydown', (e) => {
+        if (e.target.id === 'nb-query' && e.key === 'Enter') findPlace();
+        if (e.target.id === 'nb-query' && e.key === 'Escape') { picking = null; renderNotes(); }
+    });
     notesBody.addEventListener('click', (e) => {
+        if (e.target.closest('#nb-find')) { findPlace(); return; }
+        if (e.target.closest('#nb-close')) { picking = null; renderNotes(); return; }
+        const set = e.target.closest('button[data-nb-set]');
+        if (set) {
+            picking = { i: +set.dataset.ni, side: set.dataset.nbSet, query: picking?.query || '', hits: picking?.hits || null, focus: true };
+            renderNotes();
+            return;
+        }
+        const pick = e.target.closest('button[data-nb-pick]');
+        if (pick) {
+            const h = picking.hits[+pick.dataset.nbPick];
+            p.notes[picking.i][picking.side] = h.quote;
+            bounds[h.quote] = { found: true, chunk: h.chunk, cut: h.cut };
+            picking = null;
+            notesChanged = true;
+            renderNotes();
+            markDirty();
+            return;
+        }
+        const clear = e.target.closest('button[data-nb-clear]');
+        if (clear) {
+            delete p.notes[+clear.dataset.ni][clear.dataset.nbClear];
+            notesChanged = true;
+            renderNotes();
+            markDirty();
+            return;
+        }
         const btn = e.target.closest('button[data-note]');
         if (!btn) return;
         const i = +btn.dataset.ni;
         if (btn.dataset.note === 'delete') p.notes.splice(i, 1);
         else p.notes[i].status = btn.dataset.note;
+        // Rows below a deleted one move up; a search left open would follow
+        // the wrong note.
+        picking = null;
         notesChanged = true;
         renderNotes();
         markDirty();

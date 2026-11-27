@@ -24,6 +24,7 @@ import { writeFileAtomic } from '../utils/atomic_write.js';
 import { countTokens, chunkTokens } from '../core/tokenizer.js';
 import { verifyFindings, carryDecisions } from '../core/translation_review.js';
 import { loadPassport, isEmptyPassport, acceptedNotes } from '../core/passport.js';
+import { placeNotes, bookText, translationAt } from '../core/note_bounds.js';
 import { fingerprint, fingerprintMismatch, nextReviewRound, reviewScore } from '../core/book_call.js';
 import config from '../config.js';
 import { getPrompts } from '../prompts.js';
@@ -44,6 +45,28 @@ function readGlossary(state) {
         const glossary = JSON.parse(fs.readFileSync(path, 'utf-8'));
         return Array.isArray(glossary) ? glossary : [];
     } catch { return []; }
+}
+
+/**
+ * The notes as the reviewer is shown them. A bounded note says where it starts
+ * and stops in words the reviewer can find: the original's own quote when the
+ * original is in front of it, the translated paragraph at that place when only
+ * the translation is. Without its boundaries the second half of a note reads as
+ * a rule for the whole book, and every chunk before the change as breaking it.
+ */
+function reviewerNotes(notes, chunks, withOriginal) {
+    const placed = placeNotes(notes, chunks);
+    const book = placed.some(n => n.place) && !withOriginal ? bookText(chunks) : null;
+    const show = (quote, place) => {
+        if (!quote || !place?.found) return undefined;
+        return withOriginal ? quote : translationAt(book, place) || undefined;
+    };
+    return placed.map(n => ({
+        topic: n.topic || undefined,
+        advice: n.advice,
+        from: show(n.from, n.place?.from),
+        until: show(n.until, n.place?.until),
+    }));
 }
 
 /**
@@ -105,8 +128,7 @@ export function buildTranslationReviewPrompt(state, { withOriginal = false } = {
         voices: passport.voices?.length ? passport.voices : undefined,
         addressRegistry: passport.addressRegistry?.length ? passport.addressRegistry : undefined,
         // Accepted only: a proposal nobody agreed to is not the intent.
-        notes: acceptedNotes(passport).length
-            ? acceptedNotes(passport).map(n => ({ topic: n.topic || undefined, advice: n.advice })) : undefined,
+        notes: acceptedNotes(passport).length ? reviewerNotes(acceptedNotes(passport), chunks, withOriginal) : undefined,
     };
 
     // Bilingually the two texts are interleaved rather than stacked: aligning
@@ -183,7 +205,8 @@ export function applyTranslationReview(state, raw, meta) {
     }
 
     const list = Array.isArray(raw?.findings) ? raw.findings : (Array.isArray(raw) ? raw : []);
-    const { findings, rejected, rejectedFindings } = verifyFindings(list, chunks, readGlossary(state));
+    const { findings, rejected, rejectedFindings } = verifyFindings(list, chunks, readGlossary(state),
+        chunks.map(c => c.original || '').join('\n'));
 
     // And by place, for the findings that quote a decided passage differently.
     const carry = carryDecisions(previous, findings, chunks);
@@ -338,20 +361,25 @@ export async function runTranslationReviewStage(state) {
     for (const n of applied.notes) console.log(`[Review] ${n}`);
 
     const { findings, rejected, review } = applied;
-    const dropped = Object.values(rejected).reduce((a, b) => a + b, 0);
+    // Two of the counts are of findings kept, only lighter by an attachment.
+    const KEPT = new Set(['glossaryEdit', 'noteBound']);
+    const dropped = Object.entries(rejected).reduce((a, [k, n]) => a + (KEPT.has(k) ? 0 : n), 0);
+    const trimmed = Object.entries(rejected).some(([k, n]) => KEPT.has(k) && n);
     console.log(`[Review] Translation review #${review.round}: ${review.returned} finding(s) returned, ${findings.length} passed verification` +
         `${dropped ? `, ${dropped} dropped` : ''}.`);
-    if (dropped) {
+    if (dropped || trimmed) {
         const names = {
             malformed: 'malformed or an unknown scope',
             badQuote: 'quote not found in the translation',
             ambiguousQuote: 'quote occurs in more than one chunk',
             noAdvice: 'asked for a fix without saying what to do',
+            glossaryEdit: 'kept, without its glossary edit: the edit failed the checks',
+            noteBound: 'kept, without a boundary of its note: the quoted place is not in the text, or is in it twice',
         };
         for (const [key, n] of Object.entries(rejected)) {
             if (n) console.log(`[Review]   ${n} × ${names[key]}`);
         }
-        console.log(`[Review] The dropped findings are kept in "rejectedFindings" with the check each failed.`);
+        if (dropped) console.log(`[Review] The dropped findings are kept in "rejectedFindings" with the check each failed.`);
     }
     if (rejected.badQuote) {
         console.log(`[Review] Note: a quote that is not in the translation means the model wrote from memory ` +

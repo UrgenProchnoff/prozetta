@@ -2,12 +2,10 @@
  * Build the book passport: one whole-book call plus the parts that are cheaper
  * and more accurate to compute.
  *
- * The split is deliberate. Measured against chapter headings in an existing
- * project, asking a model which character narrates each segment scored 66%,
- * while anchors plus a rotation prior scored 100% — so the model is asked only
- * for the cast and their dossiers, which no amount of counting can supply, and
- * the map itself is computed. Narrative person and pronoun-based gender go into
- * the prompt as evidence rather than as questions, for the same reason.
+ * The model is asked for the cast and their dossiers, which no amount of
+ * counting can supply; narrative person and pronoun-based gender go into the
+ * prompt as evidence rather than as questions. Who narrates which chunk is a
+ * second whole-book call, below.
  */
 
 import fs from 'fs';
@@ -16,7 +14,6 @@ import { llmManager, bookModelEnabled, explainCallFailure } from '../core/llm_cl
 import { usageTracker } from '../core/usage_tracker.js';
 import { extractJson } from '../utils/parsers.js';
 import { detectNarrativePerson, characterCandidates, nameRegex } from '../core/text_stats.js';
-import { buildPovMap, describePovMap } from '../core/pov_map.js';
 import { spansFromQuotes } from '../core/quoted_spans.js';
 import { splitTextIntoChunks, chunkTokens, countTokens } from '../core/tokenizer.js';
 import { fingerprint, fingerprintMismatch } from '../core/book_call.js';
@@ -421,31 +418,29 @@ export function applyPassportAnswer(state, answer, meta) {
 
     const castNames = passport.characters.map(c => c.name);
 
-    // The map is computed: anchors plus a rotation prior score 99.4% on
-    // chapter-aligned chunks and cost nothing. What that cannot see — a book
-    // whose point of view changes without any chapter heading to key off — is a
-    // separate whole-book call (runPovMapStage), offered only when it is needed:
-    // both multi-narrator books so far needed it, the other four had one
-    // narrator and no map to draw.
+    // The map is the model's: a whole-book call of its own (runPovMapStage)
+    // names every change of narrator by quoting it, and the quotes are checked
+    // against the text. Counting names spoken in dialogue was tried first and
+    // went quietly wrong — on Halting State the cast came back as full names
+    // nobody says aloud, and 23 of 38 chapters went to the wrong narrator.
+    //
+    // A map from that call was paid for. Rebuilding the passport is no reason
+    // to throw it away, as long as it still speaks of this cast.
     const previous = { map: passport.povMap || [], from: passport.source?.povMapFrom, model: passport.source?.povMapModel, at: passport.source?.povMapAt };
-    passport.povMap = buildPovMap(chunks, castNames);
-    let mapSource = 'anchors';
+    passport.povMap = [];
+    let mapSource = null;
     let mapMeta = {};
-
-    // A map from quoted boundaries was paid for with a whole-book call of its
-    // own. Rebuilding the passport is no reason to throw it away, as long as it
-    // still speaks of this cast.
-    if (castNames.length > 1 && !passport.povMap.length && previous.from === 'quotes' && previous.map.length) {
+    if (castNames.length > 1 && previous.from === 'quotes' && previous.map.length) {
         const known = new Set(castNames.map(n => n.toLowerCase()));
         if (previous.map.every(s => !s.character || known.has(String(s.character).toLowerCase()))) {
             passport.povMap = previous.map;
             mapSource = 'quotes';
             mapMeta = { povMapModel: previous.model, povMapAt: previous.at };
-            console.log(`[Passport] No anchors found — keeping the map from quoted boundaries built earlier (${previous.map.length} span(s)).`);
+            console.log(`[Passport] Keeping the point-of-view map from quoted boundaries built earlier (${previous.map.length} span(s)).`);
         }
     }
 
-    passport.source = { model: conf.modelName, generatedAt: new Date().toISOString(), povMapFrom: mapSource, ...mapMeta };
+    passport.source = { model: conf.modelName, generatedAt: new Date().toISOString(), ...(mapSource ? { povMapFrom: mapSource } : {}), ...mapMeta };
 
     savePassport(passportPath, passport);
 
@@ -462,14 +457,12 @@ export function applyPassportAnswer(state, answer, meta) {
     }
 
     if (castNames.length > 1) {
-        const stats = describePovMap(chunks, castNames);
-        const covered = passport.povMap.reduce((n, s) => n + (s.toChunk - s.fromChunk + 1), 0);
-        console.log(`[Passport] Point-of-view map: ${passport.povMap.length} span(s) over ${covered}/${chunks.length} chunks, ` +
-            `from ${mapSource === 'quotes' ? 'quoted boundaries asked for earlier' : 'anchors + rotation'} ` +
-            `(${stats.anchors} of ${stats.segments} segments carried an anchor).`);
-        if (!passport.povMap.length) {
-            console.warn('[Passport] No anchors to build the map on. Ask for the point-of-view boundaries — the button is on ' +
-                'the passport page, or --stage=povmap. Until then chunks stay undetermined, and the translation prompt ' +
+        if (passport.povMap.length) {
+            const covered = passport.povMap.reduce((n, s) => n + (s.toChunk - s.fromChunk + 1), 0);
+            console.log(`[Passport] Point-of-view map: ${passport.povMap.length} span(s) over ${covered}/${chunks.length} chunks.`);
+        } else {
+            console.warn(`[Passport] ${castNames.length} narrators and no point-of-view map yet. Ask for the boundaries — the button ` +
+                'is on the passport page, or --stage=povmap. Until then chunks stay undetermined, and the translation prompt ' +
                 'is told to avoid gendered forms rather than guess.');
         }
     } else if (castNames.length === 1) {

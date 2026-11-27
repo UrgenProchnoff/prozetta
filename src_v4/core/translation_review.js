@@ -28,6 +28,8 @@
  */
 
 import { locateQuote } from './quoted_spans.js';
+import { bookText, placeQuote, boundaryFromTranslation } from './note_bounds.js';
+import { verifyFindings as verifyGlossaryFindings } from './glossary_review.js';
 
 /** Where a finding has to be acted on. */
 const SCOPES = new Set(['chunk', 'glossary', 'passport']);
@@ -67,14 +69,18 @@ function locateInJoined(chunks, quote) {
  * @param {Array} raw        findings as parsed from the model
  * @param {Array} chunks     project chunks, carrying `translation`
  * @param {Array} glossary   the glossary, for checking the entry a finding names
+ * @param {string} [sourceText]  the original, joined — what a proposed glossary
+ *   entry's spelling is checked against
  * @returns {{findings: Array, rejected: object, rejectedFindings: Array}}
  */
-export function verifyFindings(raw, chunks, glossary = []) {
+export function verifyFindings(raw, chunks, glossary = [], sourceText = '') {
     const rejected = {
         malformed: 0,        // not an object, or a scope we do not implement
         badQuote: 0,         // the quote is in no chunk's translation
         ambiguousQuote: 0,   // the quote is in more than one chunk
         noAdvice: 0,         // asks for a fix without saying what to do
+        glossaryEdit: 0,     // kept, but its proposed glossary edit failed the glossary review's checks
+        noteBound: 0,        // kept, but a boundary of its note is in neither text, or in it twice
     };
     const rejectedFindings = [];
     // Kept as written, trimmed only for length: what the model actually said is
@@ -92,6 +98,21 @@ export function verifyFindings(raw, chunks, glossary = []) {
     };
 
     if (!Array.isArray(raw)) return { findings: [], rejected, rejectedFindings };
+
+    // A note's boundary is wanted in the original, where the note is applied. A
+    // reviewer without the original can only quote the translation; that quote
+    // is taken back to the original paragraph it stands for.
+    let book = null;
+    const boundary = (value) => {
+        const quote = String(value || '').trim();
+        if (!quote) return null;
+        book = book || bookText(chunks);
+        if (placeQuote(book, quote).found) return quote.slice(0, 300);
+        const back = boundaryFromTranslation(book, quote);
+        if (back) return back;
+        rejected.noteBound++;
+        return null;
+    };
 
     const findings = [];
     for (const item of raw) {
@@ -158,6 +179,36 @@ export function verifyFindings(raw, chunks, glossary = []) {
         const at = locateQuote(own, quote);
         const seen = at.occurrences ? own.slice(at.offset, at.end) : null;
 
+        // What to change, so the finding can be accepted rather than only read.
+        // A glossary edit goes through the glossary review's own contract —
+        // the same checks, and in the editor the same "Accept" — and one that
+        // fails it costs the button, not the finding. A passport finding brings
+        // a note for the translator: the passport's free-form field, which every
+        // decision a finding here can ask for fits into.
+        let glossaryEdits = null;
+        if (scope === 'glossary' && item.glossary && typeof item.glossary === 'object') {
+            const proposal = {
+                ...item.glossary,
+                issue: String(item.issue || '').trim().slice(0, 40) || 'other',
+                problem: String(item.problem || '').trim().slice(0, 300),
+                quote,
+            };
+            const checked = verifyGlossaryFindings([proposal], glossary, sourceText, { checkQuote: false });
+            if (checked.findings.length) glossaryEdits = checked.findings.map(({ index, ...f }) => f);
+            else rejected.glossaryEdit++;
+        }
+        let note = null;
+        if (scope === 'passport' && item.note && typeof item.note === 'object' && String(item.note.advice || '').trim()) {
+            const from = boundary(item.note.from);
+            const until = boundary(item.note.until);
+            note = {
+                topic: String(item.note.topic || '').trim().slice(0, 80),
+                advice: String(item.note.advice).trim().slice(0, 600),
+                ...(from ? { from } : {}),
+                ...(until ? { until } : {}),
+            };
+        }
+
         findings.push({
             scope,
             chunk: hits[0],
@@ -167,6 +218,8 @@ export function verifyFindings(raw, chunks, glossary = []) {
             ...(term ? { term } : {}),
             quote,
             ...(seen ? { seen } : {}),
+            ...(glossaryEdits ? { glossaryEdits } : {}),
+            ...(note ? { note } : {}),
         });
     }
 

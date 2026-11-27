@@ -255,7 +255,8 @@ export function projectSummary(prefix) {
                 kind: p.kind || null,
                 person: p.narration?.person || null,
                 characters: (p.characters || []).length,
-                spans: (p.povMap || []).length,
+                // A map counted from names in dialogue is read as none — see loadPassport.
+                spans: p.source?.povMapFrom === 'anchors' ? 0 : (p.povMap || []).length,
                 dialogue: p.dialogue?.marker ? p.dialogue : null,
                 // Whether rebuilding it would take back somebody's corrections.
                 edited: handEdited(p),
@@ -300,12 +301,16 @@ export function projectSummary(prefix) {
             // so this is the size of the work the finding actually implies, and
             // it has to be on screen before the button is pressed.
             let glossary = null;
+            const sent = new Set((r.sent || []).map(k => String(k).toLowerCase()));
             for (const f of open) {
                 const inText = passageWithBreaks(chunks[f.chunk]?.translation, f);
                 if (inText) f.inText = inText;
-                if (f.scope !== 'glossary' || !f.term) continue;
+                // Its glossary edit already sent to the glossary editor.
+                if (sent.has(f.key)) f.sent = true;
+                const term = f.term || f.glossaryEdits?.find(e => e.action !== 'add')?.entry;
+                if (f.scope !== 'glossary' || !term) continue;
                 glossary = glossary || readGlossaryOrEmpty(prefix);
-                f.affects = chunksUsingTerm(chunks, f.term, glossary).length;
+                f.affects = chunksUsingTerm(chunks, term, glossary).length;
             }
             translationReview = {
                 generatedAt: r.generatedAt || null,
@@ -334,7 +339,9 @@ export function projectSummary(prefix) {
     if (fs.existsSync(reviewPath(prefix))) {
         try {
             const r = readJson(reviewPath(prefix));
-            glossaryReview = {
+            // Proposals sent from the translation review make the file without a
+            // review having run, and the step is not done by that.
+            if (r.generatedAt) glossaryReview = {
                 findings: (r.findings || []).length, generatedAt: r.generatedAt || null,
                 round: r.round ?? null, score: r.score ?? null,
             };

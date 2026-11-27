@@ -48,7 +48,7 @@ async function main() {
         console.error('Usage: node src_v4/main.js --stage=<extract|glossary|passport|povmap|translate|review|export> --file=<path/to/book.txt> [--model=google|local|custom] [--lang=<язык>] [--suffix=<код>]');
         console.error('  --stage=extract reads the book chunk by chunk and pulls out names, places and terms (also accepted as 1).');
         console.error('  --stage=passport reads the whole book at once (book_model profile) and writes <prefix>_passport.json.');
-        console.error('  --stage=povmap asks where the point of view changes, for a passport with several narrators and no chapter anchors; re-splits the text while nothing is translated.');
+        console.error('  --stage=povmap asks where the point of view changes, for a passport with several narrators; re-splits the text while nothing is translated.');
         console.error('  --stage=glossary reviews the glossary against the whole book and writes glossary_review.json (applies nothing).');
         console.error('  --stage=translate is the translation itself, chunk by chunk (also accepted as 2).');
         console.error('  --stage=review reads the finished translation in one call and writes translation_review.json (changes nothing).');
